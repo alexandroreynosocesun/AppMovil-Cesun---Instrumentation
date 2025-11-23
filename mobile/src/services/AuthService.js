@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { getAuthToken } from '../utils/authUtils';
 
-const API_BASE_URL = 'https://cc2541746551.ngrok-free.app/api';
+const API_BASE_URL = 'https://ecb2b679741f.ngrok-free.app/api';
 
 class AuthService {
   constructor() {

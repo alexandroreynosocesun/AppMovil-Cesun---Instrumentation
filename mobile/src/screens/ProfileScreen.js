@@ -149,63 +149,72 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleSignature = (signature) => {
-    console.log('🎯 handleSignature llamado');
-    console.log('Firma capturada:', signature);
+    console.log('🎯 handleSignature llamado (onOK)');
+    console.log('Firma capturada:', signature ? signature.substring(0, 50) + '...' : 'null');
     console.log('Tipo de firma:', typeof signature);
     console.log('Longitud de firma:', signature ? signature.length : 'null');
-    console.log('Contenido de firma:', signature);
     
-    // Validación mejorada de la firma
+    // Validación más estricta cuando se presiona "Guardar"
     if (signature && signature.trim() !== '') {
       // Verificar que sea una imagen base64 válida
       const isBase64 = /^data:image\/(png|jpeg|jpg);base64,/.test(signature) || 
                       /^[A-Za-z0-9+/=]+$/.test(signature);
       
-      if (isBase64 && signature.length > 100) {
+      // Requerir mínimo 200 caracteres cuando se confirma
+      if (isBase64 && signature.length > 200) {
         setSignatureData(signature);
-        setIsTestSignature(false); // Es una firma real dibujada
-        console.log('✅ Firma real válida guardada en estado');
+        setIsTestSignature(false);
+        console.log('✅ Firma confirmada y guardada en estado');
       } else {
         console.log('❌ Firma inválida - formato o longitud incorrecta');
-        Alert.alert(
-          'Firma Inválida',
-          'La firma debe ser una imagen válida. Por favor, dibuja una firma más completa.',
-          [{ text: 'Entendido' }]
-        );
-        setSignatureData(null);
-        setIsTestSignature(false);
+        if (signature.length <= 200) {
+          Alert.alert(
+            'Firma Muy Corta',
+            'La firma debe ser más completa. Por favor, dibuja trazos más largos y continuos.',
+            [{ text: 'Entendido' }]
+          );
+        } else {
+          Alert.alert(
+            'Firma Inválida',
+            'La firma no tiene un formato válido. Por favor, dibuja una nueva firma.',
+            [{ text: 'Entendido' }]
+          );
+        }
+        // No establecemos null aquí para que el usuario pueda seguir dibujando
       }
     } else {
       console.log('❌ Firma vacía o inválida');
-      setSignatureData(null);
-      setIsTestSignature(false);
+      Alert.alert(
+        'Sin Firma',
+        'No se detectó ninguna firma. Por favor, dibuja tu firma.',
+        [{ text: 'Entendido' }]
+      );
     }
   };
 
   const handleSignatureChange = (signature) => {
     console.log('🔄 handleSignatureChange llamado');
-    console.log('Firma cambiada:', signature);
+    console.log('Firma cambiada:', signature ? signature.substring(0, 50) + '...' : 'null');
     console.log('Tipo de firma:', typeof signature);
     console.log('Longitud de firma:', signature ? signature.length : 'null');
     
-    // Validación mejorada de la firma
+    // En onChange, guardamos cualquier firma válida (más permisivo)
     if (signature && signature.trim() !== '') {
       // Verificar que sea una imagen base64 válida
       const isBase64 = /^data:image\/(png|jpeg|jpg);base64,/.test(signature) || 
                       /^[A-Za-z0-9+/=]+$/.test(signature);
       
-      if (isBase64 && signature.length > 100) {
+      // Aceptar cualquier firma base64 válida, incluso si es corta (se validará al guardar)
+      if (isBase64 && signature.length > 50) {
         setSignatureData(signature);
-        setIsTestSignature(false); // Es una firma real dibujada
-        console.log('✅ Firma real válida actualizada en estado');
-        console.log('🔍 isTestSignature establecido a false');
-      } else {
-        console.log('❌ Firma inválida - formato o longitud incorrecta');
-        setSignatureData(null);
         setIsTestSignature(false);
+        console.log('✅ Firma actualizada en estado (onChange)');
+      } else {
+        console.log('⚠️ Firma muy corta o formato inválido en onChange');
+        // No establecemos null aquí, solo no actualizamos si es muy corta
       }
     } else {
-      console.log('❌ Firma vacía en onChange');
+      console.log('⚠️ Firma vacía en onChange');
       setSignatureData(null);
       setIsTestSignature(false);
     }
@@ -240,16 +249,16 @@ export default function ProfileScreen({ navigation }) {
       }
       
       // Validación mejorada antes de guardar
-      if (!signatureData || signatureData.length < 1000) {
+      if (!signatureData || signatureData.length < 500) {
         Alert.alert(
           'Firma Inválida',
-          'La firma es muy corta o está vacía. Por favor, dibuja una firma más completa.',
+          'La firma es muy corta o está vacía. Por favor, dibuja una firma más completa con trazos más largos.',
           [{ text: 'Entendido' }]
         );
         return;
       }
       
-      // Validación adicional: verificar que no sea una imagen de 1x1 píxel
+      // Validación adicional: verificar que no sea una imagen de 1x1 píxel o corrupta
       try {
         // Decodificar base64 para verificar el tamaño
         const base64Data = signatureData.split(',')[1] || signatureData;
@@ -259,14 +268,28 @@ export default function ProfileScreen({ navigation }) {
           bytes[i] = binaryString.charCodeAt(i);
         }
         
-        // Verificar que no sea una imagen muy pequeña (menos de 200 bytes)
-        if (bytes.length < 200) {
+        // Verificar que no sea una imagen muy pequeña (menos de 500 bytes = imagen corrupta)
+        if (bytes.length < 500) {
           Alert.alert(
             'Firma Inválida',
-            'La firma es demasiado pequeña. Por favor, dibuja una firma más grande y clara.',
+            'La firma es demasiado pequeña o está corrupta. Por favor, dibuja una firma más grande y clara con trazos completos.',
             [{ text: 'Entendido' }]
           );
           return;
+        }
+        
+        // Verificar que sea un PNG válido (debe empezar con la firma PNG)
+        if (bytes.length >= 8) {
+          const pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
+          const isValidPNG = pngSignature.every((byte, index) => bytes[index] === byte);
+          if (!isValidPNG) {
+            Alert.alert(
+              'Firma Inválida',
+              'La firma no es una imagen PNG válida. Por favor, dibuja una nueva firma.',
+              [{ text: 'Entendido' }]
+            );
+            return;
+          }
         }
       } catch (error) {
         console.error('Error validando firma:', error);
@@ -707,11 +730,11 @@ export default function ProfileScreen({ navigation }) {
                     <Text style={styles.tipText}>💡 Consejo: Dibuja a velocidad normal - los trazos rápidos ahora se capturan como líneas continuas</Text>
                     <Text style={styles.tipText}>⏱️ Nota: El procesamiento de la firma puede tardar unos segundos</Text>
                     <Text style={[styles.tipText, { 
-                      color: signatureData?.length >= 100 ? '#4CAF50' : '#FF9800',
+                      color: signatureData?.length >= 500 ? '#4CAF50' : '#FF9800',
                       fontWeight: 'bold'
                     }]}>
                       {!signatureData ? '❌ No hay firma' : 
-                       signatureData.length < 100 ? '⚠️ Firma muy corta' : 
+                       signatureData.length < 500 ? '⚠️ Firma muy corta - dibuja más trazos' : 
                        '✅ Firma lista para guardar'}
                     </Text>
                   </View>
@@ -786,37 +809,41 @@ export default function ProfileScreen({ navigation }) {
             Debug Firma
           </Button>
           
-          <Button
-            mode="outlined"
-            onPress={() => {
-              const testSignature = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-              setSignatureData(testSignature);
-              setIsTestSignature(true); // Marcar como firma de prueba
-              console.log('🧪 Firma de prueba establecida');
-              Alert.alert(
-                'Firma Seleccionada', 
-                'Se ha seleccionado una firma de prueba. Ahora puedes guardarla.',
-                [{ text: 'OK' }]
-              );
-            }}
-            style={[styles.modalButton, { backgroundColor: '#9C27B0' }]}
-            icon="check"
-          >
-            Seleccionar Firma
-          </Button>
           
           <Button
             mode="outlined"
             onPress={() => {
-              if (signatureRef.current) {
-                signatureRef.current.getData().then((data) => {
-                  console.log('🔍 Forzando captura de firma actual:', data);
-                  if (data) {
-                    handleSignature(data);
+              if (signatureRef.current && signatureRef.current.getData) {
+                try {
+                  const dataPromise = signatureRef.current.getData();
+                  if (dataPromise && typeof dataPromise.then === 'function') {
+                    // Es una promesa
+                    dataPromise.then((data) => {
+                      console.log('🔍 Forzando captura de firma actual:', data);
+                      if (data) {
+                        handleSignature(data);
+                      } else {
+                        Alert.alert('Sin Firma', 'No hay firma para capturar');
+                      }
+                    }).catch((error) => {
+                      console.error('Error obteniendo firma:', error);
+                      Alert.alert('Error', 'No se pudo obtener la firma del canvas');
+                    });
+                  } else if (dataPromise) {
+                    // Devuelve directamente los datos
+                    console.log('🔍 Forzando captura de firma actual:', dataPromise);
+                    if (dataPromise) {
+                      handleSignature(dataPromise);
+                    } else {
+                      Alert.alert('Sin Firma', 'No hay firma para capturar');
+                    }
                   } else {
                     Alert.alert('Sin Firma', 'No hay firma para capturar');
                   }
-                });
+                } catch (error) {
+                  console.error('Error obteniendo firma:', error);
+                  Alert.alert('Error', 'No se pudo obtener la firma del canvas');
+                }
               } else {
                 Alert.alert('Error', 'Canvas no disponible');
               }
@@ -860,10 +887,10 @@ export default function ProfileScreen({ navigation }) {
             }}
             style={[styles.modalButton, styles.saveButton]}
             icon={savingSignature ? "loading" : "check"}
-            disabled={!signatureData || savingSignature || signatureData?.length < 100}
+            disabled={!signatureData || savingSignature || signatureData?.length < 500}
             loading={savingSignature}
           >
-            {savingSignature ? 'Procesando...' : signatureData?.length < 100 ? 'Dibuja una firma' : 'Guardar Firma'}
+            {savingSignature ? 'Procesando...' : signatureData?.length < 500 ? 'Dibuja una firma más completa' : 'Guardar Firma'}
           </Button>
         </View>
               </View>
@@ -902,8 +929,8 @@ export default function ProfileScreen({ navigation }) {
                       <Text style={styles.debugText}>
                         Formato: {signature.startsWith('data:') ? 'Correcto' : 'Falta prefijo'}
                       </Text>
-                      <Text style={[styles.debugText, { color: signature.length < 1000 ? '#F44336' : '#4CAF50' }]}>
-                        Estado: {signature.length < 1000 ? '⚠️ Firma muy corta (posiblemente corrupta)' : '✅ Firma válida'}
+                      <Text style={[styles.debugText, { color: signature.length < 500 ? '#F44336' : '#4CAF50' }]}>
+                        Estado: {signature.length < 500 ? '⚠️ Firma muy corta (posiblemente corrupta)' : '✅ Firma válida'}
                       </Text>
                       <Image
                         source={{ uri: signature.startsWith('data:') ? signature : `data:image/png;base64,${signature}` }}
@@ -915,18 +942,6 @@ export default function ProfileScreen({ navigation }) {
                           console.log('URI intentada:', signature.startsWith('data:') ? signature : `data:image/png;base64,${signature}`);
                         }}
                       />
-                      <Button
-                        mode="outlined"
-                        onPress={() => {
-                          const testImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
-                          setSignature(testImage);
-                          Alert.alert('Prueba', 'Imagen de prueba establecida');
-                        }}
-                        style={styles.testButton}
-                        icon="test-tube"
-                      >
-                        Probar Imagen
-                      </Button>
                       
                       <Button
                         mode="outlined"

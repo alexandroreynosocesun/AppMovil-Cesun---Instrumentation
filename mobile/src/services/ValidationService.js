@@ -2,7 +2,7 @@ import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
 import { offlineService } from './OfflineService';
 
-const API_BASE_URL = 'https://cc2541746551.ngrok-free.app/api';
+const API_BASE_URL = 'https://ecb2b679741f.ngrok-free.app/api';
 
 class ValidationService {
   constructor() {
