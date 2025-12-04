@@ -22,10 +22,13 @@ import {
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
+import { usePlatform } from '../hooks/usePlatform';
+import { webStyles } from '../utils/webStyles';
 
 const { width, height } = Dimensions.get('window');
 
 export default function LoginScreen({ navigation }) {
+  const { isWeb, maxWidth, containerPadding } = usePlatform();
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -83,7 +86,7 @@ export default function LoginScreen({ navigation }) {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, isWeb && webStyles.container]}>
       <LinearGradient
         colors={['#0F0F0F', '#1A1A1A', '#2D2D2D']}
         style={styles.backgroundGradient}
@@ -93,10 +96,18 @@ export default function LoginScreen({ navigation }) {
       
       <KeyboardAvoidingView 
         style={styles.keyboardContainer}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'web' ? undefined : 'height'}
       >
         <ScrollView 
-          contentContainerStyle={styles.scrollContainer}
+          contentContainerStyle={[
+            styles.scrollContainer,
+            isWeb && {
+              maxWidth: maxWidth,
+              alignSelf: 'center',
+              width: '100%',
+              paddingHorizontal: containerPadding,
+            }
+          ]}
           showsVerticalScrollIndicator={false}
         >
           {/* Header con animación */}
@@ -129,6 +140,7 @@ export default function LoginScreen({ navigation }) {
           <Animated.View
             style={[
               styles.cardContainer,
+              isWeb && webStyles.authCard,
               {
                 opacity: fadeAnim,
                 transform: [
@@ -138,7 +150,7 @@ export default function LoginScreen({ navigation }) {
               }
             ]}
           >
-            <Surface style={styles.card} elevation={8}>
+            <Surface style={[styles.card, isWeb && webStyles.authCard]} elevation={8}>
               <Card.Content style={styles.cardContent}>
                 <View style={styles.formContainer}>
                   <TextInput

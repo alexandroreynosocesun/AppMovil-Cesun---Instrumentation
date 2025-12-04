@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import logger from '../utils/logger';
 
 const ValidationContext = createContext();
 
@@ -15,6 +16,7 @@ export const ValidationProvider = ({ children }) => {
   const [validations, setValidations] = useState([]);
   const [currentModel, setCurrentModel] = useState(null);
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [lineaPorModelo, setLineaPorModelo] = useState({}); // Guardar línea por modelo
   
   // Cargar validaciones guardadas al inicializar
   useEffect(() => {
@@ -31,25 +33,25 @@ export const ValidationProvider = ({ children }) => {
       const savedValidations = await AsyncStorage.getItem('validations');
       if (savedValidations) {
         const parsed = JSON.parse(savedValidations);
-        console.log('📥 Cargando validaciones guardadas:', parsed.length);
+        logger.info('📥 Cargando validaciones guardadas:', parsed.length);
         setValidations(parsed);
       }
     } catch (error) {
-      console.error('Error cargando validaciones:', error);
+      logger.error('Error cargando validaciones:', error);
     }
   };
   
   const saveValidations = async () => {
     try {
       await AsyncStorage.setItem('validations', JSON.stringify(validations));
-      console.log('💾 Guardando validaciones:', validations.length);
+      logger.info('💾 Guardando validaciones:', validations.length);
     } catch (error) {
-      console.error('Error guardando validaciones:', error);
+      logger.error('Error guardando validaciones:', error);
     }
   };
   
   // Debug: Log cuando cambie el estado de validaciones
-  console.log('🔄 ValidationContext - Estado actual:', {
+  logger.info('🔄 ValidationContext - Estado actual:', {
     validationsCount: validations.length,
     currentModel: currentModel,
     validations: validations.map(v => ({ 
@@ -60,15 +62,16 @@ export const ValidationProvider = ({ children }) => {
   });
 
   const addValidation = useCallback((validationData) => {
-    console.log('➕ addValidation - Agregando validación:', {
+    logger.info('➕ addValidation - Agregando validación:', {
       modelo_actual: validationData.modelo_actual,
       jig: validationData.jig?.numero_jig,
-      estado: validationData.estado
+      estado: validationData.estado,
+      linea: validationData.linea
     });
     
     setValidations(prev => {
       const newValidations = [...prev, validationData];
-      console.log('➕ addValidation - Total validaciones después de agregar:', newValidations.length);
+      logger.info('➕ addValidation - Total validaciones después de agregar:', newValidations.length);
       
       // Agrupar por modelo para verificar si se completó
       const modelGroups = newValidations.reduce((groups, validation) => {
@@ -80,12 +83,12 @@ export const ValidationProvider = ({ children }) => {
         return groups;
       }, {});
       
-      console.log('➕ addValidation - Grupos por modelo:', modelGroups);
+      logger.info('➕ addValidation - Grupos por modelo:', modelGroups);
       
       // Verificar si algún modelo tiene 14 validaciones
       Object.keys(modelGroups).forEach(model => {
         if (modelGroups[model].length >= 14) {
-          console.log('✅ Modelo completado:', model, 'con', modelGroups[model].length, 'validaciones');
+          logger.info('✅ Modelo completado:', model, 'con', modelGroups[model].length, 'validaciones');
           setCurrentModel(model);
         }
       });
@@ -94,29 +97,42 @@ export const ValidationProvider = ({ children }) => {
     });
   }, []);
 
+  const setLineaForModel = useCallback((modelo, linea) => {
+    logger.info('📝 setLineaForModel - Guardando línea para modelo:', modelo, 'línea:', linea);
+    setLineaPorModelo(prev => ({
+      ...prev,
+      [modelo]: linea
+    }));
+  }, []);
+
+  const getLineaForModel = useCallback((modelo) => {
+    return lineaPorModelo[modelo] || '';
+  }, [lineaPorModelo]);
+
   const clearValidations = useCallback(async () => {
-    console.log('🗑️ clearValidations - Limpiando todas las validaciones');
+    logger.info('🗑️ clearValidations - Limpiando todas las validaciones');
     setValidations([]);
     setCurrentModel(null);
+    setLineaPorModelo({}); // Limpiar también las líneas guardadas
     try {
       await AsyncStorage.removeItem('validations');
-      console.log('🗑️ Validaciones eliminadas del almacenamiento');
+      logger.info('🗑️ Validaciones eliminadas del almacenamiento');
     } catch (error) {
-      console.error('Error limpiando validaciones del almacenamiento:', error);
+      logger.error('Error limpiando validaciones del almacenamiento:', error);
     }
   }, []);
 
   const getValidationsByModel = useCallback((model) => {
-    console.log('🔍 getValidationsByModel - Modelo solicitado:', model);
-    console.log('🔍 getValidationsByModel - Total validaciones:', validations.length);
-    console.log('🔍 getValidationsByModel - Validaciones disponibles:', validations.map(v => ({ 
+    logger.info('🔍 getValidationsByModel - Modelo solicitado:', model);
+    logger.info('🔍 getValidationsByModel - Total validaciones:', validations.length);
+    logger.info('🔍 getValidationsByModel - Validaciones disponibles:', validations.map(v => ({ 
       modelo_actual: v.modelo_actual, 
       jig: v.jig?.numero_jig,
       estado: v.estado 
     })));
     
     const filtered = validations.filter(v => v.modelo_actual === model);
-    console.log('🔍 getValidationsByModel - Validaciones filtradas:', filtered.length);
+    logger.info('🔍 getValidationsByModel - Validaciones filtradas:', filtered.length);
     
     return filtered;
   }, [validations]);
@@ -144,7 +160,9 @@ export const ValidationProvider = ({ children }) => {
     clearValidations,
     getValidationsByModel,
     getCompletedModels,
-    setIsGeneratingReport
+    setIsGeneratingReport,
+    setLineaForModel,
+    getLineaForModel
   };
 
   return (

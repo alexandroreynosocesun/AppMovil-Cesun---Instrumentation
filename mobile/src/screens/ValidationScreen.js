@@ -5,7 +5,10 @@ import {
   ScrollView,
   Alert,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal,
+  TouchableOpacity,
+  TouchableWithoutFeedback
 } from 'react-native';
 import { formatDateTime12Hour } from '../utils/dateUtils';
 import {
@@ -24,25 +27,42 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useValidation } from '../contexts/ValidationContext';
 import { jigNGService } from '../services/JigNGService';
+import logger from '../utils/logger';
 
 export default function ValidationScreen({ route, navigation }) {
   const { jig } = route.params || {};
   const { user } = useAuth();
-  const { addValidation, getValidationsByModel } = useValidation();
+  const { addValidation, getValidationsByModel, setLineaForModel, getLineaForModel, validations } = useValidation();
   
   const [loading, setLoading] = useState(false);
   const [checkingNG, setCheckingNG] = useState(true);
   const [jigNG, setJigNG] = useState(null);
+  const [showLineaModal, setShowLineaModal] = useState(false);
   const [formData, setFormData] = useState({
     turno: user?.turno_actual || 'A', // Usar el turno del usuario automáticamente
     estado: 'OK',
     comentario: '',
-    cantidad: '1'
+    cantidad: '1',
+    linea: ''
   });
 
   useEffect(() => {
     checkJigNGStatus();
   }, [jig]);
+
+  // Cargar línea guardada para este modelo cuando se monte el componente
+  useEffect(() => {
+    if (jig?.modelo_actual) {
+      const lineaGuardada = getLineaForModel(jig.modelo_actual);
+      if (lineaGuardada) {
+        logger.info('📥 Cargando línea guardada para modelo', jig.modelo_actual, ':', lineaGuardada);
+        setFormData(prev => ({
+          ...prev,
+          linea: lineaGuardada
+        }));
+      }
+    }
+  }, [jig?.modelo_actual, getLineaForModel]);
 
   const checkJigNGStatus = async () => {
     if (!jig?.id) {
@@ -84,7 +104,7 @@ export default function ValidationScreen({ route, navigation }) {
         }
       }
     } catch (error) {
-      console.error('Error verificando NG:', error);
+      logger.error('Error verificando NG:', error);
     } finally {
       setCheckingNG(false);
     }
@@ -95,12 +115,36 @@ export default function ValidationScreen({ route, navigation }) {
       ...prev,
       [field]: value
     }));
+    
+    // Si se cambia la línea, guardarla para este modelo
+    if (field === 'linea' && jig?.modelo_actual) {
+      setLineaForModel(jig.modelo_actual, value);
+    }
   };
 
   const handleSubmitValidation = () => {
     // Validar campos requeridos
     if (!formData.turno || !formData.estado || !formData.comentario) {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
+      return;
+    }
+
+    // Validar que se haya seleccionado una línea
+    if (!formData.linea || formData.linea.trim() === '') {
+      Alert.alert(
+        'Línea Requerida',
+        'Debes seleccionar una línea antes de validar el jig.\n\nPor favor, selecciona la línea de producción.',
+        [
+          {
+            text: 'Seleccionar Línea',
+            onPress: () => setShowLineaModal(true)
+          },
+          {
+            text: 'Cancelar',
+            style: 'cancel'
+          }
+        ]
+      );
       return;
     }
 
@@ -111,6 +155,27 @@ export default function ValidationScreen({ route, navigation }) {
       return;
     }
 
+    // Verificar si el jig ya fue agregado
+    if (jig?.id) {
+      const jigYaAgregado = validations.some(v => 
+        v.jig?.id === jig.id && v.modelo_actual === jig?.modelo_actual
+      );
+      
+      if (jigYaAgregado) {
+        Alert.alert(
+          'Jig Ya Agregado',
+          `El jig ${jig?.numero_jig} ya ha sido agregado a las validaciones de este modelo.\n\nNo se puede agregar el mismo jig dos veces.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => navigation.navigate('QRScanner')
+            }
+          ]
+        );
+        return;
+      }
+    }
+
     // Crear objeto de validación
     const validationData = {
       jig: jig,
@@ -119,6 +184,7 @@ export default function ValidationScreen({ route, navigation }) {
       estado: formData.estado,
       comentario: formData.comentario,
       cantidad: formData.cantidad,
+      linea: formData.linea,
       created_at: new Date().toISOString()
     };
 
@@ -338,6 +404,86 @@ export default function ValidationScreen({ route, navigation }) {
                 left={<TextInput.Icon icon="counter" />}
             />
             </View>
+
+            {/* Línea - Modal con lista */}
+            <View style={styles.inputSection}>
+              <Paragraph style={styles.inputLabel}>Línea *</Paragraph>
+              <TouchableOpacity
+                onPress={() => setShowLineaModal(true)}
+                style={styles.lineaSelector}
+              >
+                <View style={styles.lineaSelectorContent}>
+                  <Paragraph style={[styles.lineaSelectorText, !formData.linea && styles.lineaSelectorPlaceholder]}>
+                    {formData.linea || 'Selecciona la línea'}
+                  </Paragraph>
+                  <IconButton
+                    icon="chevron-down"
+                    size={20}
+                    iconColor="#666"
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            {/* Modal para seleccionar línea */}
+            <Modal
+              visible={showLineaModal}
+              transparent={true}
+              animationType="slide"
+              onRequestClose={() => setShowLineaModal(false)}
+            >
+              <TouchableWithoutFeedback onPress={() => setShowLineaModal(false)}>
+                <View style={styles.modalOverlay}>
+                  <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+                    <View style={styles.modalContent}>
+                      <View style={styles.modalHeader}>
+                        <Title style={styles.modalTitle}>Seleccionar Línea</Title>
+                        <IconButton
+                          icon="close"
+                          size={24}
+                          onPress={() => setShowLineaModal(false)}
+                        />
+                      </View>
+                      <Divider />
+                      <ScrollView style={styles.modalList}>
+                        {[1, 2, 3, 4, 5, 6].map((linea) => (
+                          <TouchableOpacity
+                            key={linea}
+                            style={[
+                              styles.modalItem,
+                              formData.linea === `Línea ${linea}` && styles.modalItemSelected
+                            ]}
+                            onPress={() => {
+                              const lineaSeleccionada = `Línea ${linea}`;
+                              handleInputChange('linea', lineaSeleccionada);
+                              // Guardar la línea para este modelo
+                              if (jig?.modelo_actual) {
+                                setLineaForModel(jig.modelo_actual, lineaSeleccionada);
+                              }
+                              setShowLineaModal(false);
+                            }}
+                          >
+                            <Paragraph style={[
+                              styles.modalItemText,
+                              formData.linea === `Línea ${linea}` && styles.modalItemTextSelected
+                            ]}>
+                              Línea {linea}
+                            </Paragraph>
+                            {formData.linea === `Línea ${linea}` && (
+                              <IconButton
+                                icon="check"
+                                size={20}
+                                iconColor="#4CAF50"
+                              />
+                            )}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  </TouchableWithoutFeedback>
+                </View>
+              </TouchableWithoutFeedback>
+            </Modal>
           </Card.Content>
         </Card>
             
@@ -347,12 +493,17 @@ export default function ValidationScreen({ route, navigation }) {
               mode="contained"
               onPress={handleSubmitValidation}
             style={styles.submitButton}
-              disabled={loading}
+              disabled={loading || !formData.linea || formData.linea.trim() === ''}
             icon={loading ? "loading" : "check-circle"}
             contentStyle={styles.submitButtonContent}
             >
             {loading ? 'Validando...' : 'Validar Jig'}
             </Button>
+            {(!formData.linea || formData.linea.trim() === '') && (
+              <Paragraph style={styles.warningText}>
+                ⚠️ Debes seleccionar una línea para continuar
+              </Paragraph>
+            )}
             
             <Button
               mode="outlined"
@@ -565,5 +716,83 @@ const styles = StyleSheet.create({
   ngButton: {
     borderColor: '#F44336',
     borderRadius: 8,
+  },
+  // Línea selector styles
+  lineaSelector: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  lineaSelectorContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+  },
+  lineaSelectorText: {
+    fontSize: 16,
+    color: '#1E293B',
+    flex: 1,
+  },
+  lineaSelectorPlaceholder: {
+    color: '#94A3B8',
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: '70%',
+    paddingBottom: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 10,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  modalList: {
+    maxHeight: 400,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  modalItemSelected: {
+    backgroundColor: '#E8F5E9',
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: '#1E293B',
+  },
+  modalItemTextSelected: {
+    color: '#4CAF50',
+    fontWeight: '600',
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#FF9800',
+    textAlign: 'center',
+    marginTop: 8,
+    fontWeight: '600',
   },
 });

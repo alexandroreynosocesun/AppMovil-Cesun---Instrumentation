@@ -7,7 +7,8 @@ import {
   Dimensions,
   Modal,
   TouchableOpacity,
-  Text
+  Text,
+  Platform
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
@@ -20,11 +21,14 @@ import {
 import { jigService } from '../services/JigService';
 import { jigNGService } from '../services/JigNGService';
 import { offlineService } from '../services/OfflineService';
+import { useAuth } from '../contexts/AuthContext';
+import logger from '../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
 export default function QRScannerScreen({ navigation, route }) {
   const { mode } = route.params || {};
+  const { logout } = useAuth();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -33,8 +37,27 @@ export default function QRScannerScreen({ navigation, route }) {
   const [cameraActive, setCameraActive] = useState(true);
   const [showNotFoundModal, setShowNotFoundModal] = useState(false);
   const [pendingQRCode, setPendingQRCode] = useState(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [containerLayout, setContainerLayout] = useState({ width: 0, height: 0 });
+  const [cameraKey, setCameraKey] = useState(0);
 
   const hasPermission = permission?.granted;
+
+  // Forzar re-render de la cámara cuando el contenedor esté listo (especialmente en Android)
+  useEffect(() => {
+    if (containerLayout.width > 0 && containerLayout.height > 0) {
+      // Pequeño delay para asegurar que las dimensiones estén completamente calculadas
+      const timer = setTimeout(() => {
+        setCameraReady(true);
+        // Forzar re-montaje de la cámara en Android
+        if (Platform.OS === 'android') {
+          setCameraKey(prev => prev + 1);
+        }
+      }, Platform.OS === 'android' ? 300 : 100);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [containerLayout]);
 
   // Resetear estado cuando se regrese a la pantalla
   useFocusEffect(
@@ -49,10 +72,16 @@ export default function QRScannerScreen({ navigation, route }) {
       setLoading(false);
       setLastScannedQR(null);
       setCameraActive(true);
-      // Forzar re-render del scanner
+      setCameraReady(false);
+      
+      // Forzar re-render del scanner y re-montaje de la cámara en Android
       setTimeout(() => {
         setScanned(false);
-      }, 100);
+        if (Platform.OS === 'android') {
+          setCameraKey(prev => prev + 1);
+        }
+        setCameraReady(true);
+      }, Platform.OS === 'android' ? 300 : 100);
     }, [scanTimeout])
   );
 
@@ -80,10 +109,10 @@ export default function QRScannerScreen({ navigation, route }) {
 
   const processQRCode = async (data) => {
     try {
-      console.log('🔍 Procesando QR:', data);
+      logger.info('🔍 Procesando QR:', data);
       // Buscar jig por código QR
       const result = await jigService.getJigByQR(data);
-      console.log('🔍 Resultado del servicio:', result);
+      logger.info('🔍 Resultado del servicio:', result);
       
       if (result.success) {
         // Si está en modo NG, verificar si ya tiene un NG activo
@@ -149,10 +178,11 @@ export default function QRScannerScreen({ navigation, route }) {
             [
               { 
                 text: 'Iniciar Sesión', 
-                onPress: () => {
+                onPress: async () => {
                   setScanned(false);
                   setCameraActive(true);
-                  navigation.navigate('Login');
+                  // Cerrar sesión para mostrar la pantalla de Login
+                  await logout();
                 }
               }
             ]
@@ -274,15 +304,33 @@ export default function QRScannerScreen({ navigation, route }) {
     );
   }
 
+  const handleContainerLayout = (event) => {
+    const { width, height } = event.nativeEvent.layout;
+    if (width > 0 && height > 0) {
+      setContainerLayout({ width, height });
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <CameraView
-        onBarcodeScanned={cameraActive && !scanned && !loading ? handleBarCodeScanned : undefined}
-        barcodeScannerSettings={{
-          barcodeTypes: ['qr', 'pdf417'],
-        }}
-        style={StyleSheet.absoluteFillObject}
-      />
+    <View 
+      style={styles.container}
+      onLayout={handleContainerLayout}
+    >
+      {cameraReady ? (
+        <CameraView
+          key={cameraKey}
+          onBarcodeScanned={cameraActive && !scanned && !loading ? handleBarCodeScanned : undefined}
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr', 'pdf417'],
+          }}
+          style={StyleSheet.absoluteFillObject}
+        />
+      ) : (
+        <View style={[StyleSheet.absoluteFillObject, styles.cameraPlaceholder]}>
+          <ActivityIndicator size="large" color="#2196F3" />
+          <Text style={styles.cameraPlaceholderText}>Inicializando cámara...</Text>
+        </View>
+      )}
       
       {/* Overlay con instrucciones */}
       <View style={styles.overlay}>
@@ -534,5 +582,15 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  cameraPlaceholder: {
+    backgroundColor: '#000000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cameraPlaceholderText: {
+    color: '#FFFFFF',
+    marginTop: 16,
+    fontSize: 16,
   },
 });

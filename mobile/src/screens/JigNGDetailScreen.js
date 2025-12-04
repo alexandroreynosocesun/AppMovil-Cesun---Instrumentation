@@ -9,6 +9,7 @@ import {
   Modal,
   KeyboardAvoidingView,
   Platform,
+  Image,
 } from 'react-native';
 import {
   Card,
@@ -21,6 +22,7 @@ import {
 } from 'react-native-paper';
 import { jigNGService } from '../services/JigNGService';
 import { authService } from '../services/AuthService';
+import logger from '../utils/logger';
 
 export default function JigNGDetailScreen({ route, navigation }) {
   const { jigId } = route.params;
@@ -33,6 +35,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
   const [repairingUser, setRepairingUser] = useState('');
   const [selectedAction, setSelectedAction] = useState(null); // 'falso_defecto' o 'reparado'
   const [currentUser, setCurrentUser] = useState(null);
+  const [commentSaved, setCommentSaved] = useState(false); // Para saber si el comentario ya fue guardado
 
   useEffect(() => {
     loadJigDetails();
@@ -51,7 +54,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
         navigation.goBack();
       }
     } catch (error) {
-      console.error('❌ Error al cargar jig NG:', error);
+      logger.error('❌ Error al cargar jig NG:', error);
       Alert.alert('Error', 'Error inesperado al cargar detalles');
       navigation.goBack();
     } finally {
@@ -67,7 +70,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
         setRepairingUser(result.data.nombre || result.data.username || 'Usuario actual');
       }
     } catch (error) {
-      console.error('❌ Error al cargar usuario actual:', error);
+      logger.error('❌ Error al cargar usuario actual:', error);
       setRepairingUser('Usuario actual');
     }
   };
@@ -86,12 +89,25 @@ export default function JigNGDetailScreen({ route, navigation }) {
       
       if (result.success) {
         setJig(prev => ({ ...prev, estado: newStatus, usuario_reparando: repairingUser }));
-        Alert.alert('Éxito', 'Estado actualizado correctamente');
+        
+        // Si se marca como reparado o falso defecto, regresar (la lista se recargará automáticamente)
+        if (newStatus === 'reparado' || newStatus === 'falso_defecto') {
+          const mensaje = newStatus === 'reparado' 
+            ? 'Jig NG marcado como reparado. La tarjeta ha sido eliminada y el jig está disponible para validación.'
+            : 'Jig NG marcado como falso defecto. La tarjeta ha sido eliminada y el jig está disponible para validación.';
+          Alert.alert(
+            'Éxito', 
+            mensaje,
+            [{ text: 'OK', onPress: () => navigation.goBack() }]
+          );
+        } else {
+          Alert.alert('Éxito', 'Estado actualizado correctamente');
+        }
       } else {
         Alert.alert('Error', result.message || 'Error al actualizar estado');
       }
     } catch (error) {
-      console.error('❌ Error al actualizar estado:', error);
+      logger.error('❌ Error al actualizar estado:', error);
       Alert.alert('Error', 'Error inesperado al actualizar estado');
     } finally {
       setUpdating(false);
@@ -99,39 +115,32 @@ export default function JigNGDetailScreen({ route, navigation }) {
   };
 
   const handleAddRepairComment = async () => {
-    if (!repairComment.trim()) {
-      Alert.alert('Error', 'Por favor ingresa un comentario de reparación');
-      return;
-    }
-
+    // El comentario es opcional, no validamos si está vacío
+    
     try {
       setUpdating(true);
       const result = await jigNGService.updateJigNG(jigId, { 
-        comentario_reparacion: repairComment,
+        comentario_reparacion: repairComment.trim() || null,
         usuario_reparando: repairingUser || currentUser?.nombre || currentUser?.username || 'Usuario actual'
       });
       
       if (result.success) {
         setJig(prev => ({ 
           ...prev, 
-          comentario_reparacion: repairComment,
+          comentario_reparacion: repairComment.trim() || null,
           usuario_reparando: repairingUser || 'Usuario actual'
         }));
         
-        // Solo cerrar el modal si no es obligatorio (no es reparado)
-        if (selectedAction !== 'reparado') {
-          setShowCommentModal(false);
-          setRepairComment('');
-          setRepairingUser('');
-        }
+        // Marcar que el comentario fue guardado
+        setCommentSaved(true);
         
-        Alert.alert('Éxito', 'Comentario de reparación agregado');
+        Alert.alert('Éxito', 'Comentario guardado correctamente');
       } else {
-        Alert.alert('Error', result.message || 'Error al agregar comentario');
+        Alert.alert('Error', result.message || 'Error al guardar comentario');
       }
     } catch (error) {
-      console.error('❌ Error al agregar comentario:', error);
-      Alert.alert('Error', 'Error inesperado al agregar comentario');
+      logger.error('❌ Error al guardar comentario:', error);
+      Alert.alert('Error', 'Error inesperado al guardar comentario');
     } finally {
       setUpdating(false);
     }
@@ -139,48 +148,12 @@ export default function JigNGDetailScreen({ route, navigation }) {
 
   const handleSaveChanges = async () => {
     if (!selectedAction) return;
-
-    // Validar que si es reparado, tenga comentarios
-    if (selectedAction === 'reparado' && (!repairComment || repairComment.trim() === '')) {
-      Alert.alert('Error', 'Debes agregar un comentario de reparación antes de marcar como reparado');
-      setShowCommentModal(true);
-      return;
-    }
-
-    try {
-      setUpdating(true);
-      let updateData = {};
-
-      if (selectedAction === 'falso_defecto') {
-        updateData = {
-          estado: 'falso_defecto',
-          comentario_reparacion: 'Marcado como falso defecto - No presenta falla alguna',
-          usuario_reparando: repairingUser || currentUser?.nombre || currentUser?.username || 'Usuario actual'
-        };
-      } else if (selectedAction === 'reparado') {
-        updateData = {
-        estado: 'reparado',
-          comentario_reparacion: repairComment,
-          usuario_reparando: repairingUser || currentUser?.nombre || currentUser?.username || 'Usuario actual'
-        };
-      }
-
-      const result = await jigNGService.updateJigNG(jigId, updateData);
-      
-      if (result.success) {
-        setJig(result.data);
-        setSelectedAction(null);
-        setRepairComment('');
-        setRepairingUser('');
-        Alert.alert('Éxito', `Jig ${selectedAction === 'falso_defecto' ? 'marcado como falso defecto' : 'marcado como reparado'}`);
-      } else {
-        Alert.alert('Error', result.message || 'Error al actualizar estado');
-      }
-    } catch (error) {
-      console.error('❌ Error al actualizar jig NG:', error);
-      Alert.alert('Error', 'Error inesperado al actualizar estado');
-    } finally {
-      setUpdating(false);
+    
+    // Si se selecciona "reparado", actualizar estado
+    if (selectedAction === 'reparado') {
+      await handleStatusUpdate('reparado');
+    } else if (selectedAction === 'falso_defecto') {
+      await handleStatusUpdate('falso_defecto');
     }
   };
 
@@ -212,7 +185,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
                 Alert.alert('Error', result.message || 'Error al eliminar jig NG');
               }
             } catch (error) {
-              console.error('❌ Error al eliminar jig NG:', error);
+              logger.error('❌ Error al eliminar jig NG:', error);
               Alert.alert('Error', 'Error inesperado al eliminar jig NG');
             }
           }
@@ -363,6 +336,17 @@ export default function JigNGDetailScreen({ route, navigation }) {
           <Paragraph style={styles.problemDescription}>
             {jig.motivo || 'Sin descripción disponible'}
             </Paragraph>
+          
+          {/* Mostrar foto si existe */}
+          {jig.foto && (
+            <View style={styles.photoContainer}>
+              <Image 
+                source={{ uri: jig.foto }} 
+                style={styles.photoPreview}
+                resizeMode="cover"
+              />
+            </View>
+          )}
           </Card.Content>
         </Card>
 
@@ -418,63 +402,67 @@ export default function JigNGDetailScreen({ route, navigation }) {
         </Card.Content>
       </Card>
 
-      {/* Botones de Acción */}
-      <View style={styles.bottomButtons}>
-        <Button
-          mode={selectedAction === 'falso_defecto' ? 'contained' : 'outlined'}
-          onPress={() => setSelectedAction('falso_defecto')}
-          style={[
-            styles.actionButton,
-            selectedAction === 'falso_defecto' && styles.selectedButton
-          ]}
-          labelStyle={[
-            styles.actionButtonLabel,
-            selectedAction === 'falso_defecto' && styles.selectedButtonLabel
-          ]}
-        >
-          🚫 Falso Defecto
-        </Button>
-        
-        <Button
-          mode={selectedAction === 'reparado' ? 'contained' : 'outlined'}
-          onPress={() => setSelectedAction('reparado')}
-          style={[
-            styles.actionButton,
-            selectedAction === 'reparado' && styles.selectedButton
-          ]}
-          labelStyle={[
-            styles.actionButtonLabel,
-            selectedAction === 'reparado' && styles.selectedButtonLabel
-          ]}
-        >
-          ✅ Reparado
-        </Button>
-      </View>
+      {/* Botones de Acción - Solo mostrar si el comentario fue guardado y no está reparado */}
+      {commentSaved && jig?.estado !== 'reparado' && (
+        <>
+          <View style={styles.bottomButtons}>
+            <Button
+              mode={selectedAction === 'falso_defecto' ? 'contained' : 'outlined'}
+              onPress={() => setSelectedAction('falso_defecto')}
+              style={[
+                styles.actionButton,
+                selectedAction === 'falso_defecto' && styles.selectedButton
+              ]}
+              labelStyle={[
+                styles.actionButtonLabel,
+                selectedAction === 'falso_defecto' && styles.selectedButtonLabel
+              ]}
+            >
+              🚫 Falso Defecto
+            </Button>
+            
+            <Button
+              mode={selectedAction === 'reparado' ? 'contained' : 'outlined'}
+              onPress={() => setSelectedAction('reparado')}
+              style={[
+                styles.actionButton,
+                selectedAction === 'reparado' && styles.selectedButton
+              ]}
+              labelStyle={[
+                styles.actionButtonLabel,
+                selectedAction === 'reparado' && styles.selectedButtonLabel
+              ]}
+            >
+              ✅ Reparado
+            </Button>
+          </View>
 
-      <View style={styles.bottomButtons}>
-        <Button
-          mode="contained"
-          onPress={handleSaveChanges}
-          style={[
-            styles.saveButton,
-            selectedAction ? styles.saveButtonEnabled : styles.saveButtonDisabled
-          ]}
-          labelStyle={styles.saveButtonLabel}
-          disabled={!selectedAction || updating}
-        >
-          {updating ? 'Guardando...' : 'Guardar Cambios'}
-        </Button>
-        
-        <Button
-          mode="outlined"
-          onPress={handleCancel}
-          style={styles.cancelButton}
-          labelStyle={styles.cancelButtonLabel}
-          disabled={updating}
-        >
-          Cancelar
-        </Button>
-      </View>
+          <View style={styles.bottomButtons}>
+            <Button
+              mode="contained"
+              onPress={handleSaveChanges}
+              style={[
+                styles.saveButton,
+                selectedAction ? styles.saveButtonEnabled : styles.saveButtonDisabled
+              ]}
+              labelStyle={styles.saveButtonLabel}
+              disabled={!selectedAction || updating}
+            >
+              {updating ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
+            
+            <Button
+              mode="outlined"
+              onPress={() => navigation.goBack()}
+              style={styles.cancelButton}
+              labelStyle={styles.cancelButtonLabel}
+              disabled={updating}
+            >
+              Cancelar
+            </Button>
+          </View>
+        </>
+      )}
 
       {updating && (
         <View style={styles.updatingContainer}>
@@ -647,6 +635,16 @@ const styles = StyleSheet.create({
     color: '#E0E0E0',
     fontSize: 16,
     lineHeight: 24,
+    marginBottom: 16,
+  },
+  photoContainer: {
+    marginTop: 16,
+  },
+  photoPreview: {
+    width: '100%',
+    height: 250,
+    borderRadius: 8,
+    backgroundColor: '#2C2C2C',
   },
   commentHeader: {
     flexDirection: 'row',

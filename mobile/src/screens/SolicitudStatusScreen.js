@@ -12,6 +12,7 @@ import {
 import { useRoute, useNavigation } from '@react-navigation/native';
 import AuthService from '../services/AuthService';
 import { formatDate, formatTime12Hour } from '../utils/dateUtils';
+import logger from '../utils/logger';
 
 const SolicitudStatusScreen = () => {
   const route = useRoute();
@@ -37,7 +38,7 @@ const SolicitudStatusScreen = () => {
         Alert.alert('Error', result.error);
       }
     } catch (error) {
-      console.error('Error al cargar estado de solicitud:', error);
+      logger.error('Error al cargar estado de solicitud:', error);
       Alert.alert('Error', 'Error de conexión');
     } finally {
       setLoading(false);

@@ -14,64 +14,104 @@ import {
 import { Card, Title, Paragraph, Searchbar, Chip, FAB, IconButton } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { jigNGService } from '../services/JigNGService';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
 export default function JigNGScreen({ navigation }) {
   const [jigsNG, setJigsNG] = useState([]);
   const [filteredJigsNG, setFilteredJigsNG] = useState([]);
+  const [modelGroups, setModelGroups] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('Todos');
-  const [viewMode, setViewMode] = useState('cards'); // 'cards' o 'list'
-  const [jigToDelete, setJigToDelete] = useState(null);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [stats, setStats] = useState({
-    total: 0,
-    pendientes: 0,
-    reparados: 0
-  });
-  const [selectedStat, setSelectedStat] = useState('total');
+  const [totalToRepair, setTotalToRepair] = useState(0);
 
-  const statusOptions = ['Todos', 'Pendiente', 'En Reparación', 'Reparado', 'Retirado'];
-
-  // Función para calcular estadísticas
-  const calculateStats = (jigsList) => {
-    const total = jigsList.length;
-    const pendientes = jigsList.filter(jig => 
-      jig.estado === 'pendiente' || jig.estado === 'en reparación'
-    ).length;
-    const reparados = jigsList.filter(jig => 
-      jig.estado === 'reparado' || jig.estado === 'falso_defecto'
-    ).length;
+  // Función para agrupar jigs NG por modelo
+  const groupJigsNGByModel = (jigsList) => {
+    const grouped = {};
+    jigsList.forEach(jigNG => {
+      const model = jigNG.jig?.modelo_actual || 'Sin Modelo';
+      if (!grouped[model]) {
+        grouped[model] = [];
+      }
+      grouped[model].push(jigNG);
+    });
     
-    return { total, pendientes, reparados };
+    // Ordenar jigs NG dentro de cada modelo por fecha
+    Object.keys(grouped).forEach(model => {
+      grouped[model].sort((a, b) => {
+        const dateA = new Date(a.fecha_ng || 0);
+        const dateB = new Date(b.fecha_ng || 0);
+        return dateB - dateA; // Más recientes primero
+      });
+    });
+    
+    return grouped;
   };
 
-  // Función para cargar jigs NG
+  // Función para cargar jigs NG (solo pendientes)
   const loadJigsNG = useCallback(async () => {
-    console.log('🔄 Cargando jigs NG...');
+    logger.info('🔄 Cargando jigs NG...');
     setLoading(true);
     
     try {
       const result = await jigNGService.getAllJigsNG();
       
-      if (result.success) {
-        console.log('✅ Jigs NG cargados:', result.data.length);
-        setJigsNG(result.data);
-        setFilteredJigsNG(result.data);
+      if (result.success && result.data) {
+        // Manejar estructura paginada (con items) o array directo
+        let jigsNGArray = [];
         
-        // Calcular estadísticas
-        const newStats = calculateStats(result.data);
-        setStats(newStats);
-        console.log('📊 Estadísticas calculadas:', newStats);
+        if (result.data.items && Array.isArray(result.data.items)) {
+          // Estructura paginada: usar items
+          jigsNGArray = result.data.items;
+          logger.info('✅ Jigs NG recibidos (paginados):', jigsNGArray.length, 'de', result.data.total);
+        } else if (Array.isArray(result.data)) {
+          // Array directo (compatibilidad hacia atrás)
+          jigsNGArray = result.data;
+          logger.info('✅ Jigs NG recibidos (array directo):', jigsNGArray.length);
+        } else {
+          logger.error('❌ result.data no tiene formato válido:', result.data);
+          setJigsNG([]);
+          setFilteredJigsNG([]);
+          setModelGroups({});
+          setTotalToRepair(0);
+          Alert.alert('Error', 'Formato de datos inválido del servidor');
+          return;
+        }
+        
+        // Filtrar solo pendientes y en reparación
+        const pendingJigs = jigsNGArray.filter(jigNG => 
+          jigNG.estado === 'pendiente' || jigNG.estado === 'en reparación'
+        );
+        
+        logger.info('✅ Jigs NG pendientes:', pendingJigs.length);
+        setJigsNG(pendingJigs);
+        
+        // Agrupar por modelo
+        const grouped = groupJigsNGByModel(pendingJigs);
+        setModelGroups(grouped);
+        
+        // Actualizar lista filtrada
+        const modelNames = Object.keys(grouped);
+        setFilteredJigsNG(modelNames);
+        
+        // Actualizar total
+        setTotalToRepair(pendingJigs.length);
       } else {
-        console.error('❌ Error cargando jigs NG:', result.error);
-        Alert.alert('Error', result.message || 'Error al cargar jigs NG');
+        logger.error('❌ Error cargando jigs NG:', result.error || 'result.success es false');
+        setJigsNG([]);
+        setFilteredJigsNG([]);
+        setModelGroups({});
+        setTotalToRepair(0);
+        Alert.alert('Error', result.error || result.message || 'Error al cargar jigs NG');
       }
     } catch (error) {
-      console.error('❌ Error inesperado:', error);
+      logger.error('❌ Error inesperado:', error);
+      setJigsNG([]);
+      setFilteredJigsNG([]);
+      setModelGroups({});
+      setTotalToRepair(0);
       Alert.alert('Error', 'Error inesperado al cargar jigs NG');
     } finally {
       setLoading(false);
@@ -79,7 +119,7 @@ export default function JigNGScreen({ navigation }) {
   }, []);
 
   // Función para filtrar jigs NG
-  const filterJigsNG = useCallback((query, status) => {
+  const filterJigsNG = useCallback((query) => {
     let filtered = jigsNG;
 
     // Filtrar por búsqueda
@@ -94,100 +134,22 @@ export default function JigNGScreen({ navigation }) {
       );
     }
 
-    // Filtrar por estado
-    if (status !== 'Todos') {
-      filtered = filtered.filter(jigNG => jigNG.estado === status.toLowerCase());
-    }
-
-    setFilteredJigsNG(filtered);
+    // Agrupar por modelo
+    const grouped = groupJigsNGByModel(filtered);
+    setModelGroups(grouped);
     
-    // Recalcular estadísticas con los datos filtrados
-    const newStats = calculateStats(filtered);
-    setStats(newStats);
+    // Actualizar lista filtrada con nombres de modelos
+    const modelNames = Object.keys(grouped);
+    setFilteredJigsNG(modelNames);
+    
+    // Actualizar total
+    setTotalToRepair(filtered.length);
   }, [jigsNG]);
 
   // Función para manejar búsqueda
   const handleSearch = (query) => {
     setSearchQuery(query);
-    // Aplicar filtro basado en la estadística seleccionada
-    handleStatSelection(selectedStat);
-  };
-
-  // Función para manejar filtro de estado
-  const handleStatusFilter = (status) => {
-    setSelectedStatus(status);
-    filterJigsNG(searchQuery, status);
-  };
-
-  // Función para manejar selección de estadística
-  const handleStatSelection = (statType) => {
-    setSelectedStat(statType);
-    
-    let filtered = jigsNG;
-    
-    // Filtrar por búsqueda primero
-    if (searchQuery.trim()) {
-      const searchLower = searchQuery.toLowerCase();
-      filtered = filtered.filter(jig => 
-        jig.numero_jig?.toLowerCase().includes(searchLower) ||
-        jig.modelo_actual?.toLowerCase().includes(searchLower) ||
-        jig.tipo?.toLowerCase().includes(searchLower) ||
-        jig.motivo?.toLowerCase().includes(searchLower) ||
-        jig.usuario_reporte?.toLowerCase().includes(searchLower)
-      );
-    }
-    
-    // Filtrar por tipo de estadística
-    switch (statType) {
-      case 'total':
-        // Mostrar todos
-        break;
-      case 'pendientes':
-        filtered = filtered.filter(jig => 
-          jig.estado === 'pendiente' || jig.estado === 'en reparación'
-        );
-        break;
-      case 'reparados':
-        filtered = filtered.filter(jig => 
-          jig.estado === 'reparado' || jig.estado === 'falso_defecto'
-        );
-        break;
-    }
-    
-    setFilteredJigsNG(filtered);
-    
-    // Recalcular estadísticas con los datos filtrados
-    const newStats = calculateStats(filtered);
-    setStats(newStats);
-  };
-
-  // Función para eliminar jig NG
-  const handleDeleteJigNG = async () => {
-    if (!jigToDelete) return;
-
-    try {
-      const result = await jigNGService.deleteJigNG(jigToDelete.id);
-      
-      if (result.success) {
-        // Actualizar la lista local
-        const updatedJigs = jigsNG.filter(jig => jig.id !== jigToDelete.id);
-        setJigsNG(updatedJigs);
-        
-        // Recalcular estadísticas con la lista actualizada
-        const newStats = calculateStats(updatedJigs);
-        setStats(newStats);
-        
-        filterJigsNG(searchQuery, selectedStatus);
-        setShowDeleteModal(false);
-        setJigToDelete(null);
-        Alert.alert('Éxito', 'Jig NG eliminado correctamente');
-      } else {
-        Alert.alert('Error', result.message || 'Error al eliminar jig NG');
-      }
-    } catch (error) {
-      console.error('❌ Error al eliminar jig NG:', error);
-      Alert.alert('Error', 'Error inesperado al eliminar jig NG');
-    }
+    filterJigsNG(query);
   };
 
   // Función para obtener el color del estado
@@ -197,12 +159,6 @@ export default function JigNGScreen({ navigation }) {
         return '#FF9800';
       case 'en reparación':
         return '#2196F3';
-      case 'reparado':
-        return '#4CAF50';
-      case 'retirado':
-        return '#F44336';
-      case 'falso_defecto':
-        return '#9C27B0';
       default:
         return '#9E9E9E';
     }
@@ -211,8 +167,29 @@ export default function JigNGScreen({ navigation }) {
   // Función para capitalizar estado
   const capitalizeStatus = (estado) => {
     if (!estado) return 'Sin Estado';
-    if (estado === 'falso_defecto') return 'Falso Defecto';
     return estado.charAt(0).toUpperCase() + estado.slice(1).toLowerCase();
+  };
+
+  // Función para eliminar jig NG de la lista cuando se marca como reparado
+  const removeJigNGFromList = (jigNGId) => {
+    const updatedJigs = jigsNG.filter(jig => jig.id !== jigNGId);
+    setJigsNG(updatedJigs);
+    
+    // Reagrupar
+    const grouped = groupJigsNGByModel(updatedJigs);
+    setModelGroups(grouped);
+    
+    // Actualizar lista filtrada
+    const modelNames = Object.keys(grouped);
+    setFilteredJigsNG(modelNames);
+    
+    // Actualizar total
+    setTotalToRepair(updatedJigs.length);
+    
+    // Reaplicar búsqueda si hay
+    if (searchQuery.trim()) {
+      filterJigsNG(searchQuery);
+    }
   };
 
   // Cargar datos al enfocar la pantalla
@@ -222,94 +199,91 @@ export default function JigNGScreen({ navigation }) {
     }, [loadJigsNG])
   );
 
-  // Renderizar tarjeta de jig NG
-  const renderJigNGCard = ({ item: jigNG }) => (
-    <TouchableOpacity
-      style={styles.jigCard}
-      onPress={() => navigation.navigate('JigNGDetail', { jigId: jigNG.id })}
-    >
-      <Card style={styles.jigCardContent}>
+  // Renderizar tarjeta de modelo con múltiples jigs NG
+  const renderModelCard = ({ item: modelName }) => {
+    const jigsInModel = modelGroups[modelName] || [];
+    
+    return (
+      <Card style={styles.modelCard}>
         <Card.Content>
-          <View style={styles.jigCardHeader}>
-            <Title style={styles.jigNumber}>{jigNG.jig?.numero_jig || 'N/A'}</Title>
+          <View style={styles.modelCardHeader}>
+            <Title style={styles.modelCardTitle}>{modelName}</Title>
             <Chip 
-              style={[styles.statusChip, { backgroundColor: getStatusColor(jigNG.estado) }]}
-              textStyle={styles.statusChipText}
+              style={[styles.modelCountChip]}
+              textStyle={styles.modelCountChipText}
             >
-              {capitalizeStatus(jigNG.estado)}
+              {jigsInModel.length} {jigsInModel.length === 1 ? 'jig' : 'jigs'}
             </Chip>
           </View>
           
-          <View style={styles.jigCardDetails}>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Modelo:</Text>
-              <Text style={styles.detailValue}>{jigNG.jig?.modelo_actual || 'N/A'}</Text>
+          {/* Lista de jigs NG dentro del modelo */}
+          {jigsInModel.map((jigNG, index) => (
+            <View key={jigNG.id} style={styles.jigNGItem}>
+              {index > 0 && <View style={styles.divider} />}
+              
+              <TouchableOpacity
+                onPress={() => navigation.navigate('JigNGDetail', { 
+                  jigId: jigNG.id
+                })}
+                activeOpacity={0.7}
+              >
+                <View style={styles.jigNGHeader}>
+                  <View style={styles.jigNGHeaderLeft}>
+                    <Text style={styles.jigNGNumber}>{jigNG.jig?.numero_jig || 'N/A'}</Text>
+                    <Chip 
+                      style={[styles.statusChip, { backgroundColor: getStatusColor(jigNG.estado) }]}
+                      textStyle={styles.statusChipText}
+                    >
+                      {capitalizeStatus(jigNG.estado)}
+                    </Chip>
+                  </View>
+                </View>
+                
+                <View style={styles.jigNGDetails}>
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Tipo:</Text>
+                    <Text style={styles.detailValue}>{jigNG.jig?.tipo || 'N/A'}</Text>
+                  </View>
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Problema:</Text>
+                    <Text style={styles.detailValue} numberOfLines={2}>
+                      {jigNG.motivo || 'Sin descripción'}
+                    </Text>
+                  </View>
+                  
+                  {jigNG.fecha_ng && (
+                    <View style={styles.detailRow}>
+                      <Text style={styles.detailLabel}>Fecha:</Text>
+                      <Text style={styles.detailValue}>
+                        {new Date(jigNG.fecha_ng).toLocaleDateString()}
+                      </Text>
+                    </View>
+                  )}
+                  
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Reportado por:</Text>
+                    <Text style={styles.detailValue}>
+                      {jigNG.tecnico_ng?.nombre || jigNG.usuario_reporte || 'N/A'}
+                    </Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
             </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Tipo:</Text>
-              <Text style={styles.detailValue}>{jigNG.jig?.tipo || 'N/A'}</Text>
-            </View>
-            <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Problema:</Text>
-              <Text style={styles.detailValue} numberOfLines={2}>
-                {jigNG.motivo || 'Sin descripción'}
-              </Text>
-            </View>
-            {jigNG.fecha_ng && (
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>Fecha:</Text>
-                <Text style={styles.detailValue}>
-                  {new Date(jigNG.fecha_ng).toLocaleDateString()}
-                </Text>
-              </View>
-            )}
-          </View>
+          ))}
         </Card.Content>
       </Card>
-    </TouchableOpacity>
-  );
-
-  // Renderizar item de lista
-  const renderJigNGItem = ({ item: jigNG }) => (
-    <TouchableOpacity
-      style={styles.jigListItem}
-      onPress={() => navigation.navigate('JigNGDetail', { jigId: jigNG.id })}
-    >
-      <View style={styles.jigListItemContent}>
-        <View style={styles.jigListItemHeader}>
-          <Text style={styles.jigListItemNumber}>{jigNG.jig?.numero_jig || 'N/A'}</Text>
-          <Chip 
-            style={[styles.statusChip, { backgroundColor: getStatusColor(jigNG.estado) }]}
-            textStyle={styles.statusChipText}
-          >
-            {capitalizeStatus(jigNG.estado)}
-          </Chip>
-        </View>
-        <Text style={styles.jigListItemModel}>{jigNG.jig?.modelo_actual || 'N/A'}</Text>
-        <Text style={styles.jigListItemProblem} numberOfLines={1}>
-          {jigNG.motivo || 'Sin descripción'}
-        </Text>
-      </View>
-      <IconButton
-        icon="delete"
-        size={20}
-        iconColor="#F44336"
-        onPress={() => {
-          setJigToDelete(jigNG);
-          setShowDeleteModal(true);
-        }}
-      />
-    </TouchableOpacity>
-  );
+    );
+  };
 
   // Renderizar estado vacío
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyStateTitle}>No hay jigs NG</Text>
+      <Text style={styles.emptyStateTitle}>No hay jigs NG pendientes</Text>
       <Text style={styles.emptyStateSubtitle}>
-        {searchQuery || selectedStatus !== 'Todos' 
+        {searchQuery
           ? 'No se encontraron jigs NG con los filtros aplicados'
-          : 'No hay jigs NG registrados'
+          : 'No hay jigs NG que requieran reparación'
         }
       </Text>
     </View>
@@ -338,114 +312,21 @@ export default function JigNGScreen({ navigation }) {
           inputStyle={styles.searchbarInput}
         />
         
-        {/* Marcador de estadísticas */}
-        <View style={styles.statsContainer}>
-          <TouchableOpacity 
-            style={[
-              styles.statBox, 
-              selectedStat === 'total' && styles.selectedStatBox
-            ]}
-            onPress={() => handleStatSelection('total')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.statIconContainer}>
-              <Text style={styles.statIcon}>📊</Text>
-            </View>
-            <Text style={[
-              styles.statNumber,
-              selectedStat === 'total' && styles.selectedStatNumber
-            ]}>
-              {stats.total}
-            </Text>
-            <Text style={[
-              styles.statLabel,
-              selectedStat === 'total' && styles.selectedStatLabel
-            ]}>
-              Total
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[
-              styles.statBox, 
-              selectedStat === 'pendientes' && styles.selectedStatBox
-            ]}
-            onPress={() => handleStatSelection('pendientes')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.statIconContainer}>
-              <Text style={styles.statIcon}>⏳</Text>
-            </View>
-            <Text style={[
-              styles.statNumber,
-              { color: '#FF9800' },
-              selectedStat === 'pendientes' && styles.selectedStatNumber
-            ]}>
-              {stats.pendientes}
-            </Text>
-            <Text style={[
-              styles.statLabel,
-              selectedStat === 'pendientes' && styles.selectedStatLabel
-            ]}>
-              Pendientes
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity 
-            style={[
-              styles.statBox, 
-              selectedStat === 'reparados' && styles.selectedStatBox
-            ]}
-            onPress={() => handleStatSelection('reparados')}
-            activeOpacity={0.7}
-          >
-            <View style={styles.statIconContainer}>
-              <Text style={styles.statIcon}>✅</Text>
-            </View>
-            <Text style={[
-              styles.statNumber,
-              { color: '#4CAF50' },
-              selectedStat === 'reparados' && styles.selectedStatNumber
-            ]}>
-              {stats.reparados}
-            </Text>
-            <Text style={[
-              styles.statLabel,
-              selectedStat === 'reparados' && styles.selectedStatLabel
-            ]}>
-              Reparados
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Botones de vista */}
-        <View style={styles.viewModeButtons}>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'cards' && styles.activeViewModeButton]}
-            onPress={() => setViewMode('cards')}
-          >
-            <Text style={[styles.viewModeButtonText, viewMode === 'cards' && styles.activeViewModeButtonText]}>
-              Tarjetas
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.viewModeButton, viewMode === 'list' && styles.activeViewModeButton]}
-            onPress={() => setViewMode('list')}
-          >
-            <Text style={[styles.viewModeButtonText, viewMode === 'list' && styles.activeViewModeButtonText]}>
-              Lista
-            </Text>
-          </TouchableOpacity>
+        {/* Total de jigs a reparar */}
+        <View style={styles.totalContainer}>
+          <View style={styles.totalBox}>
+            <Text style={styles.totalIcon}>🔧</Text>
+            <Text style={styles.totalNumber}>{totalToRepair}</Text>
+            <Text style={styles.totalLabel}>Total de jigs a reparar</Text>
+          </View>
         </View>
       </View>
 
-      {/* Lista de jigs NG */}
+      {/* Lista de modelos con jigs NG */}
       <FlatList
         data={filteredJigsNG}
-        keyExtractor={(item) => item.id.toString()}
-        renderItem={viewMode === 'cards' ? renderJigNGCard : renderJigNGItem}
-        numColumns={viewMode === 'cards' ? 1 : 1}
-        key={viewMode} // Forzar re-render al cambiar vista
+        keyExtractor={(item) => item}
+        renderItem={renderModelCard}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -466,37 +347,6 @@ export default function JigNGScreen({ navigation }) {
         onPress={() => navigation.navigate('AddJigNG')}
         label="Agregar Jig NG"
       />
-
-      {/* Modal de confirmación de eliminación */}
-      <Modal
-        visible={showDeleteModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDeleteModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Eliminar Jig NG</Text>
-            <Text style={styles.modalMessage}>
-              ¿Estás seguro de que quieres eliminar el jig NG {jigToDelete?.numero_jig}?
-            </Text>
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
-                onPress={() => setShowDeleteModal(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.deleteButton]}
-                onPress={handleDeleteJigNG}
-              >
-                <Text style={styles.deleteButtonText}>Eliminar</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -534,117 +384,101 @@ const styles = StyleSheet.create({
     color: '#E0E0E0',
     fontSize: 16,
   },
-  statsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 20,
-    paddingHorizontal: 4,
+  totalContainer: {
+    marginBottom: 12,
   },
-  statBox: {
-    flex: 1,
+  totalBox: {
     backgroundColor: '#1E1E1E',
     borderRadius: 16,
     padding: 20,
-    marginHorizontal: 4,
     alignItems: 'center',
     elevation: 4,
     borderWidth: 2,
-    borderColor: '#333333',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    transform: [{ scale: 1 }],
+    borderColor: '#FF9800',
   },
-  selectedStatBox: {
-    backgroundColor: '#2C2C2C',
-    borderColor: '#2196F3',
-    borderWidth: 2,
-    elevation: 8,
-    transform: [{ scale: 1.05 }],
-    shadowOpacity: 0.4,
-  },
-  statIconContainer: {
+  totalIcon: {
+    fontSize: 32,
     marginBottom: 8,
   },
-  statIcon: {
-    fontSize: 24,
-  },
-  statNumber: {
-    color: '#FFFFFF',
-    fontSize: 28,
+  totalNumber: {
+    color: '#FF9800',
+    fontSize: 36,
     fontWeight: 'bold',
     marginBottom: 6,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
   },
-  selectedStatNumber: {
-    color: '#2196F3',
-    fontSize: 30,
-  },
-  statLabel: {
-    color: '#B0B0B0',
-    fontSize: 13,
-    fontWeight: '600',
-    textAlign: 'center',
-    letterSpacing: 0.5,
-  },
-  selectedStatLabel: {
-    color: '#2196F3',
-    fontWeight: 'bold',
-  },
-  viewModeButtons: {
-    flexDirection: 'row',
-    backgroundColor: '#2C2C2C',
-    borderRadius: 8,
-    padding: 4,
-    marginBottom: 8,
-  },
-  viewModeButton: {
-    flex: 1,
-    paddingVertical: 8,
-    alignItems: 'center',
-    borderRadius: 6,
-  },
-  activeViewModeButton: {
-    backgroundColor: '#2196F3',
-  },
-  viewModeButtonText: {
+  totalLabel: {
     color: '#B0B0B0',
     fontSize: 14,
-    fontWeight: '500',
-  },
-  activeViewModeButtonText: {
-    color: '#FFFFFF',
+    fontWeight: '600',
+    textAlign: 'center',
   },
   listContainer: {
     padding: 16,
     flexGrow: 1,
   },
-  jigCard: {
-    marginBottom: 16,
-  },
-  jigCardContent: {
+  modelCard: {
     backgroundColor: '#1E1E1E',
     elevation: 4,
     borderRadius: 12,
+    marginBottom: 16,
   },
-  jigCardHeader: {
+  modelCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  modelCardTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: 'bold',
+    flex: 1,
+  },
+  modelCountChip: {
+    backgroundColor: '#2C2C2C',
+  },
+  modelCountChipText: {
+    color: '#2196F3',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  jigNGItem: {
+    marginBottom: 12,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#333333',
+    marginVertical: 12,
+  },
+  jigNGHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  jigNumber: {
+  jigNGHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  jigNGNumber: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
   },
-  jigCardDetails: {
+  statusChip: {
+    height: 24,
+  },
+  statusChipText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  jigNGDetails: {
     gap: 8,
   },
   detailRow: {
@@ -663,38 +497,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     flex: 2,
     textAlign: 'right',
-  },
-  jigListItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E1E1E',
-    padding: 16,
-    marginBottom: 8,
-    borderRadius: 12,
-    elevation: 2,
-  },
-  jigListItemContent: {
-    flex: 1,
-  },
-  jigListItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  jigListItemNumber: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  jigListItemModel: {
-    color: '#B0B0B0',
-    fontSize: 14,
-    marginBottom: 2,
-  },
-  jigListItemProblem: {
-    color: '#E0E0E0',
-    fontSize: 12,
   },
   emptyState: {
     flex: 1,
@@ -720,57 +522,5 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: '#2196F3',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modal: {
-    backgroundColor: '#1E1E1E',
-    borderRadius: 12,
-    padding: 24,
-    margin: 16,
-    minWidth: 280,
-  },
-  modalTitle: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  modalMessage: {
-    color: '#E0E0E0',
-    fontSize: 16,
-    marginBottom: 24,
-    textAlign: 'center',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: '#2C2C2C',
-  },
-  deleteButton: {
-    backgroundColor: '#F44336',
-  },
-  cancelButtonText: {
-    color: '#E0E0E0',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  deleteButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
   },
 });

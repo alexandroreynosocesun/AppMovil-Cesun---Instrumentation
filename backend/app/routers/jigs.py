@@ -1,32 +1,76 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from ..database import get_db
 from ..models.models import Jig, Validacion, Reparacion, JigNG
-from ..schemas import Jig as JigSchema, JigCreate, JigHistorial, Validacion as ValidacionSchema, Reparacion as ReparacionSchema, JigNG as JigNGSchema
+from ..schemas import Jig as JigSchema, JigCreate, JigHistorial, Validacion as ValidacionSchema, Reparacion as ReparacionSchema, JigNG as JigNGSchema, PaginatedResponse
 from ..auth import get_current_user
 from ..models.models import Tecnico
+from ..services.cache_service import cache_service
+from ..utils.pagination import paginate_query
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
-@router.get("/", response_model=List[JigSchema])
+@router.get("/", response_model=PaginatedResponse[JigSchema])
 async def get_jigs(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página (máximo 100)"),
     db: Session = Depends(get_db),
     current_user: Tecnico = Depends(get_current_user)
 ):
-    """Obtener lista de jigs"""
-    jigs = db.query(Jig).offset(skip).limit(limit).all()
-    return jigs
+    """
+    Obtener lista paginada de jigs
+    
+    - **page**: Número de página (empezando en 1)
+    - **page_size**: Cantidad de elementos por página (máximo 100)
+    
+    Retorna una respuesta paginada con los jigs disponibles.
+    """
+    query = db.query(Jig).order_by(Jig.created_at.desc())
+    items, total, pages = paginate_query(query, page, page_size)
+    
+    return PaginatedResponse(
+        items=[JigSchema.from_orm(jig) for jig in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages
+    )
 
-@router.get("/qr/{codigo_qr}", response_model=JigHistorial)
+@router.get("/qr/{codigo_qr}", response_model=JigHistorial, summary="Obtener jig por código QR", description="""
+    Obtener información completa de un jig mediante su código QR.
+    
+    Incluye:
+    - Información del jig (código QR, número, tipo, estado)
+    - Historial completo de validaciones
+    - Historial de reparaciones
+    - Historial de jigs NG (No Conformes)
+    
+    Este endpoint utiliza caché para mejorar el rendimiento.
+    
+    **Parámetros:**
+    - `codigo_qr`: Código QR del jig a consultar
+    """)
 async def get_jig_by_qr(
     codigo_qr: str,
     db: Session = Depends(get_db),
     current_user: Tecnico = Depends(get_current_user)
 ):
-    """Obtener jig por código QR con historial"""
+    """Obtener jig por código QR con historial (con caché)"""
+    # Intentar obtener del caché
+    cache_key = f"jig:qr:{codigo_qr}"
+    cached_result = cache_service.get(cache_key)
+    if cached_result:
+        from ..services.monitoring_service import track_cache_hit
+        track_cache_hit(cache_key)
+        return JigHistorial(**cached_result)
+    
+    from ..services.monitoring_service import track_cache_miss
+    track_cache_miss(cache_key)
+    
     jig = db.query(Jig).filter(Jig.codigo_qr == codigo_qr).first()
     if not jig:
         raise HTTPException(
@@ -73,12 +117,17 @@ async def get_jig_by_qr(
         }
         jigs_ng_schema.append(jig_ng_dict)
     
-    return JigHistorial(
+    result = JigHistorial(
         jig=JigSchema.from_orm(jig),
         validaciones=validaciones_schema,
         reparaciones=reparaciones_schema,
         jigs_ng=jigs_ng_schema
     )
+    
+    # Guardar en caché (5 minutos para datos que cambian frecuentemente)
+    cache_service.set(cache_key, result.dict(), ttl=300)
+    
+    return result
 
 @router.get("/{jig_id}", response_model=JigSchema)
 async def get_jig_by_id(
@@ -115,6 +164,9 @@ async def create_jig(
     db.commit()
     db.refresh(db_jig)
     
+    # Invalidar caché relacionado
+    cache_service.delete_pattern("jig:*")
+    
     return JigSchema.from_orm(db_jig)
 
 @router.put("/{jig_id}", response_model=JigSchema)
@@ -137,6 +189,10 @@ async def update_jig(
     
     db.commit()
     db.refresh(jig)
+    
+    # Invalidar caché relacionado
+    cache_service.delete_pattern(f"jig:qr:{jig.codigo_qr}")
+    cache_service.delete_pattern("jig:*")
     
     return JigSchema.from_orm(jig)
 

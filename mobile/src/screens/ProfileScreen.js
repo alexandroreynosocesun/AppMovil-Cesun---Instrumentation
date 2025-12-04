@@ -1,19 +1,13 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   StyleSheet,
   ScrollView,
   Alert,
   Dimensions,
-  Text,
-  Modal,
-  TouchableWithoutFeedback,
-  Image
+  Text
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { getAuthToken } from '../utils/authUtils';
-import SignatureScreen from 'react-native-signature-canvas';
 import {
   Card,
   Title,
@@ -27,20 +21,17 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { authService } from '../services/AuthService';
+import { usePlatform } from '../hooks/usePlatform';
+import { webStyles } from '../utils/webStyles';
+import logger from '../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
 export default function ProfileScreen({ navigation }) {
+  const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user, updateProfile, logout } = useAuth();
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [signature, setSignature] = useState(user?.firma_digital || '');
-  const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [signatureData, setSignatureData] = useState(null);
-  const [savingSignature, setSavingSignature] = useState(false);
-  const [showSignaturePreview, setShowSignaturePreview] = useState(false);
-  const [isTestSignature, setIsTestSignature] = useState(false);
-  const signatureRef = useRef(null);
   
   const [formData, setFormData] = useState({
     nombre: user?.nombre || '',
@@ -60,27 +51,9 @@ export default function ProfileScreen({ navigation }) {
         confirmPassword: '',
         turno_actual: user.turno_actual || 'A'
       });
-      setSignature(user.firma_digital || '');
-      console.log('Usuario actualizado en contexto:', user);
-      console.log('Firma del usuario:', user.firma_digital ? 'Presente' : 'Ausente');
-      
-      // Cargar firma desde almacenamiento seguro
-      loadSecureSignature();
+      logger.info('Usuario actualizado en contexto:', user);
     }
   }, [user]);
-
-  const loadSecureSignature = async () => {
-    try {
-      // Cargar firma desde SecureStore directamente
-      const secureSignature = await SecureStore.getItemAsync('user_signature');
-      if (secureSignature) {
-        setSignature(secureSignature);
-        console.log('✅ Firma cargada desde SecureStore');
-      }
-    } catch (error) {
-      console.error('Error cargando firma segura:', error);
-    }
-  };
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -106,283 +79,7 @@ export default function ProfileScreen({ navigation }) {
       Alert.alert('Error', 'Las contraseñas no coinciden');
       return false;
     }
-    if (!signature) {
-      Alert.alert('Error', 'Debes crear tu firma digital');
-      return false;
-    }
     return true;
-  };
-
-
-  const clearSignature = async () => {
-    try {
-      // Eliminar firma del almacenamiento seguro
-      await SecureStore.deleteItemAsync('user_signature');
-      console.log('✅ Firma eliminada de SecureStore');
-      
-      // Limpiar estado local
-      setSignature('');
-      setSignatureData(null);
-      setShowSignatureModal(false);
-      
-      // Actualizar perfil en el servidor
-      const result = await authService.updateProfile({ firma_digital: null });
-      if (result.success) {
-        updateProfile({ firma_digital: null });
-      }
-      
-      Alert.alert('Éxito', 'Firma eliminada correctamente');
-    } catch (error) {
-      console.error('Error eliminando firma:', error);
-      Alert.alert('Error', 'No se pudo eliminar la firma');
-    }
-  };
-
-  const openSignatureModal = () => {
-    setSignatureData(null); // Empezar con firma vacía
-    setIsTestSignature(false); // Resetear estado de prueba al abrir modal
-    setShowSignatureModal(true);
-  };
-
-  const closeSignatureModal = () => {
-    setShowSignatureModal(false);
-  };
-
-  const handleSignature = (signature) => {
-    console.log('🎯 handleSignature llamado (onOK)');
-    console.log('Firma capturada:', signature ? signature.substring(0, 50) + '...' : 'null');
-    console.log('Tipo de firma:', typeof signature);
-    console.log('Longitud de firma:', signature ? signature.length : 'null');
-    
-    // Validación más estricta cuando se presiona "Guardar"
-    if (signature && signature.trim() !== '') {
-      // Verificar que sea una imagen base64 válida
-      const isBase64 = /^data:image\/(png|jpeg|jpg);base64,/.test(signature) || 
-                      /^[A-Za-z0-9+/=]+$/.test(signature);
-      
-      // Requerir mínimo 200 caracteres cuando se confirma
-      if (isBase64 && signature.length > 200) {
-        setSignatureData(signature);
-        setIsTestSignature(false);
-        console.log('✅ Firma confirmada y guardada en estado');
-      } else {
-        console.log('❌ Firma inválida - formato o longitud incorrecta');
-        if (signature.length <= 200) {
-          Alert.alert(
-            'Firma Muy Corta',
-            'La firma debe ser más completa. Por favor, dibuja trazos más largos y continuos.',
-            [{ text: 'Entendido' }]
-          );
-        } else {
-          Alert.alert(
-            'Firma Inválida',
-            'La firma no tiene un formato válido. Por favor, dibuja una nueva firma.',
-            [{ text: 'Entendido' }]
-          );
-        }
-        // No establecemos null aquí para que el usuario pueda seguir dibujando
-      }
-    } else {
-      console.log('❌ Firma vacía o inválida');
-      Alert.alert(
-        'Sin Firma',
-        'No se detectó ninguna firma. Por favor, dibuja tu firma.',
-        [{ text: 'Entendido' }]
-      );
-    }
-  };
-
-  const handleSignatureChange = (signature) => {
-    console.log('🔄 handleSignatureChange llamado');
-    console.log('Firma cambiada:', signature ? signature.substring(0, 50) + '...' : 'null');
-    console.log('Tipo de firma:', typeof signature);
-    console.log('Longitud de firma:', signature ? signature.length : 'null');
-    
-    // En onChange, guardamos cualquier firma válida (más permisivo)
-    if (signature && signature.trim() !== '') {
-      // Verificar que sea una imagen base64 válida
-      const isBase64 = /^data:image\/(png|jpeg|jpg);base64,/.test(signature) || 
-                      /^[A-Za-z0-9+/=]+$/.test(signature);
-      
-      // Aceptar cualquier firma base64 válida, incluso si es corta (se validará al guardar)
-      if (isBase64 && signature.length > 50) {
-        setSignatureData(signature);
-        setIsTestSignature(false);
-        console.log('✅ Firma actualizada en estado (onChange)');
-      } else {
-        console.log('⚠️ Firma muy corta o formato inválido en onChange');
-        // No establecemos null aquí, solo no actualizamos si es muy corta
-      }
-    } else {
-      console.log('⚠️ Firma vacía en onChange');
-      setSignatureData(null);
-      setIsTestSignature(false);
-    }
-  };
-
-  const saveSignature = async () => {
-    try {
-      console.log('🔍 Intentando guardar firma...');
-      console.log('signatureData preview:', signatureData?.substring(0, 100) || 'null');
-      console.log('Tipo:', typeof signatureData);
-      console.log('Longitud:', signatureData ? signatureData.length : 'null');
-      
-      // Decodificar para verificar el tamaño real
-      try {
-        const base64Data = signatureData.split(',')[1] || signatureData;
-        const binaryString = atob(base64Data);
-        console.log('🔍 Tamaño real de la imagen:', binaryString.length, 'bytes');
-        console.log('🔍 Preview de datos binarios:', binaryString.substring(0, 50));
-      } catch (error) {
-        console.error('Error decodificando firma:', error);
-      }
-      
-      // Verificar si hay token válido
-      const token = await getAuthToken();
-      if (!token) {
-        Alert.alert(
-          'Sesión Expirada',
-          'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
-          [{ text: 'Entendido', onPress: () => setShowSignatureModal(false) }]
-        );
-        return;
-      }
-      
-      // Validación mejorada antes de guardar
-      if (!signatureData || signatureData.length < 500) {
-        Alert.alert(
-          'Firma Inválida',
-          'La firma es muy corta o está vacía. Por favor, dibuja una firma más completa con trazos más largos.',
-          [{ text: 'Entendido' }]
-        );
-        return;
-      }
-      
-      // Validación adicional: verificar que no sea una imagen de 1x1 píxel o corrupta
-      try {
-        // Decodificar base64 para verificar el tamaño
-        const base64Data = signatureData.split(',')[1] || signatureData;
-        const binaryString = atob(base64Data);
-        const bytes = new Uint8Array(binaryString.length);
-        for (let i = 0; i < binaryString.length; i++) {
-          bytes[i] = binaryString.charCodeAt(i);
-        }
-        
-        // Verificar que no sea una imagen muy pequeña (menos de 500 bytes = imagen corrupta)
-        if (bytes.length < 500) {
-          Alert.alert(
-            'Firma Inválida',
-            'La firma es demasiado pequeña o está corrupta. Por favor, dibuja una firma más grande y clara con trazos completos.',
-            [{ text: 'Entendido' }]
-          );
-          return;
-        }
-        
-        // Verificar que sea un PNG válido (debe empezar con la firma PNG)
-        if (bytes.length >= 8) {
-          const pngSignature = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
-          const isValidPNG = pngSignature.every((byte, index) => bytes[index] === byte);
-          if (!isValidPNG) {
-            Alert.alert(
-              'Firma Inválida',
-              'La firma no es una imagen PNG válida. Por favor, dibuja una nueva firma.',
-              [{ text: 'Entendido' }]
-            );
-            return;
-          }
-        }
-      } catch (error) {
-        console.error('Error validando firma:', error);
-        Alert.alert(
-          'Firma Inválida',
-          'No se pudo validar la firma. Por favor, dibuja una nueva firma.',
-          [{ text: 'Entendido' }]
-        );
-        return;
-      }
-      
-      // Verificar formato base64
-      const isBase64 = /^data:image\/(png|jpeg|jpg);base64,/.test(signatureData) || 
-                      /^[A-Za-z0-9+/=]+$/.test(signatureData);
-      
-      if (!isBase64) {
-        Alert.alert(
-          'Formato Inválido',
-          'La firma no tiene un formato válido. Por favor, dibuja una nueva firma.',
-          [{ text: 'Entendido' }]
-        );
-        return;
-      }
-      
-      console.log('✅ Firma válida - Guardando...');
-      setSavingSignature(true);
-      setSignature(signatureData);
-      
-      // Mostrar mensaje de procesamiento
-      const message = isTestSignature 
-        ? 'La firma de prueba se está procesando y guardando. Esto puede tardar unos segundos...'
-        : 'La firma se está procesando y guardando. Esto puede tardar unos segundos...';
-        
-      Alert.alert(
-        'Procesando Firma',
-        message,
-        [],
-        { cancelable: false }
-      );
-      
-      // Guardar la firma de forma segura localmente
-      try {
-        await SecureStore.setItemAsync('user_signature', signatureData);
-        console.log('✅ Firma guardada en SecureStore');
-      } catch (error) {
-        console.error('Error guardando firma en SecureStore:', error);
-        Alert.alert('Error', 'No se pudo guardar la firma de forma segura');
-        return;
-      }
-
-      // Guardar la firma en el perfil del usuario en el servidor
-      const result = await authService.updateProfile({ firma_digital: signatureData });
-      if (result.success) {
-        updateProfile({ firma_digital: signatureData });
-      setShowSignatureModal(false);
-        Alert.alert('Éxito', 'Firma guardada correctamente de forma segura');
-    } else {
-        console.error('Error actualizando perfil:', result.error);
-        if (result.error && result.error.includes('401')) {
-          Alert.alert(
-            'Sesión Expirada',
-            'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
-            [
-              { text: 'Entendido', onPress: () => {
-                // Cerrar modal y redirigir al login
-                setShowSignatureModal(false);
-                // Aquí podrías agregar lógica para cerrar sesión
-              }}
-            ]
-          );
-        } else {
-          Alert.alert('Error', result.error || 'No se pudo guardar la firma');
-        }
-      }
-      
-    } catch (error) {
-      console.error('Error al guardar firma:', error);
-      if (error.message && error.message.includes('401')) {
-        Alert.alert(
-          'Sesión Expirada',
-          'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
-          [
-            { text: 'Entendido', onPress: () => {
-              setShowSignatureModal(false);
-            }}
-          ]
-        );
-      } else {
-        Alert.alert('Error', 'No se pudo guardar la firma. Verifica tu conexión.');
-      }
-    } finally {
-      setSavingSignature(false);
-    }
   };
 
 
@@ -395,8 +92,7 @@ export default function ProfileScreen({ navigation }) {
       const updateData = {
         nombre: formData.nombre.trim(),
         numero_empleado: formData.numero_empleado.trim(),
-        turno_actual: formData.turno_actual,
-        firma_digital: signature
+        turno_actual: formData.turno_actual
       };
 
       // Solo incluir password si se proporcionó
@@ -404,8 +100,8 @@ export default function ProfileScreen({ navigation }) {
         updateData.password = formData.password;
       }
 
-      console.log('Datos a enviar:', updateData);
-      console.log('Turno actual seleccionado:', formData.turno_actual);
+      logger.info('Datos a enviar:', updateData);
+      logger.info('Turno actual seleccionado:', formData.turno_actual);
 
       const result = await updateProfile(updateData);
       
@@ -420,7 +116,6 @@ export default function ProfileScreen({ navigation }) {
           confirmPassword: '',
           turno_actual: user?.turno_actual || 'A'
         });
-        setSignature(user?.firma_digital || '');
       } else {
         Alert.alert('Error', result.error || 'Error al actualizar el perfil');
       }
@@ -439,8 +134,6 @@ export default function ProfileScreen({ navigation }) {
       confirmPassword: '',
       turno_actual: user?.turno_actual || 'A'
     });
-    setSignature(user?.firma_digital || '');
-    setSignaturePaths([]);
     setEditing(false);
   };
 
@@ -456,9 +149,19 @@ export default function ProfileScreen({ navigation }) {
   };
 
   return (
-    <ScrollView style={styles.container}>
+    <ScrollView 
+      style={[styles.container, isWeb && webStyles.container]}
+      contentContainerStyle={[
+        isWeb && {
+          maxWidth: maxWidth,
+          alignSelf: 'center',
+          width: '100%',
+          paddingHorizontal: containerPadding,
+        }
+      ]}
+    >
       {/* Información del Usuario */}
-      <Card style={styles.card}>
+      <Card style={[styles.card, isWeb && webStyles.card]}>
         <Card.Content>
           <Title style={styles.title}>👤 Perfil de Usuario</Title>
           
@@ -488,12 +191,6 @@ export default function ProfileScreen({ navigation }) {
                 </Text>
               </View>
               
-              <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>✍️ Firma:</Text>
-                <Text style={styles.detailValue}>
-                  {user?.firma_digital ? '✓ Configurada' : '❌ Sin configurar'}
-                </Text>
-              </View>
             </View>
           </View>
 
@@ -622,66 +319,6 @@ export default function ProfileScreen({ navigation }) {
         </Card.Content>
       </Card>
 
-      {/* Firma Digital */}
-      <Card style={styles.card}>
-        <Card.Content>
-              <Title>Firma Digital *</Title>
-              <Paragraph style={styles.signatureHelp}>
-                Tu firma se usará en todos los reportes PDF generados.
-          </Paragraph>
-          
-              <View style={styles.signaturePreview}>
-                {signature ? (
-                  <View style={styles.signaturePreviewContent}>
-                    <Text style={styles.signaturePreviewText}>✓ Firma capturada</Text>
-                    <Text style={styles.signaturePreviewSubtext}>
-                      Firma digital configurada
-                    </Text>
-                    <Button
-                      mode="outlined"
-                      onPress={() => setShowSignaturePreview(true)}
-                      style={styles.viewSignatureButton}
-                      icon="eye"
-                    >
-                      Ver Firma
-                    </Button>
-            </View>
-          ) : (
-                  <View style={styles.signaturePreviewContent}>
-                    <Text style={styles.signaturePreviewText}>No hay firma</Text>
-                    <Text style={styles.signaturePreviewSubtext}>
-                      Presiona "Crear Firma" para dibujar
-                    </Text>
-            </View>
-          )}
-              </View>
-          
-              <View style={styles.signatureButtons}>
-            <Button
-                  mode="contained"
-                  onPress={openSignatureModal}
-                  style={styles.createSignatureButton}
-                  disabled={loading}
-                  icon="pencil"
-                >
-                  {signature ? 'Modificar Firma' : 'Crear Firma'}
-            </Button>
-                
-                {signature && (
-            <Button
-              mode="outlined"
-                    onPress={clearSignature}
-                    style={styles.clearSignatureButton}
-                    disabled={loading}
-                    icon="delete"
-                  >
-                    Limpiar Firma
-            </Button>
-                )}
-          </View>
-        </Card.Content>
-      </Card>
-
           {/* Botones de Acción */}
       <Card style={styles.card}>
         <Card.Content>
@@ -709,296 +346,6 @@ export default function ProfileScreen({ navigation }) {
       </Card>
         </>
       )}
-
-      {/* Modal de Firma Digital */}
-      <Modal
-        visible={showSignatureModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={closeSignatureModal}
-      >
-        <TouchableWithoutFeedback onPress={closeSignatureModal}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={() => {}}>
-              <View style={styles.modalContent}>
-                <View style={styles.modalHeader}>
-                  <Title style={styles.modalTitle}>✍️ Crear Firma Digital</Title>
-                  <Paragraph style={styles.modalSubtitle}>
-                    Dibuja tu firma con trazos continuos y suaves
-                  </Paragraph>
-                  <View style={styles.tipsContainer}>
-                    <Text style={styles.tipText}>💡 Consejo: Dibuja a velocidad normal - los trazos rápidos ahora se capturan como líneas continuas</Text>
-                    <Text style={styles.tipText}>⏱️ Nota: El procesamiento de la firma puede tardar unos segundos</Text>
-                    <Text style={[styles.tipText, { 
-                      color: signatureData?.length >= 500 ? '#4CAF50' : '#FF9800',
-                      fontWeight: 'bold'
-                    }]}>
-                      {!signatureData ? '❌ No hay firma' : 
-                       signatureData.length < 500 ? '⚠️ Firma muy corta - dibuja más trazos' : 
-                       '✅ Firma lista para guardar'}
-                    </Text>
-                  </View>
-                </View>
-                
-                <View style={styles.modalSignatureContainer}>
-                  <SignatureScreen
-                    ref={signatureRef}
-                    onOK={handleSignature}
-                    onChange={handleSignatureChange}
-                    onEmpty={() => {
-                      console.log('🔄 Firma limpiada');
-                      setSignatureData(null);
-                      setIsTestSignature(false);
-                    }}
-                    descriptionText="Dibuja tu firma completa"
-                    clearText="Limpiar"
-                    confirmText="Guardar"
-                    autoClear={false}
-                    imageType="image/png"
-                    quality={1.0}
-                    minWidth={1}
-                    maxWidth={3}
-                    penColor="#000000"
-                    backgroundColor="#ffffff"
-                    style={styles.signatureCanvas}
-                    webStyle={`
-                      .m-signature-pad {
-                        border: 2px solid #2196F3;
-                        border-radius: 10px;
-                        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                      }
-                      .m-signature-pad canvas {
-                        border-radius: 8px;
-                      }
-                    `}
-                    onBegin={() => {
-                      console.log('🖊️ Iniciando dibujo de firma');
-                    }}
-                    onEnd={() => {
-                      console.log('🖊️ Terminando dibujo de firma');
-                    }}
-                  />
-                </View>
-                
-                <View style={styles.modalButtons}>
-          <Button
-            mode="outlined"
-            onPress={closeSignatureModal}
-                    style={styles.modalButton}
-            icon="close"
-                  >
-            Cancelar
-          </Button>
-          
-          <Button
-            mode="outlined"
-            onPress={() => {
-              console.log('🔍 Estado actual de signatureData:', signatureData);
-              console.log('🔍 Tipo:', typeof signatureData);
-              console.log('🔍 Longitud:', signatureData ? signatureData.length : 'null');
-              console.log('🔍 Es firma de prueba:', isTestSignature);
-              console.log('🔍 Estado del canvas:', signatureRef.current ? 'Disponible' : 'No disponible');
-              Alert.alert(
-                'Debug Firma', 
-                `Estado: ${signatureData ? 'Capturada' : 'No capturada'}\nTipo: ${typeof signatureData}\nLongitud: ${signatureData ? signatureData.length : 'null'}\nPrueba: ${isTestSignature ? 'Sí' : 'No'}\nCanvas: ${signatureRef.current ? 'Disponible' : 'No disponible'}`
-              );
-            }}
-            style={[styles.modalButton, { backgroundColor: '#FF9800' }]}
-            icon="bug"
-          >
-            Debug Firma
-          </Button>
-          
-          
-          <Button
-            mode="outlined"
-            onPress={() => {
-              if (signatureRef.current && signatureRef.current.getData) {
-                try {
-                  const dataPromise = signatureRef.current.getData();
-                  if (dataPromise && typeof dataPromise.then === 'function') {
-                    // Es una promesa
-                    dataPromise.then((data) => {
-                      console.log('🔍 Forzando captura de firma actual:', data);
-                      if (data) {
-                        handleSignature(data);
-                      } else {
-                        Alert.alert('Sin Firma', 'No hay firma para capturar');
-                      }
-                    }).catch((error) => {
-                      console.error('Error obteniendo firma:', error);
-                      Alert.alert('Error', 'No se pudo obtener la firma del canvas');
-                    });
-                  } else if (dataPromise) {
-                    // Devuelve directamente los datos
-                    console.log('🔍 Forzando captura de firma actual:', dataPromise);
-                    if (dataPromise) {
-                      handleSignature(dataPromise);
-                    } else {
-                      Alert.alert('Sin Firma', 'No hay firma para capturar');
-                    }
-                  } else {
-                    Alert.alert('Sin Firma', 'No hay firma para capturar');
-                  }
-                } catch (error) {
-                  console.error('Error obteniendo firma:', error);
-                  Alert.alert('Error', 'No se pudo obtener la firma del canvas');
-                }
-              } else {
-                Alert.alert('Error', 'Canvas no disponible');
-              }
-            }}
-            style={[styles.modalButton, { backgroundColor: '#FF5722' }]}
-            icon="camera"
-          >
-            Capturar
-          </Button>
-          
-          <Button
-            mode="outlined"
-            onPress={() => {
-              // Limpiar el estado
-              setSignatureData(null);
-              setIsTestSignature(false);
-              console.log('🧹 Firma limpiada del estado');
-              
-              // Limpiar el canvas del componente SignatureScreen
-              if (signatureRef.current) {
-                signatureRef.current.clearSignature();
-                console.log('🧹 Canvas limpiado');
-              }
-              
-              Alert.alert('Firma Limpiada', 'La firma ha sido eliminada. Puedes dibujar una nueva.');
-            }}
-            style={[styles.modalButton, { backgroundColor: '#F44336' }]}
-            icon="eraser"
-          >
-            Limpiar Firma
-          </Button>
-          
-          <Button
-            mode="contained"
-            onPress={() => {
-              console.log('🔍 Estado antes de guardar:');
-              console.log('🔍 signatureData:', signatureData ? 'Presente' : 'Ausente');
-              console.log('🔍 isTestSignature:', isTestSignature);
-              console.log('🔍 savingSignature:', savingSignature);
-              saveSignature();
-            }}
-            style={[styles.modalButton, styles.saveButton]}
-            icon={savingSignature ? "loading" : "check"}
-            disabled={!signatureData || savingSignature || signatureData?.length < 500}
-            loading={savingSignature}
-          >
-            {savingSignature ? 'Procesando...' : signatureData?.length < 500 ? 'Dibuja una firma más completa' : 'Guardar Firma'}
-          </Button>
-        </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-
-      {/* Modal para Ver Firma Existente */}
-      <Modal
-        visible={showSignaturePreview}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowSignaturePreview(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setShowSignaturePreview(false)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback onPress={() => {}}>
-              <View style={styles.signaturePreviewModal}>
-                <View style={styles.signaturePreviewHeader}>
-                  <Title style={styles.signaturePreviewTitle}>📝 Tu Firma Digital</Title>
-                  <Paragraph style={styles.signaturePreviewSubtitle}>
-                    Esta es tu firma actual que se usará en los reportes
-                  </Paragraph>
-                </View>
-                
-                <View style={styles.signatureImageContainer}>
-                  {signature ? (
-                    <>
-                      <Text style={styles.debugText}>
-                        Debug: {signature.substring(0, 50)}...
-                      </Text>
-                      <Text style={styles.debugText}>
-                        Longitud: {signature.length} caracteres
-                      </Text>
-                      <Text style={styles.debugText}>
-                        Formato: {signature.startsWith('data:') ? 'Correcto' : 'Falta prefijo'}
-                      </Text>
-                      <Text style={[styles.debugText, { color: signature.length < 500 ? '#F44336' : '#4CAF50' }]}>
-                        Estado: {signature.length < 500 ? '⚠️ Firma muy corta (posiblemente corrupta)' : '✅ Firma válida'}
-                      </Text>
-                      <Image
-                        source={{ uri: signature.startsWith('data:') ? signature : `data:image/png;base64,${signature}` }}
-                        style={styles.signatureImage}
-                        resizeMode="contain"
-                        onLoad={() => console.log('✅ Imagen cargada correctamente')}
-                        onError={(error) => {
-                          console.log('❌ Error cargando imagen:', error);
-                          console.log('URI intentada:', signature.startsWith('data:') ? signature : `data:image/png;base64,${signature}`);
-                        }}
-                      />
-                      
-                      <Button
-                        mode="outlined"
-                        onPress={() => {
-                          Alert.alert(
-                            'Firma Corrupta',
-                            'Tu firma actual parece estar corrupta (muy corta). ¿Quieres crear una nueva firma?',
-                            [
-                              { text: 'Cancelar', style: 'cancel' },
-                              { 
-                                text: 'Crear Nueva', 
-                                onPress: () => {
-                                  setShowSignaturePreview(false);
-                                  openSignatureModal();
-                                }
-                              }
-                            ]
-                          );
-                        }}
-                        style={[styles.testButton, { borderColor: '#F44336' }]}
-                        icon="alert"
-                      >
-                        Firma Corrupta - Regenerar
-                      </Button>
-                    </>
-                  ) : (
-                    <Text style={styles.noSignatureText}>No hay firma disponible</Text>
-                  )}
-                </View>
-                
-                <View style={styles.signaturePreviewButtons}>
-                  <Button
-                    mode="outlined"
-                    onPress={() => setShowSignaturePreview(false)}
-                    style={styles.modalButton}
-                    icon="close"
-                  >
-                    Cerrar
-          </Button>
-          
-          <Button
-                    mode="contained"
-                    onPress={() => {
-                      setShowSignaturePreview(false);
-                      openSignatureModal();
-                    }}
-                    style={[styles.modalButton, styles.saveButton]}
-                    icon="pencil"
-                  >
-                    Modificar Firma
-          </Button>
-                </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
     </ScrollView>
   );
 }
@@ -1119,133 +466,6 @@ const styles = StyleSheet.create({
     marginLeft: 8,
     fontSize: 16,
   },
-  signaturePreview: {
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    marginVertical: 16,
-    backgroundColor: '#f9f9f9',
-    minHeight: 80,
-    justifyContent: 'center',
-  },
-  signaturePreviewContent: {
-    alignItems: 'center',
-    padding: 16,
-  },
-  signaturePreviewText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#B0B0B0',
-    marginBottom: 4,
-  },
-  signaturePreviewSubtext: {
-    fontSize: 14,
-    color: '#B0B0B0',
-  },
-  signatureHelp: {
-    color: '#B0B0B0',
-    fontStyle: 'italic',
-    marginBottom: 8,
-  },
-  signatureButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginTop: 8,
-  },
-  createSignatureButton: {
-    flex: 1,
-    marginRight: 8,
-  },
-  clearSignatureButton: {
-    flex: 1,
-    marginLeft: 8,
-  },
-  // Modal styles
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    width: width * 0.9,
-    maxHeight: height * 0.8,
-    elevation: 10,
-  },
-  modalHeader: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  tipsContainer: {
-    backgroundColor: '#E3F2FD',
-    padding: 12,
-    borderRadius: 8,
-    marginBottom: 20,
-    borderLeftWidth: 4,
-    borderLeftColor: '#2196F3',
-  },
-  tipText: {
-    fontSize: 14,
-    color: '#1976D2',
-    textAlign: 'center',
-    fontStyle: 'italic',
-  },
-  modalSignatureContainer: {
-    borderWidth: 2,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    marginVertical: 16,
-    backgroundColor: '#fff',
-    height: 250,
-  },
-  signatureCanvas: {
-    flex: 1,
-    height: 400,
-    backgroundColor: '#fff',
-    borderRadius: 16,
-    elevation: 6,
-    shadowColor: '#2196F3',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    // Optimizaciones para trazos rápidos y continuos
-    transform: [{ scale: 1 }],
-    overflow: 'hidden',
-    // Configuraciones de rendimiento para captura rápida
-    shouldRasterizeIOS: true,
-    renderToHardwareTextureAndroid: true,
-    // Mejoras para respuesta táctil
-    pointerEvents: 'auto',
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  modalButton: {
-    flex: 1,
-    marginHorizontal: 4,
-  },
-  saveButton: {
-    backgroundColor: '#2196F3',
-  },
   actionButtons: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -1257,68 +477,5 @@ const styles = StyleSheet.create({
   actionCancelButton: {
     flex: 1,
     marginLeft: 8,
-  },
-  // Estilos para el modal de vista de firma
-  signaturePreviewModal: {
-    backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
-    width: width * 0.9,
-    maxHeight: height * 0.7,
-    elevation: 10,
-  },
-  signaturePreviewHeader: {
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  signaturePreviewTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#1E293B',
-  },
-  signaturePreviewSubtitle: {
-    color: '#64748B',
-    textAlign: 'center',
-    fontSize: 14,
-  },
-  signatureImageContainer: {
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
-    borderRadius: 12,
-    marginVertical: 16,
-    backgroundColor: '#F8FAFC',
-    minHeight: 200,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  signatureImage: {
-    width: '100%',
-    height: 200,
-    borderRadius: 8,
-  },
-  noSignatureText: {
-    fontSize: 16,
-    color: '#64748B',
-    fontStyle: 'italic',
-  },
-  signaturePreviewButtons: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 20,
-  },
-  viewSignatureButton: {
-    marginTop: 8,
-    borderColor: '#2196F3',
-  },
-  debugText: {
-    fontSize: 10,
-    color: '#666',
-    marginBottom: 8,
-    fontFamily: 'monospace',
-  },
-  testButton: {
-    marginTop: 8,
-    borderColor: '#FF9800',
   },
 });

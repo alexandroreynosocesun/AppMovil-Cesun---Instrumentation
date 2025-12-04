@@ -1,6 +1,20 @@
 from pydantic import BaseModel, validator
 from datetime import datetime
-from typing import Optional, List
+from typing import Optional, List, Generic, TypeVar
+
+# Tipo genérico para paginación
+T = TypeVar('T')
+
+# Esquema genérico para respuestas paginadas
+class PaginatedResponse(BaseModel, Generic[T]):
+    items: List[T]
+    total: int
+    page: int
+    page_size: int
+    pages: int
+    
+    class Config:
+        from_attributes = True
 
 # Esquemas para Técnicos
 class TecnicoBase(BaseModel):
@@ -33,6 +47,7 @@ class Tecnico(TecnicoBase):
     firma_digital: Optional[str] = None
     turno_actual: str
     tipo_tecnico: str
+    tipo_usuario: str
     activo: bool
     created_at: datetime
     
@@ -59,7 +74,7 @@ class Jig(JigBase):
 
 # Esquemas para Validaciones
 class ValidacionBase(BaseModel):
-    jig_id: int
+    jig_id: Optional[int] = None  # Opcional para asignaciones sin jig específico
     turno: str
     estado: str
     comentario: Optional[str] = None
@@ -67,12 +82,16 @@ class ValidacionBase(BaseModel):
 
 class ValidacionCreate(ValidacionBase):
     firma_digital: Optional[str] = None
+    tecnico_asignado_id: Optional[int] = None  # Para asignaciones
+    modelo_actual: Optional[str] = None  # Modelo del jig
 
 class Validacion(ValidacionBase):
     id: int
     tecnico_id: int
+    tecnico_asignado_id: Optional[int] = None
     fecha: datetime
     sincronizado: bool
+    completada: bool = False
     created_at: datetime
     
     class Config:
@@ -113,6 +132,7 @@ class JigNGBase(BaseModel):
     usuario_reporte: Optional[str] = None
     usuario_reparando: Optional[str] = None
     comentario_reparacion: Optional[str] = None
+    foto: Optional[str] = None  # Base64 de la foto del jig NG
 
 class JigNGCreate(JigNGBase):
     pass
@@ -150,6 +170,7 @@ class SolicitudRegistroBase(BaseModel):
     nombre: str
     numero_empleado: str
     password: str
+    tipo_usuario: str = "tecnico"  # ingeniero, tecnico, gestion
     firma_digital: Optional[str] = None
 
 class SolicitudRegistroCreate(SolicitudRegistroBase):
@@ -177,3 +198,54 @@ class JigHistorial(BaseModel):
     validaciones: List[Validacion]
     reparaciones: List[Reparacion]
     jigs_ng: List[JigNG] = []
+
+# Esquemas para Etiquetas NG Dañadas
+class DamagedLabelBase(BaseModel):
+    modelo: str
+    tipo_jig: str  # manual, semiautomatico, new_semiautomatico
+    numero_jig: Optional[str] = None
+    foto: Optional[str] = None  # Base64 de la foto
+
+class DamagedLabelCreate(DamagedLabelBase):
+    pass
+
+class DamagedLabelUpdate(BaseModel):
+    estado: Optional[str] = None
+
+class DamagedLabel(DamagedLabelBase):
+    id: int
+    reportado_por_id: int
+    estado: str
+    created_at: datetime
+    
+    # Información del usuario que reportó
+    reportado_por: Optional[dict] = None
+    
+    class Config:
+        from_attributes = True
+
+# Esquemas para Auditoría PDF
+class AuditoriaPDFBase(BaseModel):
+    nombre_archivo: str
+    ruta_archivo: str
+    modelo: Optional[str] = None
+    tecnico_nombre: str
+    numero_empleado: str
+    fecha: datetime
+    turno: str
+    linea: Optional[str] = None
+    cantidad_validaciones: int = 0
+
+class AuditoriaPDFCreate(AuditoriaPDFBase):
+    tecnico_id: int
+
+class AuditoriaPDF(AuditoriaPDFBase):
+    id: int
+    tecnico_id: int
+    fecha_dia: int
+    fecha_mes: int
+    fecha_anio: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

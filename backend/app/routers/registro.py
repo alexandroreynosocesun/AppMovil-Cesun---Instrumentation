@@ -7,8 +7,10 @@ from ..models.models import SolicitudRegistro, Tecnico
 from ..schemas import SolicitudRegistroCreate, SolicitudRegistroResponse, SolicitudRegistroUpdate
 from ..auth import get_current_user
 from passlib.context import CryptContext
+from ..utils.logger import get_logger
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = get_logger(__name__)
 
 router = APIRouter()
 

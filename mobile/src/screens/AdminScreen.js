@@ -53,14 +53,36 @@ export default function AdminScreen({ navigation }) {
       ]);
 
       if (usersResult.success) {
-        setUsers(usersResult.data);
+        // El endpoint devuelve una respuesta paginada con estructura { items, total, page, ... }
+        // O puede devolver un array directo (compatibilidad)
+        const responseData = usersResult.data;
+        let usersData = [];
+        
+        if (responseData) {
+          // Si tiene estructura paginada
+          if (responseData.items && Array.isArray(responseData.items)) {
+            usersData = responseData.items;
+          } 
+          // Si es un array directo
+          else if (Array.isArray(responseData)) {
+            usersData = responseData;
+          }
+        }
+        
+        setUsers(usersData);
+      } else {
+        // Si falla, asegurar que users sea un array vacío
+        setUsers([]);
       }
 
       if (statsResult.success) {
         setStats(statsResult.data);
       }
     } catch (error) {
+      logger.error('Error cargando datos:', error);
       Alert.alert('Error', 'Error cargando datos');
+      // Asegurar que users sea un array vacío en caso de error
+      setUsers([]);
     } finally {
       setLoading(false);
     }
@@ -211,10 +233,10 @@ export default function AdminScreen({ navigation }) {
         <Card style={styles.usersCard}>
           <Card.Content>
             <Title>Usuarios Registrados</Title>
-            {users.length === 0 ? (
+            {!users || users.length === 0 ? (
               <Paragraph>No hay usuarios registrados</Paragraph>
             ) : (
-              users.map((user) => (
+              (Array.isArray(users) ? users : []).map((user) => (
                 <List.Item
                   key={user.id}
                   title={user.nombre}

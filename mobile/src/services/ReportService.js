@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
+import logger from '../utils/logger';
 
-const API_BASE_URL = 'https://ecb2b679741f.ngrok-free.app/api';
+const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
 
 class ReportService {
   constructor() {
@@ -30,44 +31,24 @@ class ReportService {
 
   async generateValidationReport(reportData) {
     try {
-      console.log('Enviando petición al servidor:', {
-        url: `${API_BASE_URL}/validations/generate-batch-report`,
-        data: reportData
-      });
+      logger.info('📤 Enviando petición al servidor con TODAS las validaciones:');
+      logger.info(`   URL: ${API_BASE_URL}/validations/generate-batch-report`);
+      logger.info(`   Total validaciones: ${reportData.validaciones.length}`);
+      logger.info(`   Validaciones:`, reportData.validaciones.map(v => ({
+        jig_id: v.jig_id,
+        numero_jig: v.numero_jig,
+        estado: v.estado
+      })));
       
-      // Primero intentar con datos mínimos para probar la conexión
-      const testData = {
-        fecha: reportData.fecha,
-        turno: reportData.turno,
-        tecnico: reportData.tecnico,
-        tecnico_id: reportData.tecnico_id,
-        modelo: reportData.modelo,
-        validaciones: reportData.validaciones.slice(0, 1) // Solo una validación para probar
-      };
-      
-      console.log('Datos de prueba (1 validación):', JSON.stringify(testData, null, 2));
-      
-      const response = await this.api.post('/validations/generate-batch-report', testData);
-      console.log('Respuesta exitosa del servidor:', response.data);
+      // Enviar TODAS las validaciones directamente
+      const response = await this.api.post('/validations/generate-batch-report', reportData);
+      logger.info('✅ Respuesta exitosa del servidor:', response.data);
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Error generando reporte:', error);
-      console.error('Error response:', error.response?.data);
-      console.error('Error status:', error.response?.status);
-      console.error('Error headers:', error.response?.headers);
-      
-      // Si falla con datos de prueba, intentar con datos completos
-      if (error.response?.status === 500) {
-        console.log('🔄 Error 500 con datos de prueba, intentando con datos completos...');
-        try {
-          const response = await this.api.post('/validations/generate-batch-report', reportData);
-          console.log('Respuesta exitosa con datos completos:', response.data);
-          return { success: true, data: response.data };
-        } catch (fullError) {
-          console.error('Error también con datos completos:', fullError);
-          return { success: false, error: 'Error interno del servidor (500). El backend tiene un problema.' };
-        }
-      }
+      logger.error('❌ Error generando reporte:', error);
+      logger.error('Error response:', error.response?.data);
+      logger.error('Error status:', error.response?.status);
+      logger.error('Error headers:', error.response?.headers);
       
       let errorMessage = 'Error de conexión';
       
@@ -96,7 +77,7 @@ class ReportService {
       const response = await this.api.get('/validations/reports');
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('Error obteniendo historial de reportes:', error);
+      logger.error('Error obteniendo historial de reportes:', error);
       return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
     }
   }
@@ -104,22 +85,22 @@ class ReportService {
   // Método para diagnosticar problemas del backend
   async testBackendConnection() {
     try {
-      console.log('🔍 Probando conexión con el backend...');
+      logger.info('🔍 Probando conexión con el backend...');
       
       // Probar endpoint básico
       const response = await this.api.get('/health');
-      console.log('✅ Backend responde correctamente:', response.data);
+      logger.info('✅ Backend responde correctamente:', response.data);
       return { success: true, data: response.data };
     } catch (error) {
-      console.error('❌ Backend no responde:', error);
+      logger.error('❌ Backend no responde:', error);
       
       // Probar con endpoint alternativo
       try {
         const response = await this.api.get('/validations/');
-        console.log('✅ Endpoint alternativo funciona:', response.data);
+        logger.info('✅ Endpoint alternativo funciona:', response.data);
         return { success: true, data: response.data };
       } catch (altError) {
-        console.error('❌ Ningún endpoint funciona:', altError);
+        logger.error('❌ Ningún endpoint funciona:', altError);
         return { 
           success: false, 
           error: 'Backend completamente no disponible. Verifique que el servidor esté ejecutándose.' 
@@ -130,3 +111,4 @@ class ReportService {
 }
 
 export const reportService = new ReportService();
+

@@ -19,6 +19,7 @@ import {
 import { jigNGService } from '../services/JigNGService';
 import { jigService } from '../services/JigService';
 import { useAuth } from '../contexts/AuthContext';
+import logger from '../utils/logger';
 
 export default function RepairJigScreen({ navigation, route }) {
   const { jigNG, fromValidation, validationJig } = route.params;
@@ -43,11 +44,11 @@ export default function RepairJigScreen({ navigation, route }) {
         setJigInfo(result.data);
       } else {
         Alert.alert('Error', 'No se pudo cargar la información del jig');
-        console.error('Error cargando jig:', result.error);
+        logger.error('Error cargando jig:', result.error);
       }
     } catch (error) {
       Alert.alert('Error', 'Error cargando información del jig');
-      console.error('Error cargando jig:', error);
+      logger.error('Error cargando jig:', error);
     } finally {
       setLoadingJig(false);
     }

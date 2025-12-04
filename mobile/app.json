@@ -31,7 +31,17 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro",
+      "name": "Validación de Jigs - Web",
+      "description": "Sistema de validación de jigs industriales",
+      "themeColor": "#2196F3",
+      "backgroundColor": "#ffffff",
+      "lang": "es",
+      "scope": "/",
+      "startUrl": "/",
+      "display": "standalone",
+      "orientation": "any"
     },
     "plugins": [
       [
@@ -46,7 +56,8 @@
           "cameraPermission": "Permitir acceso a la cámara para tomar fotos"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "@react-native-community/datetimepicker"
     ],
     "sdkVersion": "54.0.0"
   }

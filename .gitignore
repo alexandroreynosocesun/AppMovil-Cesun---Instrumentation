@@ -1,0 +1,53 @@
+# Dependencies
+node_modules/
+mobile/node_modules/
+mobile/.expo/
+mobile/.expo-shared/
+**/__pycache__/
+**/*.pyc
+venv/
+.venv/
+
+# Environment variables
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+dist/
+build/
+*.egg-info/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Ngrok
+.ngrok2/
+ngrok.exe
+
+# Uploads (imágenes y archivos subidos)
+backend/uploads/
+backend/reports/
+backend/logs/
+backend/.env
+backend/.env.production
+uploads/
+
