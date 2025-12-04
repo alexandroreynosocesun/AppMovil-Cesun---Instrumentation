@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { authService } from '../services/AuthService';
+import logger from '../utils/logger';
 
 const AuthContext = createContext();
 
@@ -32,10 +33,19 @@ export const AuthProvider = ({ children }) => {
       if (storedUser && storedToken) {
         setUser(JSON.parse(storedUser));
         setIsAuthenticated(true);
-        console.log('✅ Datos de autenticación cargados desde almacenamiento seguro');
+        logger.info('✅ Datos de autenticación cargados desde almacenamiento seguro');
+
+        // Asegurar que el token también esté disponible en AsyncStorage
+        // para servicios que leen de allí (por ejemplo, AdminService)
+        try {
+          await AsyncStorage.setItem('token', storedToken);
+          logger.info('✅ Token sincronizado a AsyncStorage al iniciar la app');
+        } catch (syncError) {
+          logger.error('Error sincronizando token a AsyncStorage al iniciar:', syncError);
+        }
       }
     } catch (error) {
-      console.error('Error verificando usuario guardado:', error);
+      logger.error('Error verificando usuario guardado:', error);
       // Fallback a AsyncStorage para migración
       try {
         const storedUser = await AsyncStorage.getItem('user');
@@ -44,18 +54,18 @@ export const AuthProvider = ({ children }) => {
         if (storedUser && storedToken) {
           setUser(JSON.parse(storedUser));
           setIsAuthenticated(true);
-          console.log('⚠️ Datos cargados desde AsyncStorage (migración)');
+          logger.info('⚠️ Datos cargados desde AsyncStorage (migración)');
           
-          // Migrar a SecureStore
-          await SecureStore.setItemAsync('user_data', storedUser);
-          await SecureStore.setItemAsync('auth_token', storedToken);
-          console.log('✅ Datos migrados a SecureStore');
+          // Migrar a SecureStore (asegurar que sean strings)
+          await SecureStore.setItemAsync('user_data', typeof storedUser === 'string' ? storedUser : JSON.stringify(storedUser));
+          await SecureStore.setItemAsync('auth_token', typeof storedToken === 'string' ? storedToken : String(storedToken));
+          logger.info('✅ Datos migrados a SecureStore');
           
           // Sincronizar token para compatibilidad
           await authService.syncTokenToAsyncStorage();
         }
       } catch (fallbackError) {
-        console.error('Error en fallback:', fallbackError);
+        logger.error('Error en fallback:', fallbackError);
       }
     } finally {
       setLoading(false);
@@ -68,25 +78,75 @@ export const AuthProvider = ({ children }) => {
       const response = await authService.login(usuario, password);
       
       if (response.success) {
+        logger.info('🔍 Estructura de response.data:', JSON.stringify(response.data, null, 2));
+        logger.info('🔍 Tipo de response.data:', typeof response.data);
+        logger.info('🔍 Keys de response.data:', Object.keys(response.data || {}));
+        
         const { tecnico, access_token } = response.data;
         
-        // Guardar datos sensibles en SecureStore
-        await SecureStore.setItemAsync('user_data', JSON.stringify(tecnico));
-        await SecureStore.setItemAsync('auth_token', access_token);
+        logger.info('🔍 tecnico:', typeof tecnico, tecnico ? 'existe' : 'null/undefined');
+        logger.info('🔍 access_token:', typeof access_token, access_token ? 'existe' : 'null/undefined');
+        
+        // Validar y convertir datos antes de guardar
+        if (!tecnico) {
+          logger.error('❌ Error: tecnico es null o undefined');
+          return { success: false, error: 'Datos de usuario inválidos' };
+        }
+        
+        if (!access_token) {
+          logger.error('❌ Error: access_token es null o undefined');
+          return { success: false, error: 'Token de acceso inválido' };
+        }
+        
+        // Convertir tecnico a string JSON de forma segura
+        let userDataString;
+        try {
+          if (typeof tecnico === 'string') {
+            userDataString = tecnico;
+          } else if (tecnico && typeof tecnico === 'object') {
+            // Asegurar que todos los valores sean serializables
+            const sanitizedTecnico = JSON.parse(JSON.stringify(tecnico));
+            userDataString = JSON.stringify(sanitizedTecnico);
+          } else {
+            throw new Error('tecnico no es un objeto válido');
+          }
+        } catch (jsonError) {
+          logger.error('❌ Error serializando tecnico:', jsonError);
+          return { success: false, error: 'Error procesando datos de usuario' };
+        }
+        
+        // Convertir access_token a string
+        const tokenString = typeof access_token === 'string' ? access_token : String(access_token);
+        
+        // Validar que los strings no estén vacíos
+        if (!userDataString || userDataString === 'null' || userDataString === 'undefined') {
+          logger.error('❌ Error: user_data no es válido');
+          return { success: false, error: 'Datos de usuario inválidos' };
+        }
+        
+        if (!tokenString || tokenString === 'null' || tokenString === 'undefined') {
+          logger.error('❌ Error: auth_token no es válido');
+          return { success: false, error: 'Token de acceso inválido' };
+        }
+        
+        // Guardar datos sensibles en SecureStore (asegurar que sean strings)
+        await SecureStore.setItemAsync('user_data', userDataString);
+        await SecureStore.setItemAsync('auth_token', tokenString);
         
         // Sincronizar token a AsyncStorage para compatibilidad
         await authService.syncTokenToAsyncStorage();
         
+        logger.info('🔍 Usuario logueado - tipo_usuario:', tecnico.tipo_usuario);
         setUser(tecnico);
         setIsAuthenticated(true);
         
-        console.log('✅ Datos de autenticación guardados de forma segura');
+        logger.info('✅ Datos de autenticación guardados de forma segura');
         return { success: true };
       } else {
         return { success: false, error: response.error };
       }
     } catch (error) {
-      console.error('Error en login:', error);
+      logger.error('Error en login:', error);
       return { success: false, error: 'Error de conexión' };
     } finally {
       setLoading(false);
@@ -107,31 +167,31 @@ export const AuthProvider = ({ children }) => {
       setUser(null);
       setIsAuthenticated(false);
       
-      console.log('✅ Datos de autenticación eliminados de forma segura');
+      logger.info('✅ Datos de autenticación eliminados de forma segura');
     } catch (error) {
-      console.error('Error en logout:', error);
+      logger.error('Error en logout:', error);
     }
   };
 
   const updateProfile = async (updateData) => {
     try {
-      console.log('AuthContext - Actualizando perfil con:', updateData);
+      logger.info('AuthContext - Actualizando perfil con:', updateData);
       const response = await authService.updateProfile(updateData);
       if (response.success) {
         // Aplicar los cambios directamente al usuario actual
         const updatedUser = { ...user, ...updateData };
-        console.log('AuthContext - Usuario actualizado:', updatedUser);
+        logger.info('AuthContext - Usuario actualizado:', updatedUser);
         setUser(updatedUser);
         
         // Actualizar datos en SecureStore
         await SecureStore.setItemAsync('user_data', JSON.stringify(updatedUser));
-        console.log('✅ Perfil actualizado en almacenamiento seguro');
+        logger.info('✅ Perfil actualizado en almacenamiento seguro');
         
         return { success: true };
       }
       return { success: false, error: response.error };
     } catch (error) {
-      console.error('Error actualizando perfil:', error);
+      logger.error('Error actualizando perfil:', error);
       return { success: false, error: 'Error de conexión' };
     }
   };
@@ -144,13 +204,13 @@ export const AuthProvider = ({ children }) => {
         
         // Actualizar datos en SecureStore
         await SecureStore.setItemAsync('user_data', JSON.stringify(response.data));
-        console.log('✅ Perfil refrescado en almacenamiento seguro');
+        logger.info('✅ Perfil refrescado en almacenamiento seguro');
         
         return { success: true };
       }
       return { success: false, error: response.error };
     } catch (error) {
-      console.error('Error refrescando perfil:', error);
+      logger.error('Error refrescando perfil:', error);
       return { success: false, error: 'Error de conexión' };
     }
   };

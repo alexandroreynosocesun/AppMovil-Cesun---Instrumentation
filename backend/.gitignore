@@ -116,3 +116,9 @@ reports/
 .idea/
 *.swp
 *.swo
+
+# Configuración - backups de .env
+.env.backup
+.env.local
+.env.production
+.env.*.local

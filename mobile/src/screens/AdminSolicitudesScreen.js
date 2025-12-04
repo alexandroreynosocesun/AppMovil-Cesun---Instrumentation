@@ -16,6 +16,7 @@ import {
 import { formatDate, formatTime12Hour } from '../utils/dateUtils';
 import { useFocusEffect } from '@react-navigation/native';
 import AdminService from '../services/AdminService';
+import logger from '../utils/logger';
 
 const AdminSolicitudesScreen = ({ navigation }) => {
   const [solicitudes, setSolicitudes] = useState([]);
@@ -42,16 +43,25 @@ const AdminSolicitudesScreen = ({ navigation }) => {
   const loadSolicitudes = async () => {
     try {
       setLoading(true);
+      logger.info('🔄 [AdminSolicitudesScreen] Cargando solicitudes pendientes...');
       const result = await AdminService.getSolicitudesPendientes();
       
+      logger.info('📡 [AdminSolicitudesScreen] Resultado:', result);
+      
       if (result.success) {
-        setSolicitudes(result.data);
+        // Asegurarse de que result.data sea un array
+        const solicitudesArray = Array.isArray(result.data) ? result.data : [];
+        logger.info('✅ [AdminSolicitudesScreen] Solicitudes cargadas:', solicitudesArray.length);
+        logger.info('✅ [AdminSolicitudesScreen] Datos:', solicitudesArray);
+        setSolicitudes(solicitudesArray);
       } else {
-        Alert.alert('Error', result.error);
+        logger.error('❌ [AdminSolicitudesScreen] Error:', result.error);
+        Alert.alert('Error', result.error || 'Error al cargar solicitudes');
       }
     } catch (error) {
-      console.error('Error al cargar solicitudes:', error);
-      Alert.alert('Error', 'Error de conexión');
+      logger.error('❌ [AdminSolicitudesScreen] Error al cargar solicitudes:', error);
+      logger.error('❌ [AdminSolicitudesScreen] Error completo:', JSON.stringify(error, null, 2));
+      Alert.alert('Error', 'Error de conexión. Verifica que el backend esté funcionando.');
     } finally {
       setLoading(false);
     }
@@ -118,7 +128,7 @@ const AdminSolicitudesScreen = ({ navigation }) => {
         Alert.alert('Error', result.error || 'Error procesando la solicitud');
       }
     } catch (error) {
-      console.error('Error al procesar solicitud:', error);
+      logger.error('Error al procesar solicitud:', error);
       Alert.alert(
         'Error', 
         'Error de conexión. Verifica que el backend esté funcionando.',
@@ -169,16 +179,6 @@ const AdminSolicitudesScreen = ({ navigation }) => {
         {formatDate(item.fecha_solicitud)} {formatTime12Hour(item.fecha_solicitud)}
       </Text>
 
-      {item.firma_digital && (
-        <View style={styles.firmaContainer}>
-          <Text style={styles.firmaLabel}>Firma digital:</Text>
-          <Image 
-            source={{ uri: `data:image/png;base64,${item.firma_digital}` }}
-            style={styles.firmaImage}
-            resizeMode="contain"
-          />
-        </View>
-      )}
 
       {item.estado === 'pendiente' && (
         <View style={styles.actionsContainer}>
@@ -339,7 +339,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#E8E8E8',
+    color: '#1E293B',
   },
   refreshButton: {
     padding: 8,
@@ -356,7 +356,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: '#B0B0B0',
+    color: '#64748B',
   },
   emptyContainer: {
     flex: 1,
@@ -366,7 +366,7 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 18,
-    color: '#B0B0B0',
+    color: '#64748B',
     textAlign: 'center',
   },
   listContainer: {
@@ -392,7 +392,7 @@ const styles = StyleSheet.create({
   usuarioText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#E8E8E8',
+    color: '#1E293B',
   },
   estadoBadge: {
     paddingHorizontal: 8,
@@ -400,23 +400,23 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   estadoText: {
-    color: '#E8E8E8',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
   },
   nombreText: {
     fontSize: 16,
-    color: '#B0B0B0',
+    color: '#334155',
     marginBottom: 4,
   },
   empleadoText: {
     fontSize: 14,
-    color: '#B0B0B0',
+    color: '#64748B',
     marginBottom: 4,
   },
   fechaText: {
     fontSize: 12,
-    color: '#E8E8E8',
+    color: '#64748B',
     marginBottom: 8,
   },
   firmaContainer: {
@@ -427,7 +427,7 @@ const styles = StyleSheet.create({
   },
   firmaLabel: {
     fontSize: 12,
-    color: '#B0B0B0',
+    color: '#475569',
     marginBottom: 4,
   },
   firmaImage: {
@@ -456,7 +456,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F44336',
   },
   actionButtonText: {
-    color: '#E8E8E8',
+    color: '#FFFFFF',
     textAlign: 'center',
     fontWeight: 'bold',
   },
@@ -469,12 +469,12 @@ const styles = StyleSheet.create({
   comentariosLabel: {
     fontSize: 12,
     fontWeight: 'bold',
-    color: '#B0B0B0',
+    color: '#334155',
     marginBottom: 4,
   },
   comentariosText: {
     fontSize: 12,
-    color: '#B0B0B0',
+    color: '#475569',
   },
   modalOverlay: {
     flex: 1,
@@ -492,13 +492,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#E8E8E8',
+    color: '#1E293B',
     textAlign: 'center',
     marginBottom: 8,
   },
   modalSubtitle: {
     fontSize: 14,
-    color: '#B0B0B0',
+    color: '#64748B',
     textAlign: 'center',
     marginBottom: 16,
   },
@@ -510,6 +510,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginBottom: 20,
     minHeight: 80,
+    color: '#1E293B',
+    backgroundColor: '#FFFFFF',
   },
   modalActions: {
     flexDirection: 'row',
@@ -532,12 +534,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#F44336',
   },
   cancelButtonText: {
-    color: '#E8E8E8',
+    color: '#FFFFFF',
     textAlign: 'center',
     fontWeight: 'bold',
   },
   confirmButtonText: {
-    color: '#E8E8E8',
+    color: '#FFFFFF',
     textAlign: 'center',
     fontWeight: 'bold',
   },

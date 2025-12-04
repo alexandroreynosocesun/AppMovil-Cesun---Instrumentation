@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 from ..database import get_db
 from ..models.models import Tecnico, SolicitudRegistro
-from ..schemas import Tecnico as TecnicoSchema, TecnicoCreate, SolicitudRegistroResponse, SolicitudRegistroUpdate
+from ..schemas import Tecnico as TecnicoSchema, TecnicoCreate, SolicitudRegistroResponse, SolicitudRegistroUpdate, PaginatedResponse
 from ..auth import get_password_hash, get_current_user
 from ..services.notification_service import notification_service
+from ..utils.pagination import paginate_query
+from ..utils.logger import api_logger
 
 router = APIRouter()
 
@@ -22,14 +24,78 @@ def verify_admin(current_user: Tecnico = Depends(get_current_user)):
         )
     return current_user
 
-@router.get("/users", response_model=List[TecnicoSchema])
+@router.get("/users", response_model=PaginatedResponse[TecnicoSchema])
 async def get_all_users(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página (máximo 100)"),
     db: Session = Depends(get_db),
     admin_user: Tecnico = Depends(verify_admin)
 ):
-    """Obtener todos los usuarios (solo administradores)"""
-    users = db.query(Tecnico).all()
-    return users
+    """
+    Obtener todos los usuarios con paginación (solo administradores)
+    
+    - **page**: Número de página (empezando en 1)
+    - **page_size**: Cantidad de elementos por página (máximo 100)
+    """
+    query = db.query(Tecnico).order_by(Tecnico.created_at.desc())
+    items, total, pages = paginate_query(query, page, page_size)
+    
+    return PaginatedResponse(
+        items=[TecnicoSchema.from_orm(user) for user in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages
+    )
+
+@router.get("/tecnicos", response_model=PaginatedResponse[TecnicoSchema])
+async def get_tecnicos(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página (máximo 100)"),
+    db: Session = Depends(get_db),
+    current_user: Tecnico = Depends(get_current_user)
+):
+    """
+    Obtener lista paginada de técnicos disponibles para asignación (usuarios con rol asignaciones o admin)
+    
+    - **page**: Número de página (empezando en 1)
+    - **page_size**: Cantidad de elementos por página (máximo 100)
+    """
+    # Permitir acceso a usuarios con rol "asignaciones" o admin
+    api_logger.debug(f"[GET_TECNICOS] Usuario actual: {current_user.usuario}, tipo_usuario: {current_user.tipo_usuario}")
+    
+    if current_user.tipo_usuario not in ['asignaciones', 'ingeniero'] and current_user.usuario not in ADMIN_USERS:
+        api_logger.warning(f"[GET_TECNICOS] Acceso denegado para usuario {current_user.usuario}")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo usuarios con rol de asignaciones pueden acceder."
+        )
+    
+    # Obtener solo técnicos (usuarios con tipo_usuario = 'tecnico' o 'validacion')
+    # Excluir explícitamente: ingeniero, asignaciones, admin, gestion, etc.
+    # El filtro IN solo incluye 'tecnico' y 'validacion', excluyendo automáticamente:
+    # - asignaciones
+    # - ingeniero
+    # - admin
+    # - gestion
+    # - superadmin
+    # - inventario
+    query = db.query(Tecnico).filter(
+        Tecnico.tipo_usuario.in_(['tecnico', 'validacion'])
+    ).order_by(Tecnico.nombre)
+    
+    api_logger.debug(f"[GET_TECNICOS] Filtro aplicado: tipo_usuario IN ('tecnico', 'validacion')")
+    api_logger.debug(f"[GET_TECNICOS] Esto excluye automáticamente: asignaciones, ingeniero, admin, gestion, superadmin, inventario")
+    
+    items, total, pages = paginate_query(query, page, page_size)
+    
+    return PaginatedResponse(
+        items=[TecnicoSchema.from_orm(tecnico) for tecnico in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages
+    )
 
 @router.get("/users/{user_id}", response_model=TecnicoSchema)
 async def get_user(
@@ -155,25 +221,56 @@ async def get_admin_stats(
 
 # ===== GESTIÓN DE SOLICITUDES DE REGISTRO =====
 
-@router.get("/solicitudes", response_model=List[SolicitudRegistroResponse])
+@router.get("/solicitudes", response_model=PaginatedResponse[SolicitudRegistroResponse])
 async def get_solicitudes_registro(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página (máximo 100)"),
     db: Session = Depends(get_db),
     admin_user: Tecnico = Depends(verify_admin)
 ):
-    """Obtener todas las solicitudes de registro (solo administradores)"""
-    solicitudes = db.query(SolicitudRegistro).order_by(SolicitudRegistro.fecha_solicitud.desc()).all()
-    return solicitudes
+    """
+    Obtener todas las solicitudes de registro con paginación (solo administradores)
+    
+    - **page**: Número de página (empezando en 1)
+    - **page_size**: Cantidad de elementos por página (máximo 100)
+    """
+    query = db.query(SolicitudRegistro).order_by(SolicitudRegistro.fecha_solicitud.desc())
+    items, total, pages = paginate_query(query, page, page_size)
+    
+    return PaginatedResponse(
+        items=[SolicitudRegistroResponse.from_orm(s) for s in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages
+    )
 
-@router.get("/solicitudes/pendientes", response_model=List[SolicitudRegistroResponse])
+@router.get("/solicitudes/pendientes", response_model=PaginatedResponse[SolicitudRegistroResponse])
 async def get_solicitudes_pendientes(
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página (máximo 100)"),
     db: Session = Depends(get_db),
     admin_user: Tecnico = Depends(verify_admin)
 ):
-    """Obtener solo las solicitudes pendientes (solo administradores)"""
-    solicitudes = db.query(SolicitudRegistro).filter(
+    """
+    Obtener solo las solicitudes pendientes con paginación (solo administradores)
+    
+    - **page**: Número de página (empezando en 1)
+    - **page_size**: Cantidad de elementos por página (máximo 100)
+    """
+    query = db.query(SolicitudRegistro).filter(
         SolicitudRegistro.estado == "pendiente"
-    ).order_by(SolicitudRegistro.fecha_solicitud.desc()).all()
-    return solicitudes
+    ).order_by(SolicitudRegistro.fecha_solicitud.desc())
+    
+    items, total, pages = paginate_query(query, page, page_size)
+    
+    return PaginatedResponse(
+        items=[SolicitudRegistroResponse.from_orm(s) for s in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages
+    )
 
 @router.get("/solicitudes/{solicitud_id}", response_model=SolicitudRegistroResponse)
 async def get_solicitud_detalle(
@@ -240,7 +337,8 @@ async def aprobar_solicitud(
             password_hash=solicitud.password_hash,
             firma_digital=solicitud.firma_digital,
             turno_actual="mañana",
-            tipo_tecnico="Técnico de Instrumentación"
+            tipo_tecnico="Técnico de Instrumentación",
+            tipo_usuario=solicitud.tipo_usuario or "tecnico"
         )
         
         db.add(nuevo_usuario)

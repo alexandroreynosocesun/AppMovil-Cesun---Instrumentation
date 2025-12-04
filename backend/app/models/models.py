@@ -1,9 +1,9 @@
 from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
-Base = declarative_base()
+# Importar Base desde database.py para mantener consistencia
+from app.database import Base
 
 class Tecnico(Base):
     __tablename__ = "tecnicos"
@@ -16,6 +16,7 @@ class Tecnico(Base):
     firma_digital = Column(Text, nullable=True)  # Base64 de la imagen de firma
     turno_actual = Column(String(20), default="A")  # A(Día), B(Noche), C(Fines)
     tipo_tecnico = Column(String(50), default="Técnico de Instrumentación")
+    tipo_usuario = Column(String(20), default="tecnico")  # ingeniero, tecnico, inventario
     activo = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -39,8 +40,9 @@ class Validacion(Base):
     __tablename__ = "validaciones"
     
     id = Column(Integer, primary_key=True, index=True)
-    jig_id = Column(Integer, ForeignKey("jigs.id"), nullable=False)
+    jig_id = Column(Integer, ForeignKey("jigs.id"), nullable=True)  # Opcional para asignaciones sin jig específico
     tecnico_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=False)
+    tecnico_asignado_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)  # Técnico al que se asignó la validación
     fecha = Column(DateTime, default=datetime.utcnow)
     turno = Column(String(20), nullable=False)  # A, B, C
     estado = Column(String(10), nullable=False)  # OK, NG
@@ -48,11 +50,13 @@ class Validacion(Base):
     cantidad = Column(Integer, default=1)
     firma_digital = Column(Text, nullable=True)
     sincronizado = Column(Boolean, default=False)
+    completada = Column(Boolean, default=False)  # Estado de completado de la asignación
     created_at = Column(DateTime, default=datetime.utcnow)
     
     # Relaciones
     jig = relationship("Jig", back_populates="validaciones")
-    tecnico = relationship("Tecnico")
+    tecnico = relationship("Tecnico", foreign_keys=[tecnico_id])
+    tecnico_asignado = relationship("Tecnico", foreign_keys=[tecnico_asignado_id])
 
 class Reparacion(Base):
     __tablename__ = "reparaciones"
@@ -88,6 +92,7 @@ class JigNG(Base):
     usuario_reporte = Column(String(100), nullable=True)  # Usuario que reportó el problema
     usuario_reparando = Column(String(100), nullable=True)  # Usuario que está reparando
     comentario_reparacion = Column(Text, nullable=True)  # Comentarios de reparación
+    foto = Column(Text, nullable=True)  # Base64 de la foto del jig NG
     sincronizado = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -95,6 +100,21 @@ class JigNG(Base):
     jig = relationship("Jig", back_populates="jigs_ng", overlaps="jigs_ng")
     tecnico_ng = relationship("Tecnico", foreign_keys=[tecnico_id])
     tecnico_reparacion = relationship("Tecnico", foreign_keys=[tecnico_reparacion_id])
+
+class DamagedLabel(Base):
+    __tablename__ = "damaged_labels"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    modelo = Column(String(100), nullable=False)  # Modelo del jig
+    tipo_jig = Column(String(30), nullable=False)  # manual, semiautomatico, new_semiautomatico
+    numero_jig = Column(String(20), nullable=True)  # Opcional, algunos no tienen
+    foto = Column(Text, nullable=True)  # Base64 de la foto del jig
+    reportado_por_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=False)
+    estado = Column(String(20), default="pendiente")  # pendiente, procesado, resuelto
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relaciones
+    reportado_por = relationship("Tecnico")
 
 class SolicitudRegistro(Base):
     __tablename__ = "solicitudes_registro"
@@ -104,6 +124,7 @@ class SolicitudRegistro(Base):
     nombre = Column(String(100), nullable=False)
     numero_empleado = Column(String(20), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
+    tipo_usuario = Column(String(20), default="tecnico")  # ingeniero, tecnico, gestion
     firma_digital = Column(Text, nullable=True)  # Base64 de la firma
     estado = Column(String(20), default="pendiente")  # pendiente, aprobada, rechazada
     admin_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
@@ -114,3 +135,25 @@ class SolicitudRegistro(Base):
     
     # Relaciones
     admin = relationship("Tecnico")
+
+class AuditoriaPDF(Base):
+    __tablename__ = "auditoria_pdfs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nombre_archivo = Column(String(255), nullable=False)
+    ruta_archivo = Column(String(500), nullable=False)
+    modelo = Column(String(100), nullable=True)
+    tecnico_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=False)
+    tecnico_nombre = Column(String(100), nullable=False)
+    numero_empleado = Column(String(20), nullable=False)
+    fecha = Column(DateTime, nullable=False)
+    fecha_dia = Column(Integer, nullable=False)  # Día del mes (1-31)
+    fecha_mes = Column(Integer, nullable=False)  # Mes (1-12)
+    fecha_anio = Column(Integer, nullable=False)  # Año (2024, 2025, etc.)
+    turno = Column(String(20), nullable=False)  # A, B, C
+    linea = Column(String(50), nullable=True)
+    cantidad_validaciones = Column(Integer, default=0)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relaciones
+    tecnico = relationship("Tecnico")

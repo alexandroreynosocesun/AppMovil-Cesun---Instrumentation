@@ -5,31 +5,28 @@ import {
   ScrollView,
   Alert,
   Dimensions,
-  RefreshControl,
-  Linking,
   Platform
 } from 'react-native';
-import { formatDate, formatTime12Hour } from '../utils/dateUtils';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as Sharing from 'expo-sharing';
 import {
-  Button,
   Card,
   Title,
   Paragraph,
-  TextInput,
-  RadioButton,
-  ActivityIndicator,
+  Button,
   Chip,
+  ActivityIndicator,
   Surface,
   Divider,
-  List,
   IconButton,
+  Text,
   FAB
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { useValidation } from '../contexts/ValidationContext';
+import { formatDate } from '../utils/dateUtils';
+import logger from '../utils/logger';
+import { LinearGradient } from 'expo-linear-gradient';
 import { reportService } from '../services/ReportService';
+import { getAuthToken } from '../utils/authUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -48,21 +45,14 @@ export default function ReporteScreen({ navigation, route }) {
   const [selectedModel, setSelectedModel] = useState(currentModel);
   const [turno, setTurno] = useState(user?.turno_actual || 'A');
   const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
-  const [refreshing, setRefreshing] = useState(false);
-  const [hasSignature, setHasSignature] = useState(false);
-  const [downloadingPDF, setDownloadingPDF] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [reportData, setReportData] = useState(null);
+  const [pdfInfo, setPdfInfo] = useState(null);
   
   // Obtener validaciones del modelo seleccionado
   const currentValidations = selectedModel ? getValidationsByModel(selectedModel) : [];
   const completedModels = getCompletedModels();
-  
-  // Debug: Verificar datos
-  console.log('🔍 Debug ReporteScreen:');
-  console.log('selectedModel:', selectedModel);
-  console.log('currentValidations.length:', currentValidations.length);
-  console.log('completedModels:', completedModels);
-  console.log('Todas las validaciones:', validations);
-  console.log('Validaciones por modelo:', validations.map(v => ({ modelo: v.modelo_actual, jig: v.jig?.numero_jig })));
 
   // Actualizar modelo seleccionado cuando cambien las validaciones
   useEffect(() => {
@@ -70,15 +60,6 @@ export default function ReporteScreen({ navigation, route }) {
       setSelectedModel(currentModel);
     }
   }, [currentModel, selectedModel]);
-
-  // Verificar si el usuario tiene firma guardada
-  useEffect(() => {
-    if (user?.firma_digital) {
-      setHasSignature(true);
-    } else {
-      setHasSignature(false);
-    }
-  }, [user?.firma_digital]);
 
   // Función para obtener color del turno
   const getTurnoColor = (turno) => {
@@ -95,199 +76,18 @@ export default function ReporteScreen({ navigation, route }) {
     return estado === 'OK' ? '#4CAF50' : '#F44336';
   };
 
-  // Funciones formatDate y formatTime ahora importadas desde dateUtils
-
-  const handleRefresh = () => {
-    setRefreshing(true);
-    // Simular refresh
-    setTimeout(() => {
-      setRefreshing(false);
-    }, 1000);
-  };
-
-  // Función para diagnosticar problemas del backend
-  const handleTestBackend = async () => {
-    try {
-      setIsGeneratingReport(true);
-      console.log('🔍 Iniciando diagnóstico del backend...');
-      
-      const result = await reportService.testBackendConnection();
-      
-      if (result.success) {
-        Alert.alert(
-          '✅ Backend Funcionando',
-          'El servidor está respondiendo correctamente.\n\nEl problema puede estar en el endpoint específico de generación de PDF.',
-          [{ text: 'OK' }]
-        );
-      } else {
-        Alert.alert(
-          '❌ Backend No Disponible',
-          `El servidor no está respondiendo:\n\n${result.error}\n\nVerifique que el servidor esté ejecutándose.`,
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      console.error('Error en diagnóstico:', error);
-      Alert.alert('Error', 'Error al diagnosticar el backend');
-    } finally {
-      setIsGeneratingReport(false);
-    }
-  };
-
-  const downloadPDF = async (filename) => {
-    if (downloadingPDF) {
-      console.log('⚠️ Descarga ya en progreso, ignorando...');
-      return;
-    }
-    
-    try {
-      setDownloadingPDF(true);
-      console.log('📥 Iniciando descarga de PDF:', filename);
-      
-      // Mostrar indicador de carga
-      Alert.alert('Descargando PDF', 'Preparando descarga...');
-      
-      // URL del endpoint de descarga
-      const downloadUrl = `https://6ce89e26f529.ngrok-free.app/api/validations/download-pdf/${filename}`;
-      console.log('🔗 URL de descarga:', downloadUrl);
-      
-      // Crear nombre de archivo local
-      const localFilename = `reporte_${Date.now()}.pdf`;
-      const localUri = `${FileSystem.documentDirectory}${localFilename}`;
-      console.log('💾 Archivo local:', localUri);
-      
-      // Configurar opciones de descarga con timeout
-      const downloadOptions = {
-        headers: {
-          'ngrok-skip-browser-warning': 'true'
-        }
-      };
-      
-      // Descargar el archivo con timeout
-      console.log('⬇️ Iniciando descarga...');
-      const downloadResult = await Promise.race([
-        FileSystem.downloadAsync(downloadUrl, localUri, downloadOptions),
-        new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Timeout de descarga')), 30000)
-        )
-      ]);
-      
-      console.log('📊 Resultado de descarga:', downloadResult);
-      
-      if (downloadResult.status === 200) {
-        console.log('✅ Descarga exitosa, verificando compatibilidad de compartir...');
-        
-        // Verificar si se puede compartir
-        const isAvailable = await Sharing.isAvailableAsync();
-        console.log('📤 Compartir disponible:', isAvailable);
-        
-        if (isAvailable) {
-          console.log('📤 Abriendo diálogo de compartir...');
-          try {
-            await Sharing.shareAsync(downloadResult.uri, {
-              mimeType: 'application/pdf',
-              dialogTitle: 'Abrir Reporte PDF'
-            });
-            console.log('✅ PDF compartido exitosamente');
-          } catch (shareError) {
-            console.error('❌ Error compartiendo PDF:', shareError);
-            Alert.alert(
-              'PDF Descargado',
-              `El PDF se ha descargado pero no se pudo abrir automáticamente.\n\nUbicación: ${downloadResult.uri}`,
-              [{ text: 'OK' }]
-            );
-          }
-        } else {
-          Alert.alert(
-            'PDF Descargado',
-            `El PDF se ha descargado en: ${downloadResult.uri}`,
-            [{ text: 'OK' }]
-          );
-        }
-      } else {
-        throw new Error(`Error descargando: Status ${downloadResult.status}`);
-      }
-    } catch (error) {
-      console.error('❌ Error descargando PDF:', error);
-      
-      let errorMessage = 'No se pudo descargar el PDF';
-      if (error.message.includes('Timeout')) {
-        errorMessage = 'La descarga tardó demasiado. Verifique su conexión e intente nuevamente.';
-      } else if (error.message.includes('Network')) {
-        errorMessage = 'Error de conexión. Verifique su internet e intente nuevamente.';
-      } else {
-        errorMessage = `Error: ${error.message}`;
-      }
-      
-      Alert.alert(
-        'Error de Descarga',
-        errorMessage,
-        [
-          { text: 'Reintentar', onPress: () => downloadPDF(filename) },
-          { text: 'Cancelar', style: 'cancel' }
-        ]
-      );
-    } finally {
-      setDownloadingPDF(false);
-    }
-  };
-
-  const handleGenerateReport = async () => {
-    if (currentValidations.length === 0) {
-      Alert.alert('Error', 'No hay validaciones para generar el reporte');
-      return;
-    }
-
-    // Verificar si el usuario tiene firma guardada
-    if (!hasSignature) {
-      Alert.alert(
-        'Firma Requerida',
-        'Para generar reportes profesionales, necesitas configurar tu firma digital.\n\n¿Deseas configurarla ahora?',
-        [
-          {
-            text: 'Generar Sin Firma',
-            onPress: () => generateReportWithoutSignature(),
-            style: 'cancel'
-          },
-          {
-            text: 'Configurar Firma',
-            onPress: () => navigation.navigate('Profile')
-          }
-        ]
-      );
-      return;
-    }
-
-    generateReportWithSignature();
-  };
-
-  const generateReportWithoutSignature = async () => {
-    // Llamar a la función original de generación
-    await generateReportWithSignature();
-  };
-
-  const generateReportWithSignature = async () => {
+  // Generar reporte
+  const generateReport = async () => {
     try {
       setIsGeneratingReport(true);
       
       // Formatear fecha para el servidor
       const fechaFormateada = new Date(fecha).toISOString();
       
-      // Debug: Verificar datos antes de procesar
-      console.log('🔍 Debug generateReportWithSignature:');
-      console.log('currentValidations.length:', currentValidations.length);
-      console.log('selectedModel:', selectedModel);
-      console.log('currentValidations:', currentValidations.map(v => ({
-        modelo: v.modelo_actual,
-        jig: v.jig?.numero_jig,
-        estado: v.estado
-      })));
-      
       // Limpiar y validar datos antes de enviar
       const validacionesLimpias = currentValidations
-        .filter(v => v.jig?.id && v.estado) // Solo validaciones con jig y estado
+        .filter(v => v.jig?.id && v.estado)
         .map(v => {
-          // Asegurar que todos los campos requeridos existan
           const validacion = {
             jig_id: parseInt(v.jig.id),
             numero_jig: String(v.jig.numero_jig || ''),
@@ -296,37 +96,27 @@ export default function ReporteScreen({ navigation, route }) {
             estado: String(v.estado),
             cantidad: parseInt(v.cantidad) || 1,
             comentario: String(v.comentario || ''),
+            linea: String(v.linea || '').trim(),
             created_at: new Date(v.created_at).toISOString(),
             tecnico_id: parseInt(user?.id)
           };
           
-          // Validar que no hay valores NaN o undefined
           if (isNaN(validacion.jig_id) || isNaN(validacion.tecnico_id) || isNaN(validacion.cantidad)) {
-            console.warn('Validación con datos inválidos:', v);
+            logger.warn('Validación con datos inválidos:', v);
             return null;
           }
           
           return validacion;
         })
-        .filter(v => v !== null); // Remover validaciones inválidas
-
-      console.log('🔍 validacionesLimpias.length:', validacionesLimpias.length);
-      console.log('🔍 validacionesLimpias:', validacionesLimpias.map(v => ({
-        jig_id: v.jig_id,
-        numero_jig: v.numero_jig,
-        estado: v.estado,
-        comentario: v.comentario,
-        created_at: v.created_at
-      })));
+        .filter(v => v !== null);
 
       // Crear estructura de datos compatible con el backend
-      const reportData = {
+      const reportDataToSend = {
         fecha: fechaFormateada,
         turno: turno || 'A',
         tecnico: user?.nombre || 'N/A',
         tecnico_id: user?.id,
         modelo: selectedModel || 'N/A',
-        signature_data: user?.firma_digital || null, // Incluir firma digital
         validaciones: validacionesLimpias.map(v => ({
           jig_id: v.jig_id,
           numero_jig: v.numero_jig,
@@ -335,236 +125,131 @@ export default function ReporteScreen({ navigation, route }) {
           estado: v.estado,
           cantidad: v.cantidad,
           comentario: v.comentario,
+          linea: v.linea,
           created_at: v.created_at,
           tecnico_id: v.tecnico_id
         }))
       };
 
-      console.log('📊 reportData.validaciones.length:', reportData.validaciones.length);
-      console.log('📊 reportData.validaciones:', reportData.validaciones.map(v => ({
-        jig_id: v.jig_id,
-        numero_jig: v.numero_jig,
-        estado: v.estado,
-        comentario: v.comentario
-      })));
-      
-      // Debug: Verificar firma digital
-      console.log('🔍 Debug Firma Digital:');
-      console.log('user?.firma_digital existe:', !!user?.firma_digital);
-      console.log('user?.firma_digital length:', user?.firma_digital?.length || 0);
-      console.log('user?.firma_digital preview:', user?.firma_digital?.substring(0, 100) || 'null');
-      console.log('signature_data en reportData:', !!reportData.signature_data);
-      console.log('signature_data length:', reportData.signature_data?.length || 0);
-      console.log('signature_data preview:', reportData.signature_data?.substring(0, 100) || 'null');
-
-      // Validar que no hay valores NaN en el reporte principal
-      if (isNaN(reportData.tecnico_id)) {
+      // Validaciones
+      if (isNaN(reportDataToSend.tecnico_id)) {
         Alert.alert('Error', 'ID de técnico inválido. Inicie sesión nuevamente.');
         return;
       }
 
-      // Validar datos antes de enviar
-      if (!reportData.validaciones || reportData.validaciones.length === 0) {
+      if (!reportDataToSend.validaciones || reportDataToSend.validaciones.length === 0) {
         Alert.alert('Error', 'No hay validaciones válidas para generar el reporte');
         return;
       }
 
-      if (!reportData.modelo || reportData.modelo === 'N/A') {
+      if (!reportDataToSend.modelo || reportDataToSend.modelo === 'N/A') {
         Alert.alert('Error', 'Debe seleccionar un modelo para el reporte');
         return;
       }
 
-      if (!reportData.tecnico_id || reportData.tecnico_id === 0) {
-        Alert.alert('Error', 'No se pudo identificar al técnico. Inicie sesión nuevamente.');
-        return;
-      }
-
-      // Validar que todas las validaciones tengan datos requeridos
-      const validacionesInvalidas = reportData.validaciones.filter(v => 
-        !v.jig_id || !v.estado || !v.created_at
-      );
-
-      if (validacionesInvalidas.length > 0) {
-        Alert.alert('Error', 'Algunas validaciones tienen datos incompletos. Verifique la información.');
-        return;
-      }
-
-      // Test de serialización JSON
-      try {
-        const testSerialization = JSON.stringify(reportData);
-        console.log('✅ Serialización JSON exitosa');
-      } catch (serializationError) {
-        console.error('❌ Error en serialización JSON:', serializationError);
-        Alert.alert('Error', 'Error al preparar los datos del reporte');
-        return;
-      }
-
-      console.log('=== DEBUG REPORTE ===');
-      console.log('Datos del reporte:', JSON.stringify(reportData, null, 2));
-      console.log('Número de validaciones:', reportData.validaciones.length);
-      console.log('Modelo seleccionado:', reportData.modelo);
-      console.log('Técnico ID:', reportData.tecnico_id);
-      console.log('Fecha formateada:', reportData.fecha);
-      console.log('Tamaño del JSON:', JSON.stringify(reportData).length, 'caracteres');
-      console.log('========================');
+      // Generar reporte
+      let result = await reportService.generateValidationReport(reportDataToSend);
       
-      // Intentar con formato alternativo si el primero falla
-      let result = await reportService.generateValidationReport(reportData);
-      console.log('Respuesta del servidor (intento 1):', result);
-      
-      // Si falla, intentar con formato simplificado
-      if (!result.success && result.error?.includes('500')) {
-        console.log('🔄 Intentando con formato simplificado...');
-        
-        const reportDataSimplificado = {
-          fecha: fechaFormateada,
-          turno: turno || 'A',
-          tecnico: user?.nombre || 'N/A',
-          tecnico_id: user?.id,
-          modelo: selectedModel || 'N/A',
-          signature_data: user?.firma_digital || null, // Incluir firma digital
-          validaciones: validacionesLimpias.map(v => ({
-            jig_id: v.jig_id,
-            estado: v.estado,
-            cantidad: v.cantidad,
-            created_at: v.created_at
-          }))
-        };
-        
-        console.log('Datos simplificados:', JSON.stringify(reportDataSimplificado, null, 2));
-        result = await reportService.generateValidationReport(reportDataSimplificado);
-        console.log('Respuesta del servidor (intento 2):', result);
-      }
-
-      // Si ambos intentos fallan, mostrar reporte local temporal
       if (!result.success) {
-        console.log('⚠️ Servidor no disponible, generando reporte local...');
-        const reporteLocal = generarReporteLocal(reportData);
-        mostrarReporteLocal(reporteLocal);
+        Alert.alert('Error', result.error || 'Error generando el reporte');
         return;
       }
+
+      // Guardar datos del reporte y PDF
+      setReportData(reportDataToSend);
+      setPdfInfo({
+        pdf_filename: result.data.pdf_filename,
+        pdf_path: result.data.pdf_path,
+        validations_count: result.data.validations_count,
+        modelo: result.data.modelo,
+        saved_to_audit: result.data.saved_to_audit !== undefined ? result.data.saved_to_audit : true
+      });
       
-      if (result.success) {
-        Alert.alert(
-          'Reporte Generado',
-          `El reporte se ha generado exitosamente.\n\nModelo: ${result.data.modelo}\nValidaciones: ${result.data.validations_count}\nPDF: ${result.data.pdf_path}`,
-          [
-            {
-              text: downloadingPDF ? 'Descargando...' : 'Descargar PDF',
-              onPress: downloadingPDF ? null : () => {
-                console.log('Descargando reporte:', result.data);
-                if (result.data.pdf_filename) {
-                  downloadPDF(result.data.pdf_filename);
-                } else {
-                  Alert.alert('Error', 'No se encontró el archivo PDF');
-                }
-              },
-              disabled: downloadingPDF
-            },
-            {
-              text: 'Nuevo Reporte',
-              onPress: () => {
-                clearValidations();
-                navigation.navigate('QRScanner');
-              }
-            }
-          ]
-        );
-      } else {
-        Alert.alert('Error', result.error || 'Error generando el reporte');
-      }
+      // El backend guarda automáticamente en auditoría, pero inicializamos saved como false
+      // para que el usuario confirme visualmente el guardado
+      setSaved(false);
+      
+      logger.info('✅ Reporte generado exitosamente. PDF guardado en auditoría por el backend.');
+      
     } catch (error) {
-      console.error('Error generando reporte:', error);
-      console.error('Detalles del error:', error.response?.data);
-      
-      let errorMessage = 'Error de conexión al generar el reporte';
-      
-      if (error.response?.status === 500) {
-        errorMessage = 'Error interno del servidor. Verifique los datos e intente nuevamente.';
-      } else if (error.response?.status === 400) {
-        errorMessage = 'Datos inválidos. Verifique la información del reporte.';
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      }
-      
-      Alert.alert('Error', errorMessage);
+      logger.error('Error generando reporte:', error);
+      Alert.alert('Error', 'Error de conexión al generar el reporte');
     } finally {
       setIsGeneratingReport(false);
     }
   };
 
-  // Función para generar reporte local temporal
-  const generarReporteLocal = (reportData) => {
-    const fechaFormateada = new Date(reportData.fecha).toLocaleDateString('es-ES');
-    const horaFormateada = new Date(reportData.fecha).toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: true
-    });
-
-    const totalValidaciones = reportData.validaciones.length;
-    const validacionesOK = reportData.validaciones.filter(v => v.estado === 'OK').length;
-    const validacionesNG = reportData.validaciones.filter(v => v.estado === 'NG').length;
-
-    return {
-      fecha: fechaFormateada,
-      hora: horaFormateada,
-      turno: reportData.turno,
-      tecnico: reportData.tecnico,
-      modelo: reportData.modelo,
-      totalValidaciones,
-      validacionesOK,
-      validacionesNG,
-      validaciones: reportData.validaciones
-    };
+  // Guardar en auditoría y navegar a AuditoriaScreen
+  const handleSaveToAudit = async () => {
+    try {
+      setSaving(true);
+      logger.info('💾 Guardando reporte en auditoría...');
+      
+      // El backend ya guarda automáticamente en auditoría al generar el reporte
+      // Verificamos que el PDF esté guardado consultando la respuesta del servidor
+      if (pdfInfo?.pdf_filename) {
+        logger.info('✅ PDF ya generado:', pdfInfo.pdf_filename);
+        logger.info('✅ El reporte fue guardado en auditoría automáticamente por el backend');
+        
+        // Confirmar visualmente después de un breve delay
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        // Guardar el nombre del archivo antes de limpiar el estado
+        const savedFilename = pdfInfo.pdf_filename;
+        
+        setSaved(true);
+        logger.info('✅ Estado actualizado: Guardado en auditoría');
+        
+        // Limpiar validaciones y resetear estado para empezar un nuevo reporte
+        logger.info('🧹 Limpiando validaciones para empezar un nuevo reporte...');
+        clearValidations();
+        setReportData(null);
+        setPdfInfo(null);
+        setSaved(false);
+        setSelectedModel(null);
+        
+        logger.info('✅ Estado reseteado. Listo para empezar un nuevo reporte.');
+        
+        // Mostrar confirmación y navegar a Home
+        Alert.alert(
+          '✅ Guardado en Auditoría',
+          `El reporte "${savedFilename}" ha sido guardado exitosamente.\n\nLas validaciones han sido limpiadas.`,
+          [
+            {
+              text: 'OK',
+              onPress: () => {
+                navigation.navigate('Home');
+              }
+            }
+          ]
+        );
+      } else {
+        logger.warn('⚠️ No hay información del PDF disponible');
+        Alert.alert(
+          'Advertencia',
+          'El PDF aún no está disponible. Por favor, espera a que se genere el reporte.',
+          [{ text: 'OK' }]
+        );
+      }
+    } catch (error) {
+      logger.error('❌ Error guardando en auditoría:', error);
+      Alert.alert(
+        'Error',
+        'No se pudo confirmar el guardado del reporte en auditoría. El reporte puede haberse guardado correctamente. Verifica en la pantalla de Auditoría.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // Función para mostrar reporte local
-  const mostrarReporteLocal = (reporte) => {
-    const mensaje = `📊 REPORTE LOCAL GENERADO
-
-📅 Fecha: ${reporte.fecha}
-🕐 Hora: ${reporte.hora}
-👤 Técnico: ${reporte.tecnico}
-🏭 Modelo: ${reporte.modelo}
-🔄 Turno: ${reporte.turno}
-
-📈 ESTADÍSTICAS:
-✅ Validaciones OK: ${reporte.validacionesOK}
-❌ Validaciones NG: ${reporte.validacionesNG}
-📊 Total: ${reporte.totalValidaciones}
-
-⚠️ NOTA: Este es un reporte local temporal.
-El servidor no está disponible para generar el PDF.
-Los datos se han guardado localmente.`;
-
-    Alert.alert(
-      'Reporte Local Generado',
-      mensaje,
-      [
-        {
-          text: 'Ver Detalles',
-          onPress: () => {
-            console.log('=== REPORTE LOCAL ===');
-            console.log(JSON.stringify(reporte, null, 2));
-            console.log('===================');
-          }
-        },
-        {
-          text: 'Nuevo Reporte',
-          onPress: () => {
-            clearValidations();
-            navigation.navigate('QRScanner');
-          }
-        },
-        {
-          text: 'OK',
-          style: 'default'
-        }
-      ]
-    );
+  // Continuar escaneando
+  const handleContinueScanning = () => {
+    navigation.navigate('QRScanner');
   };
 
+
+  // Limpiar validaciones
   const handleClearValidations = () => {
     Alert.alert(
       'Limpiar Validaciones',
@@ -577,286 +262,401 @@ Los datos se han guardado localmente.`;
           onPress: () => {
             clearValidations();
             setSelectedModel(null);
+            setReportData(null);
+            setPdfInfo(null);
+            setSaved(false);
           }
         }
       ]
     );
   };
 
-  const handleContinueScanning = () => {
-    navigation.navigate('QRScanner');
-  };
+  // Si no hay reporte generado, mostrar vista de generación
+  if (!reportData || !pdfInfo) {
+  return (
+    <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          {/* Header con gradiente */}
+          <LinearGradient
+            colors={['#2196F3', '#1976D2', '#0D47A1']}
+            style={styles.headerGradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+          >
+          <View style={styles.headerContent}>
+              <View style={styles.headerTextContainer}>
+              <Title style={styles.headerTitle}>📊 Reporte de Validación</Title>
+              <Paragraph style={styles.headerSubtitle}>
+                {formatDate(fecha)} • Turno {turno}
+              </Paragraph>
+            </View>
+            </View>
+          </LinearGradient>
 
+        {/* Información del técnico */}
+          <Card style={styles.infoCard}>
+          <Card.Content>
+              <Title style={styles.cardTitle}>Información del Reporte</Title>
+              <View style={styles.infoGrid}>
+                <View style={styles.infoItem}>
+                  <Paragraph style={styles.infoLabel}>Técnico:</Paragraph>
+                  <Paragraph style={styles.infoValue}>{user?.nombre || 'N/A'}</Paragraph>
+              </View>
+                <View style={styles.infoItem}>
+                  <Paragraph style={styles.infoLabel}>Modelo:</Paragraph>
+                  <Paragraph style={styles.infoValue}>{selectedModel || 'N/A'}</Paragraph>
+              </View>
+                <View style={styles.infoItem}>
+                  <Paragraph style={styles.infoLabel}>Total Validaciones:</Paragraph>
+                  <Paragraph style={styles.infoValue}>{currentValidations.length}</Paragraph>
+              </View>
+                <View style={styles.infoItem}>
+                  <Paragraph style={styles.infoLabel}>Turno:</Paragraph>
+                    <Chip
+                    style={[styles.turnoChip, { backgroundColor: getTurnoColor(turno) }]}
+                    textStyle={styles.chipText}
+                  >
+                    {turno}
+                    </Chip>
+                </View>
+              </View>
+          </Card.Content>
+        </Card>
+
+          {/* Resumen estadístico */}
+          {currentValidations.length > 0 && (
+            <Card style={styles.summaryCard}>
+          <Card.Content>
+                <Title style={styles.cardTitle}>Resumen de Validaciones</Title>
+                <View style={styles.summaryGrid}>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryNumber}>{currentValidations.length}</Text>
+                    <Text style={styles.summaryLabel}>Total Jigs</Text>
+            </View>
+                  <View style={styles.summaryItem}>
+                    <Text style={[styles.summaryNumber, { color: '#4CAF50' }]}>
+                      {currentValidations.filter(v => v.estado === 'OK').length}
+                    </Text>
+                    <Text style={styles.summaryLabel}>OK</Text>
+                  </View>
+                  <View style={styles.summaryItem}>
+                    <Text style={[styles.summaryNumber, { color: '#F44336' }]}>
+                      {currentValidations.filter(v => v.estado === 'NG').length}
+                    </Text>
+                    <Text style={styles.summaryLabel}>NG</Text>
+                  </View>
+                  <View style={styles.summaryItem}>
+                    <Text style={styles.summaryNumber}>
+                      {currentValidations.reduce((sum, v) => sum + parseInt(v.cantidad || 0), 0)}
+                    </Text>
+                    <Text style={styles.summaryLabel}>Cantidad Total</Text>
+                  </View>
+                </View>
+              </Card.Content>
+            </Card>
+          )}
+
+          {currentValidations.length === 0 && (
+            <Card style={styles.emptyCard}>
+              <Card.Content>
+                <Paragraph style={styles.emptyText}>
+                  No hay validaciones registradas. Escanea algunos jigs para generar el reporte.
+                </Paragraph>
+              </Card.Content>
+            </Card>
+          )}
+        </ScrollView>
+
+        {/* Botones FAB */}
+        {currentValidations.length > 0 && (
+          <View style={styles.fabContainer}>
+            <FAB
+              style={[styles.fab, styles.continueFab]}
+                  icon="qrcode-scan"
+              onPress={handleContinueScanning}
+              mode="contained"
+            />
+            <FAB
+              style={[styles.fab, styles.generateFab]}
+              icon={isGeneratingReport ? "loading" : "file-document"}
+              onPress={generateReport}
+              disabled={isGeneratingReport}
+            />
+            <FAB
+              style={[styles.fab, styles.clearFab]}
+              icon="delete"
+              onPress={handleClearValidations}
+              small
+            />
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  // Vista de previsualización del reporte generado
+  const validaciones = reportData.validaciones || [];
+  const validacionesOK = validaciones.filter(v => v.estado === 'OK').length;
+  const validacionesNG = validaciones.filter(v => v.estado === 'NG').length;
+  
+  // Debug: Verificar cantidad de validaciones
+  logger.info('🔍 Validaciones en previsualización:', {
+    total: validaciones.length,
+    validaciones: validaciones.map(v => ({
+      numero_jig: v.numero_jig,
+      estado: v.estado,
+      cantidad: v.cantidad
+    }))
+  });
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-        }
-      >
-        {/* Header tipo estado de cuenta */}
-        <Surface style={styles.headerCard} elevation={4}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {/* Header con gradiente */}
+        <LinearGradient
+          colors={['#2196F3', '#1976D2', '#0D47A1']}
+          style={styles.headerGradient}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+        >
           <View style={styles.headerContent}>
-            <View style={styles.headerLeft}>
-              <Title style={styles.headerTitle}>📊 Reporte de Validación</Title>
+            <IconButton
+              icon="arrow-left"
+              iconColor="#FFFFFF"
+              size={24}
+              onPress={() => {
+                setReportData(null);
+                setPdfInfo(null);
+                setSaved(false);
+              }}
+            />
+            <View style={styles.headerTextContainer}>
+              <Title style={styles.headerTitle}>📄 Previsualización del Reporte</Title>
               <Paragraph style={styles.headerSubtitle}>
-                {formatDate(fecha)} {formatTime12Hour(fecha)} • Turno {turno}
+                Revisa los detalles antes de guardar
+              </Paragraph>
+              </View>
+                  </View>
+        </LinearGradient>
+
+        {/* Información del reporte */}
+        <Card style={styles.infoCard}>
+          <Card.Content>
+            <Title style={styles.cardTitle}>Información del Reporte</Title>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Técnico:</Paragraph>
+                <Paragraph style={styles.infoValue}>{reportData.tecnico || user?.nombre}</Paragraph>
+                  </View>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Modelo:</Paragraph>
+                <Paragraph style={styles.infoValue}>{reportData.modelo || 'N/A'}</Paragraph>
+                  </View>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Fecha:</Paragraph>
+                <Paragraph style={styles.infoValue}>
+                  {reportData.fecha ? formatDate(reportData.fecha) : new Date().toLocaleDateString('es-ES')}
+                </Paragraph>
+                  </View>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Turno:</Paragraph>
+                <Chip
+                  style={[styles.turnoChip, { backgroundColor: getTurnoColor(reportData.turno) }]}
+                  textStyle={styles.chipText}
+                >
+                  {reportData.turno}
+                </Chip>
+                  </View>
+                  </View>
+          </Card.Content>
+        </Card>
+
+        {/* Resumen estadístico */}
+        <Card style={styles.summaryCard}>
+          <Card.Content>
+            <Title style={styles.cardTitle}>Resumen de Validaciones</Title>
+            <View style={styles.summaryGrid}>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryNumber}>{validaciones.length}</Text>
+                <Text style={styles.summaryLabel}>Total Jigs</Text>
+                  </View>
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryNumber, { color: '#4CAF50' }]}>
+                  {validacionesOK}
+                </Text>
+                <Text style={styles.summaryLabel}>OK</Text>
+                  </View>
+              <View style={styles.summaryItem}>
+                <Text style={[styles.summaryNumber, { color: '#F44336' }]}>
+                  {validacionesNG}
+                </Text>
+                <Text style={styles.summaryLabel}>NG</Text>
+                  </View>
+              <View style={styles.summaryItem}>
+                <Text style={styles.summaryNumber}>
+                  {validaciones.reduce((sum, v) => sum + parseInt(v.cantidad || 0), 0)}
+                </Text>
+                <Text style={styles.summaryLabel}>Cantidad Total</Text>
+                  </View>
+                </View>
+          </Card.Content>
+        </Card>
+
+        {/* Lista completa de validaciones */}
+        <Card style={styles.previewCard}>
+          <Card.Content>
+            <Title style={styles.cardTitle}>Validaciones Incluidas</Title>
+            <Paragraph style={styles.previewSubtitle}>
+              Total: {validaciones.length} validaciones
+                          </Paragraph>
+            <Divider style={styles.divider} />
+            {validaciones.length === 0 ? (
+              <Paragraph style={styles.emptyText}>
+                No hay validaciones para mostrar
+                          </Paragraph>
+            ) : (
+              <ScrollView 
+                style={styles.validationsScroll}
+                nestedScrollEnabled={true}
+                showsVerticalScrollIndicator={true}
+              >
+                {validaciones.map((validation, index) => (
+                  <View key={`validation-${index}-${validation.numero_jig || index}`} style={styles.previewRow}>
+                    <View style={styles.previewLeft}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                        <Paragraph style={styles.previewJig}>
+                          Jig: {validation.numero_jig || 'N/A'}
+                        </Paragraph>
+                        <Chip
+                          style={[
+                            styles.estadoChip,
+                            { backgroundColor: getEstadoColor(validation.estado), marginLeft: 8 }
+                          ]}
+                          textStyle={styles.chipText}
+                        >
+                          {validation.estado}
+                        </Chip>
+                      </View>
+                      <Paragraph style={styles.previewModel}>
+                        Modelo: {validation.modelo || reportData.modelo}
+                      </Paragraph>
+                      {validation.tipo && (
+                        <Paragraph style={styles.previewLinea}>
+                          Tipo: {validation.tipo}
+                        </Paragraph>
+                      )}
+                      {validation.linea && (
+                        <Paragraph style={styles.previewLinea}>
+                          Línea: {validation.linea}
+                        </Paragraph>
+                      )}
+                      {validation.comentario && (
+                        <Paragraph style={styles.previewComentario}>
+                          Comentario: {validation.comentario}
+                        </Paragraph>
+                      )}
+                      {validation.created_at && (
+                        <Paragraph style={[styles.previewComentario, { fontSize: 10, marginTop: 4 }]}>
+                          Fecha: {new Date(validation.created_at).toLocaleString('es-ES')}
+                        </Paragraph>
+                      )}
+                    </View>
+                    <View style={styles.previewRight}>
+                      <Paragraph style={styles.previewCantidad}>
+                        Cantidad: {validation.cantidad || 1}
+                      </Paragraph>
+                    </View>
+                  </View>
+                ))}
+                </ScrollView>
+            )}
+          </Card.Content>
+        </Card>
+
+        {/* Información adicional del reporte */}
+        <Card style={styles.infoCard}>
+          <Card.Content>
+            <Title style={styles.cardTitle}>Detalles del Reporte</Title>
+            <View style={styles.infoGrid}>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Archivo PDF:</Paragraph>
+                <Paragraph style={styles.infoValue} numberOfLines={1}>
+                  {pdfInfo?.pdf_filename || 'Generando...'}
+                </Paragraph>
+              </View>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Fecha de Generación:</Paragraph>
+                <Paragraph style={styles.infoValue}>
+                  {reportData.fecha ? formatDate(reportData.fecha) : new Date().toLocaleDateString('es-ES')}
+                </Paragraph>
+              </View>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Total Validaciones:</Paragraph>
+                <Paragraph style={styles.infoValue}>
+                  {pdfInfo?.validations_count || validaciones.length}
+                </Paragraph>
+              </View>
+              <View style={styles.infoItem}>
+                <Paragraph style={styles.infoLabel}>Estado:</Paragraph>
+                <Chip
+                  style={[styles.turnoChip, { backgroundColor: saved ? '#4CAF50' : '#FF9800' }]}
+                  textStyle={styles.chipText}
+                >
+                  {saved ? 'Guardado' : 'Pendiente'}
+                </Chip>
+              </View>
+            </View>
+          </Card.Content>
+        </Card>
+
+        {/* Estado de guardado */}
+        {saved && (
+          <Surface style={styles.savedIndicator} elevation={2}>
+            <View style={styles.savedContent}>
+              <IconButton icon="check-circle" iconColor="#4CAF50" size={24} />
+              <Paragraph style={styles.savedText}>
+                ✅ Reporte guardado en auditoría
               </Paragraph>
             </View>
-            <View style={styles.headerRight}>
-              <Chip
-                style={[styles.turnoChip, { backgroundColor: getTurnoColor(turno) }]}
-                textStyle={styles.chipText}
-              >
-                TURNO {turno}
-              </Chip>
-            </View>
-          </View>
-        </Surface>
-
-        {/* Información del técnico */}
-        <Card style={styles.technicianCard}>
-          <Card.Content>
-            <View style={styles.technicianInfo}>
-              <View style={styles.technicianItem}>
-                <Paragraph style={styles.technicianLabel}>Técnico:</Paragraph>
-                <Paragraph style={styles.technicianValue}>{user?.nombre || 'N/A'}</Paragraph>
-              </View>
-              <View style={styles.technicianItem}>
-                <Paragraph style={styles.technicianLabel}>Modelo:</Paragraph>
-                <Paragraph style={styles.technicianValue}>{selectedModel || 'N/A'}</Paragraph>
-              </View>
-              <View style={styles.technicianItem}>
-                <Paragraph style={styles.technicianLabel}>Total Validaciones:</Paragraph>
-                <Paragraph style={styles.technicianValue}>{currentValidations.length}</Paragraph>
-              </View>
-            </View>
-            
-            {/* Selector de modelo si hay múltiples modelos */}
-            {completedModels.length > 1 && (
-              <View style={styles.modelSelector}>
-                <Paragraph style={styles.selectorLabel}>Cambiar Modelo:</Paragraph>
-                <View style={styles.modelChips}>
-                  {completedModels.map((model) => (
-                    <Chip
-                      key={model}
-                      selected={selectedModel === model}
-                      onPress={() => setSelectedModel(model)}
-                      style={[
-                        styles.modelChip,
-                        selectedModel === model && { backgroundColor: '#2196F3' }
-                      ]}
-                      textStyle={selectedModel === model ? { color: '#E8E8E8' } : {}}
-                    >
-                      {model}
-                    </Chip>
-                  ))}
-                </View>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Lista de validaciones en formato tabla bancaria */}
-        <Card style={styles.validationsCard}>
-          <Card.Content>
-            <View style={styles.validationsHeader}>
-              <Title style={styles.validationsTitle}>Validaciones Realizadas</Title>
-              <Chip style={styles.countChip}>
-                {currentValidations.length} jigs
-              </Chip>
-            </View>
-            
-            {currentValidations.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Paragraph style={styles.emptyText}>
-                  No hay validaciones registradas
-                </Paragraph>
-                <Button
-                  mode="outlined"
-                  onPress={() => navigation.navigate('QRScanner')}
-                  style={styles.scanButton}
-                  icon="qrcode-scan"
-                >
-                  Escanear Jig
-                </Button>
-              </View>
-            ) : (
-              <View style={styles.tableContainer}>
-                {/* Header de la tabla */}
-                <View style={styles.tableHeader}>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>FECHA</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>TURNO</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>EMPLEADO</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>TIPO JIG</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>N° JIG</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>MODELO</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>CANT.</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>ESTADO</Paragraph>
-                  </View>
-                  <View style={styles.headerCell}>
-                    <Paragraph style={styles.headerText}>COMENTARIOS</Paragraph>
-                  </View>
-                </View>
-
-                {/* Filas de validaciones */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-                  <View style={styles.tableBody}>
-                    {currentValidations.map((validation, index) => (
-                      <View key={index} style={styles.tableRow}>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText}>
-                            {formatDate(validation.created_at)} {formatTime12Hour(validation.created_at)}
-                          </Paragraph>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText}>
-                            {validation.turno}
-                          </Paragraph>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText}>
-                            {user?.nombre || 'N/A'}
-                          </Paragraph>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText}>
-                            {validation.jig?.tipo || 'N/A'}
-                          </Paragraph>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText}>
-                            {validation.jig?.numero_jig || 'N/A'}
-                          </Paragraph>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText}>
-                            {validation.jig?.modelo_actual || 'N/A'}
-                          </Paragraph>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText}>
-                            {validation.cantidad || '1'}
-                          </Paragraph>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Chip
-                            style={[
-                              styles.estadoChip,
-                              { backgroundColor: getEstadoColor(validation.estado) }
-                            ]}
-                            textStyle={styles.chipText}
-                          >
-                            {validation.estado}
-                          </Chip>
-                        </View>
-                        <View style={styles.dataCell}>
-                          <Paragraph style={styles.dataText} numberOfLines={2}>
-                            {validation.comentario || '-'}
-                          </Paragraph>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                </ScrollView>
-              </View>
-            )}
-          </Card.Content>
-        </Card>
-
-        {/* Resumen del reporte */}
-        {currentValidations.length > 0 && (
-          <Card style={styles.summaryCard}>
-            <Card.Content>
-              <Title style={styles.summaryTitle}>Resumen del Reporte</Title>
-              <View style={styles.summaryGrid}>
-                <View style={styles.summaryItem}>
-                  <Paragraph style={styles.summaryLabel}>Total Jigs:</Paragraph>
-                  <Paragraph style={styles.summaryValue}>{currentValidations.length}</Paragraph>
-                </View>
-                <View style={styles.summaryItem}>
-                  <Paragraph style={styles.summaryLabel}>OK:</Paragraph>
-                  <Paragraph style={[styles.summaryValue, { color: '#4CAF50' }]}>
-                    {currentValidations.filter(v => v.estado === 'OK').length}
-                  </Paragraph>
-                </View>
-                <View style={styles.summaryItem}>
-                  <Paragraph style={styles.summaryLabel}>NG:</Paragraph>
-                  <Paragraph style={[styles.summaryValue, { color: '#F44336' }]}>
-                    {currentValidations.filter(v => v.estado === 'NG').length}
-                  </Paragraph>
-                </View>
-                <View style={styles.summaryItem}>
-                  <Paragraph style={styles.summaryLabel}>Total Cantidad:</Paragraph>
-                  <Paragraph style={styles.summaryValue}>
-                    {currentValidations.reduce((sum, v) => sum + parseInt(v.cantidad || 0), 0)}
-                  </Paragraph>
-                </View>
-              </View>
-            </Card.Content>
-          </Card>
+          </Surface>
         )}
       </ScrollView>
 
-      {/* Botones de acción flotantes */}
-      {currentValidations.length > 0 && (
+      {/* Botones FAB */}
+      {reportData && pdfInfo && (
         <View style={styles.fabContainer}>
           <FAB
             style={[styles.fab, styles.continueFab]}
             icon="qrcode-scan"
-            label="Continuar Escaneando"
             onPress={handleContinueScanning}
             mode="contained"
+            label="Continuar"
+            small
           />
-          <FAB
-            style={[
-              styles.fab, 
-              styles.signatureFab,
-              { backgroundColor: hasSignature ? '#4CAF50' : '#9C27B0' }
-            ]}
-            icon={hasSignature ? "check" : "pencil"}
-            label={hasSignature ? "Firma Guardada" : "Configurar Firma"}
-            onPress={() => navigation.navigate('Profile')}
-            disabled={isGeneratingReport}
-          />
-          <FAB
-            style={[styles.fab, styles.generateFab]}
-            icon={isGeneratingReport ? "loading" : "file-document"}
-            label={isGeneratingReport ? "Generando..." : "Generar Reporte"}
-            onPress={handleGenerateReport}
-            disabled={isGeneratingReport || downloadingPDF}
-          />
-          
-          <FAB
-            style={[styles.fab, styles.testFab]}
-            icon="bug"
-            label="Diagnosticar Backend"
-            onPress={handleTestBackend}
-            disabled={isGeneratingReport}
-          />
+          {!saved ? (
+            <FAB
+              style={[styles.fab, styles.saveFab]}
+              icon={saving ? "loading" : "check-circle"}
+              onPress={handleSaveToAudit}
+              disabled={saving}
+              mode="contained"
+              label="Guardar"
+            />
+          ) : (
+            <FAB
+              style={[styles.fab, styles.auditFab]}
+              icon="file-document-multiple"
+              onPress={() => navigation.navigate('Auditoria')}
+              mode="contained"
+              label="Auditoría"
+            />
+          )}
           <FAB
             style={[styles.fab, styles.clearFab]}
             icon="delete"
-            label="Limpiar"
             onPress={handleClearValidations}
             small
+            mode="contained"
           />
         </View>
       )}
@@ -871,276 +671,260 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 20,
-    paddingBottom: 160, // Espacio para FABs (aumentado para 3 botones)
+    paddingBottom: 120,
   },
-  // Header styles
-  headerCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+  headerGradient: {
+    paddingTop: Platform.OS === 'ios' ? 50 : 20,
+    paddingBottom: 20,
+    paddingHorizontal: 20,
     marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
+    borderRadius: 16,
   },
   headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 20,
   },
-  headerLeft: {
+  headerTextContainer: {
     flex: 1,
+    marginLeft: 8,
   },
   headerTitle: {
-    color: '#1E293B',
+    color: '#FFFFFF',
     fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 6,
-    letterSpacing: 0.5,
+    fontWeight: 'bold',
+    marginBottom: 4,
   },
   headerSubtitle: {
-    color: '#64748B',
-    fontSize: 16,
-    fontWeight: '500',
+    color: '#E3F2FD',
+    fontSize: 14,
   },
-  headerRight: {
-    marginLeft: 16,
+  infoCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 4,
+  },
+  summaryCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 4,
+    backgroundColor: '#FFF3E0',
+  },
+  previewCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 4,
+  },
+  pdfInfoCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 4,
+    backgroundColor: '#E3F2FD',
+  },
+  emptyCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    elevation: 4,
+    backgroundColor: '#FFF3E0',
+  },
+  cardTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    color: '#1E293B',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  infoItem: {
+    width: '48%',
+    marginBottom: 12,
+  },
+  infoLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  infoValue: {
+    fontSize: 16,
+    color: '#1E293B',
+    fontWeight: '600',
   },
   turnoChip: {
-    borderRadius: 20,
+    borderRadius: 16,
+    marginTop: 4,
   },
   chipText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: 'bold',
   },
-  // Technician card styles
-  technicianCard: {
-    marginBottom: 20,
-    borderRadius: 16,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  technicianInfo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  technicianItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  technicianLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#64748B',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  technicianValue: {
-    fontSize: 16,
-    color: '#1E293B',
-    fontWeight: '600',
-  },
-  // Model selector styles
-  modelSelector: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 2,
-    borderTopColor: '#2D2D2D',
-  },
-  selectorLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#B0B0B0',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
-  },
-  modelChips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  modelChip: {
-    borderRadius: 16,
-  },
-  // Validations card styles
-  validationsCard: {
-    marginBottom: 16,
-    borderRadius: 12,
-    backgroundColor: '#1A1A1A',
-    borderWidth: 2,
-    borderColor: '#2D2D2D',
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  validationsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  validationsTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#E8E8E8',
-    textShadowColor: 'rgba(0, 0, 0, 0.5)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
-  },
-  countChip: {
-    backgroundColor: '#E3F2FD',
-  },
-  emptyState: {
-    alignItems: 'center',
-    padding: 40,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#B0B0B0',
-    marginBottom: 16,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
-  },
-  scanButton: {
-    borderColor: '#2196F3',
-  },
-  // Tabla bancaria styles
-  tableContainer: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#2D2D2D',
-    overflow: 'hidden',
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  tableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#2A2A2A',
-    borderBottomWidth: 3,
-    borderBottomColor: '#4A4A4A',
-  },
-  headerCell: {
-    paddingVertical: 12,
-    paddingHorizontal: 8,
-    borderRightWidth: 1,
-    borderRightColor: '#2D2D2D',
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  headerText: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: '#E8E8E8',
-    textAlign: 'center',
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
-  },
-  tableBody: {
-    backgroundColor: '#1A1A1A',
-  },
-  tableRow: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#2D2D2D',
-    minHeight: 50,
-  },
-  dataCell: {
-    paddingVertical: 8,
-    paddingHorizontal: 8,
-    borderRightWidth: 1,
-    borderRightColor: '#2D2D2D',
-    minWidth: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  dataText: {
-    fontSize: 11,
-    color: '#E8E8E8',
-    textAlign: 'center',
-    lineHeight: 14,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 1,
-  },
-  estadoChip: {
-    borderRadius: 12,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-  },
-  chipText: {
-    fontSize: 10,
-    fontWeight: 'bold',
-    color: '#E8E8E8',
-  },
-  // Summary card styles
-  summaryCard: {
-    marginBottom: 16,
-    borderRadius: 12,
-    backgroundColor: '#FFF3E0',
-  },
-  summaryTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FF9800',
-    marginBottom: 16,
-  },
   summaryGrid: {
     flexDirection: 'row',
+    justifyContent: 'space-around',
     flexWrap: 'wrap',
-    justifyContent: 'space-between',
   },
   summaryItem: {
+    alignItems: 'center',
+    marginBottom: 16,
     width: '48%',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
+  },
+  summaryNumber: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#1E293B',
+    marginBottom: 4,
   },
   summaryLabel: {
     fontSize: 14,
+    color: '#64748B',
     fontWeight: '600',
-    color: '#666666',
   },
-  summaryValue: {
+  previewSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 12,
+  },
+  divider: {
+    marginVertical: 12,
+  },
+  previewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  previewLeft: {
+    flex: 1,
+  },
+  previewJig: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+    marginBottom: 4,
+  },
+  previewModel: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  previewLinea: {
+    fontSize: 11,
+    color: '#2196F3',
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  previewComentario: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 4,
+    fontStyle: 'italic',
+  },
+  previewRight: {
+    alignItems: 'flex-end',
+    minWidth: 80,
+  },
+  validationsScroll: {
+    maxHeight: 500,
+  },
+  estadoChip: {
+    borderRadius: 12,
+    marginBottom: 4,
+  },
+  previewCantidad: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  moreText: {
+    fontSize: 12,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  pdfInfo: {
+    marginBottom: 12,
+  },
+  pdfInfoLabel: {
+    fontSize: 12,
+    color: '#64748B',
+    marginBottom: 4,
+    fontWeight: '600',
+  },
+  pdfInfoValue: {
+    fontSize: 14,
+    color: '#1E293B',
+    fontWeight: '500',
+  },
+  savedIndicator: {
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 12,
+    backgroundColor: '#E8F5E9',
+  },
+  savedContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  savedText: {
+    fontSize: 14,
+    color: '#2E7D32',
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  emptyText: {
     fontSize: 16,
-    fontWeight: 'bold',
-    color: '#000000',
+    color: '#64748B',
+    textAlign: 'center',
+    padding: 20,
   },
-  // FAB styles
+  actionButtons: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 30 : 20,
+    backgroundColor: '#FFFFFF',
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    flexDirection: 'column',
+    gap: 12,
+    zIndex: 1000,
+  },
+  actionButton: {
+    borderRadius: 12,
+    elevation: 2,
+  },
+  continueButton: {
+    borderColor: '#2196F3',
+  },
+  previewButton: {
+    backgroundColor: '#F44336',
+  },
+  saveButton: {
+    backgroundColor: '#4CAF50',
+    elevation: 4,
+  },
+  auditButton: {
+    backgroundColor: '#9C27B0',
+    elevation: 4,
+  },
+  buttonContent: {
+    paddingVertical: 8,
+  },
+  buttonLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
   fabContainer: {
     position: 'absolute',
     bottom: 16,
@@ -1162,16 +946,44 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
   },
-  signatureFab: {
-    backgroundColor: '#9C27B0',
+  previewFab: {
+    backgroundColor: '#F44336',
+    elevation: 8,
+    shadowColor: '#F44336',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   generateFab: {
     backgroundColor: '#4CAF50',
   },
-  testFab: {
-    backgroundColor: '#FF9800',
+  saveFab: {
+    backgroundColor: '#4CAF50',
+    elevation: 8,
+    shadowColor: '#4CAF50',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+  },
+  auditFab: {
+    backgroundColor: '#9C27B0',
+    elevation: 8,
+    shadowColor: '#9C27B0',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   clearFab: {
     backgroundColor: '#F44336',
   },
 });
+

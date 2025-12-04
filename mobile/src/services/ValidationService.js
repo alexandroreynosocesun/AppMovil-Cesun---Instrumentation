@@ -1,14 +1,15 @@
 import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
 import { offlineService } from './OfflineService';
+import logger from '../utils/logger';
 
-const API_BASE_URL = 'https://ecb2b679741f.ngrok-free.app/api';
+const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
 
 class ValidationService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 10000,
+      timeout: 30000, // Aumentado a 30 segundos
       headers: {
         'ngrok-skip-browser-warning': 'true',
         'Content-Type': 'application/json',
@@ -38,7 +39,7 @@ class ValidationService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error creando validación:', error);
+      logger.error('Error creando validación:', error);
       
       // Si hay error de conexión, guardar offline
       if (!error.response) {
@@ -72,10 +73,33 @@ class ValidationService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo validaciones:', error);
+      logger.error('Error obteniendo validaciones:', error);
+      
+      // Manejar diferentes tipos de errores
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.'
+        };
+      } else if (error.response?.status === 500) {
+        return {
+          success: false,
+          error: 'SERVER_ERROR',
+          message: 'Error del servidor. Por favor, intenta nuevamente en unos momentos.'
+        };
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        return {
+          success: false,
+          error: 'NETWORK_ERROR',
+          message: 'Sin conexión a internet. Verifica tu conexión e intenta nuevamente.'
+        };
+      }
+      
       return {
         success: false,
-        error: error.response?.data?.detail || 'Error de conexión'
+        error: error.response?.status || 'UNKNOWN_ERROR',
+        message: error.response?.data?.detail || 'Error de conexión'
       };
     }
   }
@@ -88,7 +112,7 @@ class ValidationService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error sincronizando validaciones:', error);
+      logger.error('Error sincronizando validaciones:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -109,13 +133,49 @@ class ValidationService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo reporte de turno:', error);
+      logger.error('Error obteniendo reporte de turno:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
       };
     }
   }
+
+  async asignarValidacion(validationId, numeroEmpleado) {
+    try {
+      const response = await this.api.post(`/validations/asignar`, {
+        validation_id: validationId,
+        numero_empleado: numeroEmpleado
+      });
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Error asignando validación:', error);
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error asignando validación'
+      };
+    }
+  }
+
+  async marcarCompletada(validationId) {
+    try {
+      const response = await this.api.put(`/validations/${validationId}/completar`);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Error marcando validación como completada:', error);
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error marcando validación como completada'
+      };
+    }
+  }
 }
 
 export const validationService = new ValidationService();
+

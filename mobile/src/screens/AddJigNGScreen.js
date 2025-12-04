@@ -9,7 +9,9 @@ import {
   Platform,
   TouchableOpacity,
   Dimensions,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import {
   Card,
   Title,
@@ -19,10 +21,12 @@ import {
   ActivityIndicator,
   Chip,
   Divider,
+  IconButton,
 } from 'react-native-paper';
 import { jigNGService } from '../services/JigNGService';
 import { jigService } from '../services/JigService';
 import { authService } from '../services/AuthService';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -39,25 +43,17 @@ export default function AddJigNGScreen({ navigation, route }) {
     prioridad: 'media',
     estado: 'pendiente',
     usuario_reporte: '',
+    foto: null,
   });
 
   // Fallas comunes sugeridas
   const commonFaults = [
-    'Desgaste de componentes',
-    'Falla en sistema hidráulico',
-    'Problema eléctrico',
-    'Desalineación de piezas',
-    'Falla en sensor',
-    'Problema de presión',
-    'Desgaste de sellos',
-    'Falla en motor',
-    'Problema de lubricación',
-    'Desgaste de rodamientos',
-    'Falla en válvulas',
-    'Problema de temperatura',
-    'Desgaste de herramientas',
-    'Falla en sistema neumático',
-    'Problema de calibración'
+    'Conector optico ng',
+    'Conector speaker ng',
+    'No 5v',
+    'No 12',
+    'Se reincia',
+    'Botonera NG'
   ];
 
   const prioridadOptions = [
@@ -79,7 +75,7 @@ export default function AddJigNGScreen({ navigation, route }) {
         jig_id: route.params.jigData.id,
         qrCode: route.params.jigData.codigo_qr 
       }));
-      console.log('✅ Información del jig cargada desde navegación:', route.params.jigData);
+      logger.info('✅ Información del jig cargada desde navegación:', route.params.jigData);
     }
     // Si se pasó un código QR desde la navegación, buscarlo automáticamente
     else if (route?.params?.qrCode) {
@@ -95,10 +91,10 @@ export default function AddJigNGScreen({ navigation, route }) {
       if (result.success) {
         setUserProfile(result.data);
         setFormData(prev => ({ ...prev, usuario_reporte: result.data.nombre }));
-        console.log('✅ Perfil cargado:', result.data.nombre);
+        logger.info('✅ Perfil cargado:', result.data.nombre);
       }
     } catch (error) {
-      console.error('❌ Error cargando perfil:', error);
+      logger.error('❌ Error cargando perfil:', error);
     }
   };
 
@@ -116,14 +112,14 @@ export default function AddJigNGScreen({ navigation, route }) {
       if (result.success) {
         setJigInfo(result.data);
         setFormData(prev => ({ ...prev, jig_id: result.data.id }));
-        console.log('✅ Jig encontrado:', result.data);
+        logger.info('✅ Jig encontrado:', result.data);
       } else {
         setJigInfo(null);
         setFormData(prev => ({ ...prev, jig_id: 0 }));
-        console.log('❌ Jig no encontrado');
+        logger.info('❌ Jig no encontrado');
       }
     } catch (error) {
-      console.error('❌ Error buscando jig:', error);
+      logger.error('❌ Error buscando jig:', error);
       setJigInfo(null);
       setFormData(prev => ({ ...prev, jig_id: 0 }));
     } finally {
@@ -143,6 +139,49 @@ export default function AddJigNGScreen({ navigation, route }) {
     const currentMotivo = formData.motivo;
     const newMotivo = currentMotivo ? `${currentMotivo}, ${fault}` : fault;
     handleInputChange('motivo', newMotivo);
+  };
+
+  // Función para tomar foto
+  const handleTakePhoto = async () => {
+    try {
+      // Solicitar permisos
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permisos requeridos',
+          'Necesitamos acceso a la cámara para tomar la foto del jig.'
+        );
+        return;
+      }
+
+      // Tomar foto
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: true,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+        setFormData(prev => ({
+          ...prev,
+          foto: base64Image
+        }));
+      }
+    } catch (error) {
+      logger.error('Error tomando foto:', error);
+      Alert.alert('Error', 'No se pudo tomar la foto. Intenta nuevamente.');
+    }
+  };
+
+  // Función para eliminar foto
+  const handleRemovePhoto = () => {
+    setFormData(prev => ({
+      ...prev,
+      foto: null
+    }));
   };
 
   const validateForm = () => {
@@ -189,7 +228,7 @@ export default function AddJigNGScreen({ navigation, route }) {
         Alert.alert('Error', result.message || 'Error al crear jig NG');
       }
     } catch (error) {
-      console.error('❌ Error al crear jig NG:', error);
+      logger.error('❌ Error al crear jig NG:', error);
       Alert.alert('Error', 'Error inesperado al crear jig NG');
     } finally {
       setLoading(false);
@@ -328,6 +367,44 @@ export default function AddJigNGScreen({ navigation, route }) {
                   </Chip>
                 ))}
               </View>
+            </View>
+
+            {/* Foto del Jig NG */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Foto del Jig NG (Opcional)</Text>
+              {formData.foto ? (
+                <View style={styles.photoContainer}>
+                  <Image source={{ uri: formData.foto }} style={styles.photoPreview} />
+                  <View style={styles.photoActions}>
+                    <Button
+                      mode="outlined"
+                      onPress={handleTakePhoto}
+                      style={styles.photoButton}
+                      icon="camera"
+                    >
+                      Tomar otra foto
+                    </Button>
+                    <Button
+                      mode="outlined"
+                      onPress={handleRemovePhoto}
+                      style={[styles.photoButton, styles.removeButton]}
+                      icon="delete"
+                      textColor="#F44336"
+                    >
+                      Eliminar foto
+                    </Button>
+                  </View>
+                </View>
+              ) : (
+                <Button
+                  mode="outlined"
+                  onPress={handleTakePhoto}
+                  style={styles.photoButton}
+                  icon="camera"
+                >
+                  Tomar foto
+                </Button>
+              )}
             </View>
 
             {/* Botones */}
@@ -560,5 +637,26 @@ const styles = StyleSheet.create({
     color: '#B0B0B0',
     marginLeft: 8,
     fontSize: 14,
+  },
+  photoContainer: {
+    marginTop: 12,
+  },
+  photoPreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    marginBottom: 12,
+    backgroundColor: '#2C2C2C',
+  },
+  photoActions: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  photoButton: {
+    flex: 1,
+    borderColor: '#2196F3',
+  },
+  removeButton: {
+    borderColor: '#F44336',
   },
 });

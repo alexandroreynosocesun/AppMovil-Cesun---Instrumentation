@@ -1,7 +1,8 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useAuth } from '../contexts/AuthContext';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, View, Platform } from 'react-native';
+import { usePlatform } from '../hooks/usePlatform';
 
 // Pantallas de autenticación
 import LoginScreen from '../screens/LoginScreen';
@@ -22,11 +23,20 @@ import AddJigNGScreen from '../screens/AddJigNGScreen';
 import JigNGDetailScreen from '../screens/JigNGDetailScreen';
 import RepairJigScreen from '../screens/RepairJigScreen';
 import AllJigsScreen from '../screens/AllJigsScreen';
+import AssignValidationScreen from '../screens/AssignValidationScreen';
+import ActiveValidationsScreen from '../screens/ActiveValidationsScreen';
+import AssignedValidationsScreen from '../screens/AssignedValidationsScreen';
+import DamagedLabelScreen from '../screens/DamagedLabelScreen';
+import DamagedLabelsListScreen from '../screens/DamagedLabelsListScreen';
+import AuditoriaScreen from '../screens/AuditoriaScreen';
+import StorageManagementScreen from '../screens/StorageManagementScreen';
+import PDFPreviewScreen from '../screens/PDFPreviewScreen';
 
 const Stack = createStackNavigator();
 
 export default function AuthNavigator() {
   const { isAuthenticated, loading } = useAuth();
+  const { isWeb, isDesktop, maxWidth } = usePlatform();
 
   if (loading) {
     return (
@@ -41,11 +51,24 @@ export default function AuthNavigator() {
       screenOptions={{
         headerStyle: {
           backgroundColor: '#2196F3',
+          ...(isWeb && {
+            maxWidth: maxWidth,
+            alignSelf: 'center',
+            width: '100%',
+          }),
         },
         headerTintColor: '#fff',
         headerTitleStyle: {
           fontWeight: 'bold',
         },
+        ...(isWeb && {
+          headerMode: 'screen',
+          cardStyle: {
+            maxWidth: maxWidth,
+            alignSelf: 'center',
+            width: '100%',
+          },
+        }),
       }}
     >
       {isAuthenticated ? (
@@ -82,6 +105,11 @@ export default function AuthNavigator() {
             options={{ title: 'Panel de Administración' }}
           />
           <Stack.Screen 
+            name="StorageManagement" 
+            component={StorageManagementScreen} 
+            options={{ title: 'Gestión de Almacenamiento' }}
+          />
+          <Stack.Screen 
             name="AdminSolicitudes" 
             component={AdminSolicitudesScreen} 
             options={{ title: 'Solicitudes de Registro' }}
@@ -115,6 +143,41 @@ export default function AuthNavigator() {
             name="AllJigs" 
             component={AllJigsScreen} 
             options={{ title: 'Todos los Jigs' }}
+          />
+          <Stack.Screen 
+            name="AssignValidation" 
+            component={AssignValidationScreen} 
+            options={{ title: 'Asignar Validaciones' }}
+          />
+          <Stack.Screen 
+            name="ActiveValidations" 
+            component={ActiveValidationsScreen} 
+            options={{ title: 'Estatus de Validaciones' }}
+          />
+          <Stack.Screen 
+            name="AssignedValidations" 
+            component={AssignedValidationsScreen} 
+            options={{ title: 'Validaciones Asignadas' }}
+          />
+          <Stack.Screen 
+            name="DamagedLabel" 
+            component={DamagedLabelScreen} 
+            options={{ title: 'Reportar Etiqueta NG' }}
+          />
+          <Stack.Screen 
+            name="DamagedLabelsList" 
+            component={DamagedLabelsListScreen} 
+            options={{ title: 'Etiquetas NG Reportadas' }}
+          />
+          <Stack.Screen 
+            name="Auditoria" 
+            component={AuditoriaScreen} 
+            options={{ title: 'Auditoría' }}
+          />
+          <Stack.Screen 
+            name="PDFPreview" 
+            component={PDFPreviewScreen} 
+            options={{ title: 'Previsualización de PDF', headerShown: false }}
           />
         </>
       ) : (

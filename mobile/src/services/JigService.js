@@ -1,13 +1,14 @@
 import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
+import logger from '../utils/logger';
 
-const API_BASE_URL = 'https://ecb2b679741f.ngrok-free.app/api';
+const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
 
 class JigService {
   constructor() {
     this.api = axios.create({
       baseURL: API_BASE_URL,
-      timeout: 10000,
+      timeout: 30000, // Aumentado a 30 segundos
       headers: {
         'ngrok-skip-browser-warning': 'true',
         'Content-Type': 'application/json',
@@ -39,17 +40,17 @@ class JigService {
     } catch (error) {
       // Solo loguear como error si no es un 404 (que es parte del flujo normal)
       if (error.response?.status !== 404) {
-        console.error('Error obteniendo jig por QR:', error);
+        logger.error('Error obteniendo jig por QR:', error);
       } else {
-        console.log('🔍 Jig no encontrado (404) - Flujo normal');
+        logger.info('🔍 Jig no encontrado (404) - Flujo normal');
       }
       
-      console.log('🔍 Status code:', error.response?.status);
-      console.log('🔍 Error response:', error.response?.data);
+      logger.info('🔍 Status code:', error.response?.status);
+      logger.info('🔍 Error response:', error.response?.data);
       
       // Manejar diferentes tipos de errores
       if (error.response?.status === 404) {
-        console.log('🔍 Detectado error 404 - Jig no encontrado');
+        logger.info('🔍 Detectado error 404 - Jig no encontrado');
         return {
           success: false,
           error: 'NOT_FOUND',
@@ -91,7 +92,7 @@ class JigService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo jigs:', error);
+      logger.error('Error obteniendo jigs:', error);
       
       // Manejar diferentes tipos de errores
       if (error.response?.status === 401) {
@@ -130,7 +131,7 @@ class JigService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo jig por ID:', error);
+      logger.error('Error obteniendo jig por ID:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -146,7 +147,7 @@ class JigService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error creando jig:', error);
+      logger.error('Error creando jig:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -157,17 +158,17 @@ class JigService {
   // Eliminar jig
   async deleteJig(jigId) {
     try {
-      console.log('🗑️ Eliminando jig con ID:', jigId);
+      logger.info('🗑️ Eliminando jig con ID:', jigId);
       
       const response = await this.api.delete(`/jigs/${jigId}`);
       
-      console.log('✅ Jig eliminado exitosamente');
+      logger.info('✅ Jig eliminado exitosamente');
       return {
         success: true,
         data: response.data
       };
     } catch (error) {
-      console.error('❌ Error al eliminar jig:', error);
+      logger.error('❌ Error al eliminar jig:', error);
       
       if (error.response?.status === 401) {
         return {
@@ -206,3 +207,4 @@ class JigService {
 }
 
 export const jigService = new JigService();
+

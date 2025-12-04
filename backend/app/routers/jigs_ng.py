@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from ..database import get_db
 from ..models.models import JigNG, Jig, Tecnico
-from ..schemas import JigNG as JigNGSchema, JigNGCreate, JigNGUpdate
+from ..schemas import JigNG as JigNGSchema, JigNGCreate, JigNGUpdate, PaginatedResponse
 from ..auth import get_current_user
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -22,6 +25,7 @@ def serialize_jig_ng(jig_ng, include_jig=False, db=None):
         "fecha_reparacion": jig_ng.fecha_reparacion,
         "tecnico_reparacion_id": jig_ng.tecnico_reparacion_id,
         "observaciones_reparacion": jig_ng.observaciones_reparacion,
+        "foto": jig_ng.foto,
         "sincronizado": jig_ng.sincronizado,
         "created_at": jig_ng.created_at,
         "tecnico_ng": {
@@ -78,17 +82,26 @@ def serialize_jig_ng(jig_ng, include_jig=False, db=None):
     
     return result
 
-@router.get("/", response_model=List[JigNGSchema])
+@router.get("/", response_model=PaginatedResponse[JigNGSchema])
 async def get_jigs_ng(
-    skip: int = 0,
-    limit: int = 100,
+    page: int = Query(1, ge=1, description="Número de página"),
+    page_size: int = Query(20, ge=1, le=100, description="Tamaño de página (máximo 100)"),
     estado: Optional[str] = None,
     categoria: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: Tecnico = Depends(get_current_user)
 ):
-    """Obtener lista de jigs NG con filtros opcionales"""
+    """
+    Obtener lista paginada de jigs NG con filtros opcionales
+    
+    - **page**: Número de página (empezando en 1)
+    - **page_size**: Cantidad de elementos por página (máximo 100)
+    - **estado**: Filtrar por estado (pendiente, en_reparacion, reparado, descartado)
+    - **categoria**: Filtrar por categoría
+    """
     from sqlalchemy.orm import joinedload
+    from ..utils.pagination import paginate_query
+    from ..schemas import PaginatedResponse
     
     query = db.query(JigNG).options(
         joinedload(JigNG.tecnico_ng),
@@ -101,10 +114,21 @@ async def get_jigs_ng(
     if categoria:
         query = query.filter(JigNG.categoria == categoria)
     
-    jigs_ng = query.offset(skip).limit(limit).all()
+    # Ordenar por fecha más reciente primero
+    query = query.order_by(JigNG.fecha_ng.desc())
+    
+    items, total, pages = paginate_query(query, page, page_size)
     
     # Convertir a diccionario para incluir información de técnicos
-    return [serialize_jig_ng(jig_ng, include_jig=True, db=db) for jig_ng in jigs_ng]
+    serialized_items = [serialize_jig_ng(jig_ng, include_jig=True, db=db) for jig_ng in items]
+    
+    return PaginatedResponse(
+        items=serialized_items,
+        total=total,
+        page=page,
+        page_size=page_size,
+        pages=pages
+    )
 
 @router.get("/jig/{jig_id}", response_model=List[JigNGSchema])
 async def get_jig_ng_by_jig_id(
@@ -192,13 +216,16 @@ async def update_jig_ng(
     for field, value in jig_ng_data.dict(exclude_unset=True).items():
         setattr(jig_ng, field, value)
     
-    # Si se marca como reparado, actualizar fechas y técnico
-    if jig_ng_data.estado == "reparado":
+    # Si se marca como reparado o falso defecto, actualizar fechas y técnico
+    if jig_ng_data.estado == "reparado" or jig_ng_data.estado == "falso_defecto":
         from datetime import datetime
-        jig_ng.fecha_reparacion = datetime.utcnow()
-        jig_ng.tecnico_reparacion_id = current_user.id
+        if jig_ng_data.estado == "reparado":
+            jig_ng.fecha_reparacion = datetime.utcnow()
+            jig_ng.tecnico_reparacion_id = current_user.id
+        # Eliminar la foto cuando se marca como reparado o falso defecto
+        jig_ng.foto = None
         
-        # Cambiar estado del jig a "activo"
+        # Cambiar estado del jig a "activo" para que pueda ser validado nuevamente
         jig = db.query(Jig).filter(Jig.id == jig_ng.jig_id).first()
         if jig:
             jig.estado = "activo"

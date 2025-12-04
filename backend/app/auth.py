@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 from .database import get_db
 from .models.models import Tecnico
 from .schemas import Token
+from .utils.logger import auth_logger
 
 # Configuración de seguridad
-SECRET_KEY = "tu-clave-secreta-super-segura-aqui"  # En producción usar variable de entorno
+from app.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES
+
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
@@ -29,9 +30,12 @@ def authenticate_user(db: Session, usuario: str, password: str) -> Optional[Tecn
     """Autenticar usuario"""
     user = db.query(Tecnico).filter(Tecnico.usuario == usuario).first()
     if not user:
+        auth_logger.warning(f"Intento de login fallido: usuario '{usuario}' no encontrado")
         return None
     if not verify_password(password, user.password_hash):
+        auth_logger.warning(f"Intento de login fallido: contraseña incorrecta para usuario '{usuario}'")
         return None
+    auth_logger.info(f"Login exitoso para usuario '{usuario}'")
     return user
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -56,11 +60,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         usuario: str = payload.get("sub")
         if usuario is None:
+            auth_logger.warning("Token JWT inválido: usuario no encontrado en payload")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        auth_logger.warning(f"Error decodificando token JWT: {e}")
         raise credentials_exception
     
     user = db.query(Tecnico).filter(Tecnico.usuario == usuario).first()
     if user is None:
+        auth_logger.warning(f"Usuario '{usuario}' no encontrado en BD después de validar token")
         raise credentials_exception
     return user

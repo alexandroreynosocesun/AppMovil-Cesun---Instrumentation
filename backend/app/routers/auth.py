@@ -5,10 +5,31 @@ from ..database import get_db
 from ..models.models import Tecnico, SolicitudRegistro
 from ..schemas import TecnicoCreate, TecnicoLogin, Token, Tecnico as TecnicoSchema, TecnicoUpdate, SolicitudRegistroCreate, SolicitudRegistroResponse
 from ..auth import authenticate_user, create_access_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+from ..utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, summary="Iniciar sesión", description="""
+    Iniciar sesión con usuario y contraseña.
+    
+    Retorna un token JWT que debe ser usado en el header `Authorization: Bearer <token>` 
+    para acceder a los endpoints protegidos.
+    
+    **Ejemplo de uso:**
+    ```json
+    {
+        "usuario": "tu_usuario",
+        "password": "tu_contraseña"
+    }
+    ```
+    
+    **Respuesta:**
+    - `access_token`: Token JWT para autenticación
+    - `token_type`: Tipo de token (siempre "bearer")
+    - `tecnico`: Información del técnico autenticado
+    """)
 async def login(login_data: TecnicoLogin, db: Session = Depends(get_db)):
     """Iniciar sesión de técnico"""
     user = authenticate_user(db, login_data.usuario, login_data.password)
@@ -74,12 +95,21 @@ async def register(solicitud_data: SolicitudRegistroCreate, db: Session = Depend
         )
     
     # Crear solicitud de registro
+    # Mapear valores del frontend al backend (ahora guardamos directamente los valores del frontend)
+    tipo_usuario_map = {
+        'asignaciones': 'asignaciones',
+        'validaciones': 'tecnico',
+        'gestion': 'gestion'
+    }
+    tipo_usuario_backend = tipo_usuario_map.get(solicitud_data.tipo_usuario, 'tecnico')
+    
     hashed_password = get_password_hash(solicitud_data.password)
     db_solicitud = SolicitudRegistro(
         usuario=solicitud_data.usuario,
         nombre=solicitud_data.nombre,
         numero_empleado=solicitud_data.numero_empleado,
         password_hash=hashed_password,
+        tipo_usuario=tipo_usuario_backend,
         firma_digital=solicitud_data.firma_digital
     )
     

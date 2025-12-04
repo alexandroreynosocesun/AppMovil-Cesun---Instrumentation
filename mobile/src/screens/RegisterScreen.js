@@ -7,7 +7,8 @@ import {
   Dimensions,
   Animated,
   TouchableOpacity,
-  Text
+  Text,
+  Modal
 } from 'react-native';
 import {
   Card,
@@ -15,10 +16,10 @@ import {
   Paragraph,
   Button,
   TextInput,
-  RadioButton,
   HelperText,
   ActivityIndicator,
-  Surface
+  Surface,
+  Divider
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { authService } from '../services/AuthService';
@@ -31,8 +32,28 @@ export default function RegisterScreen({ navigation }) {
     nombre: '',
     numero_empleado: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    tipo_usuario: 'validaciones' // validaciones, asignaciones, gestion
   });
+  const [dropdownVisible, setDropdownVisible] = useState(false);
+  
+  // Mapeo de valores mostrados a valores del backend
+  const tipoUsuarioMap = {
+    'asignaciones': 'ingeniero',
+    'validaciones': 'tecnico',
+    'gestion': 'gestion'
+  };
+  
+  const tipoUsuarioOptions = [
+    { value: 'asignaciones', label: 'Asignaciones' },
+    { value: 'validaciones', label: 'Validaciones' },
+    { value: 'gestion', label: 'Gestión' }
+  ];
+  
+  const getSelectedLabel = () => {
+    const option = tipoUsuarioOptions.find(opt => opt.value === formData.tipo_usuario);
+    return option ? option.label : 'Selecciona un tipo';
+  };
   const [loading, setLoading] = useState(false);
   
   // Animaciones
@@ -96,6 +117,7 @@ export default function RegisterScreen({ navigation }) {
         nombre: formData.nombre.trim(),
         numero_empleado: formData.numero_empleado.trim(),
         password: formData.password,
+        tipo_usuario: tipoUsuarioMap[formData.tipo_usuario] || 'tecnico', // Mapear al valor del backend
       };
 
       const result = await authService.register(registerData);
@@ -292,6 +314,74 @@ export default function RegisterScreen({ navigation }) {
                 activeOutlineColor="#4A4A4A"
                 textColor="#F5F5F5"
           />
+
+          {/* Selector de Tipo de Usuario */}
+          <View style={styles.dropdownContainer}>
+            <Text style={styles.dropdownLabel}>Tipo de Usuario *</Text>
+            <TouchableOpacity
+              style={styles.dropdownButton}
+              onPress={() => setDropdownVisible(true)}
+            >
+              <Text style={[
+                styles.dropdownButtonText,
+                !formData.tipo_usuario && styles.dropdownButtonTextPlaceholder
+              ]}>
+                {getSelectedLabel()}
+              </Text>
+              <Text style={styles.dropdownArrow}>▼</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Modal del Dropdown */}
+          <Modal
+            visible={dropdownVisible}
+            transparent={true}
+            animationType="fade"
+            onRequestClose={() => setDropdownVisible(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setDropdownVisible(false)}
+            >
+              <View style={styles.modalContent}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitle}>Selecciona Tipo de Usuario</Text>
+                  <TouchableOpacity
+                    onPress={() => setDropdownVisible(false)}
+                    style={styles.modalCloseButton}
+                  >
+                    <Text style={styles.modalCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <Divider style={styles.modalDivider} />
+                {tipoUsuarioOptions.map((option, index) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.modalOption,
+                      formData.tipo_usuario === option.value && styles.modalOptionSelected,
+                      index === tipoUsuarioOptions.length - 1 && styles.modalOptionLast
+                    ]}
+                    onPress={() => {
+                      handleInputChange('tipo_usuario', option.value);
+                      setDropdownVisible(false);
+                    }}
+                  >
+                    <Text style={[
+                      styles.modalOptionText,
+                      formData.tipo_usuario === option.value && styles.modalOptionTextSelected
+                    ]}>
+                      {option.label}
+                    </Text>
+                    {formData.tipo_usuario === option.value && (
+                      <Text style={styles.modalOptionCheck}>✓</Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </TouchableOpacity>
+          </Modal>
         </Card.Content>
           </Surface>
         </Animated.View>
@@ -483,5 +573,112 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#F5F5F5',
     letterSpacing: 0.5,
+  },
+  dropdownContainer: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  dropdownLabel: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#F5F5F5',
+    marginBottom: 8,
+  },
+  dropdownButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#0F0F0F',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+    minHeight: 56,
+  },
+  dropdownButtonText: {
+    fontSize: 16,
+    color: '#F5F5F5',
+    flex: 1,
+  },
+  dropdownButtonTextPlaceholder: {
+    color: '#666666',
+  },
+  dropdownArrow: {
+    fontSize: 12,
+    color: '#666666',
+    marginLeft: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#1F1F1F',
+    borderRadius: 16,
+    width: width * 0.85,
+    maxWidth: 400,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#F5F5F5',
+  },
+  modalCloseButton: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 24,
+    color: '#B0B0B0',
+    lineHeight: 24,
+  },
+  modalDivider: {
+    backgroundColor: '#333333',
+  },
+  modalOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#333333',
+  },
+  modalOptionLast: {
+    borderBottomWidth: 0,
+  },
+  modalOptionSelected: {
+    backgroundColor: '#2A2A2A',
+  },
+  modalOptionText: {
+    fontSize: 16,
+    color: '#F5F5F5',
+  },
+  modalOptionTextSelected: {
+    color: '#2196F3',
+    fontWeight: '600',
+  },
+  modalOptionCheck: {
+    fontSize: 18,
+    color: '#2196F3',
+    fontWeight: 'bold',
   },
 });

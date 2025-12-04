@@ -1,7 +1,8 @@
 import axios from 'axios';
 import { getAuthToken } from '../utils/authUtils';
+import logger from '../utils/logger';
 
-const API_BASE_URL = 'https://ecb2b679741f.ngrok-free.app/api';
+const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
 
 class JigNGService {
   constructor() {
@@ -38,7 +39,7 @@ class JigNGService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error creando jig NG:', error);
+      logger.error('Error creando jig NG:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -62,7 +63,7 @@ class JigNGService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo jigs NG:', error);
+      logger.error('Error obteniendo jigs NG:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -84,7 +85,7 @@ class JigNGService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo jigs NG por jig ID:', error);
+      logger.error('Error obteniendo jigs NG por jig ID:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -101,7 +102,7 @@ class JigNGService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo jig NG por ID:', error);
+      logger.error('Error obteniendo jig NG por ID:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -118,7 +119,7 @@ class JigNGService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error actualizando jig NG:', error);
+      logger.error('Error actualizando jig NG:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -135,7 +136,7 @@ class JigNGService {
         data: response.data
       };
     } catch (error) {
-      console.error('Error eliminando jig NG:', error);
+      logger.error('Error eliminando jig NG:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -146,15 +147,15 @@ class JigNGService {
   // Obtener estadísticas de jigs NG
   async getNGStats() {
     try {
-      console.log('Obteniendo estadísticas NG...');
+      logger.info('Obteniendo estadísticas NG...');
       const response = await this.api.get('/jigs-ng/stats/summary');
-      console.log('Estadísticas NG obtenidas exitosamente');
+      logger.info('Estadísticas NG obtenidas exitosamente');
       return {
         success: true,
         data: response.data
       };
     } catch (error) {
-      console.error('Error obteniendo estadísticas NG:', error);
+      logger.error('Error obteniendo estadísticas NG:', error);
       
       // Manejo específico de timeout
       if (error.code === 'ECONNABORTED') {
@@ -195,7 +196,7 @@ class JigNGService {
       }
       return result;
     } catch (error) {
-      console.error('Error verificando estado NG:', error);
+      logger.error('Error verificando estado NG:', error);
       return {
         success: false,
         error: error.message || 'Error de conexión'
@@ -205,3 +206,4 @@ class JigNGService {
 }
 
 export const jigNGService = new JigNGService();
+

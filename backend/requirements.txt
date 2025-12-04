@@ -10,3 +10,18 @@ reportlab==4.0.7
 requests==2.31.0
 python-dotenv==1.0.0
 pydantic==2.5.0
+schedule==1.2.0
+python-json-logger==2.0.7
+# PostgreSQL
+psycopg2-binary==2.9.9
+# Redis para caché
+redis==5.0.1
+hiredis==2.2.3
+# Monitoreo y alertas
+prometheus-client==0.19.0
+sentry-sdk[fastapi]==1.40.0
+# Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+httpx==0.25.2
+pytest-cov==4.1.0

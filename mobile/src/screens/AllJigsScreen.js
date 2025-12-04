@@ -23,6 +23,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { jigService } from '../services/JigService';
 import { formatDate, formatTime12Hour } from '../utils/dateUtils';
+import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
@@ -43,11 +44,11 @@ export default function AllJigsScreen({ navigation }) {
 
   // Función para agrupar jigs por tipo
   const groupJigsByType = (jigsList) => {
-    console.log('🔧 groupJigsByType called with:', jigsList.length, 'jigs');
+    logger.info('🔧 groupJigsByType called with:', jigsList.length, 'jigs');
     const grouped = {};
     jigsList.forEach(jig => {
       const type = jig.tipo || 'Sin Tipo';
-      console.log('🔧 Processing jig:', { numero: jig.numero_jig, tipo: jig.tipo, modelo: jig.modelo_actual });
+      logger.info('🔧 Processing jig:', { numero: jig.numero_jig, tipo: jig.tipo, modelo: jig.modelo_actual });
       if (!grouped[type]) {
         grouped[type] = [];
       }
@@ -63,17 +64,17 @@ export default function AllJigsScreen({ navigation }) {
       });
     });
     
-    console.log('🔧 groupJigsByType result:', Object.keys(grouped));
+    logger.info('🔧 groupJigsByType result:', Object.keys(grouped));
     return grouped;
   };
 
   // Función para agrupar jigs por modelo (para tipo Manual)
   const groupJigsByModel = (jigsList) => {
-    console.log('🔧 groupJigsByModel called with:', jigsList.length, 'jigs');
+    logger.info('🔧 groupJigsByModel called with:', jigsList.length, 'jigs');
     const grouped = {};
     jigsList.forEach(jig => {
       const model = jig.modelo_actual || 'Sin Modelo';
-      console.log('🔧 Processing jig for model grouping:', { 
+      logger.info('🔧 Processing jig for model grouping:', { 
         numero: jig.numero_jig, 
         tipo: jig.tipo, 
         modelo: jig.modelo_actual,
@@ -94,8 +95,8 @@ export default function AllJigsScreen({ navigation }) {
       });
     });
     
-    console.log('🔧 groupJigsByModel result:', Object.keys(grouped));
-    console.log('🔧 groupJigsByModel details:', grouped);
+    logger.info('🔧 groupJigsByModel result:', Object.keys(grouped));
+    logger.info('🔧 groupJigsByModel details:', grouped);
     return grouped;
   };
 
@@ -109,26 +110,43 @@ export default function AllJigsScreen({ navigation }) {
   const loadJigs = async () => {
     try {
       setLoading(true);
-      console.log('🔍 Cargando todos los jigs...');
+      logger.info('🔍 Cargando todos los jigs...');
       
       // Debug: Verificar token antes de hacer la petición
       const { getAuthToken } = await import('../utils/authUtils');
       const token = await getAuthToken();
-      console.log('🔍 Token disponible:', token ? 'Sí' : 'No');
-      console.log('🔍 Token preview:', token ? token.substring(0, 20) + '...' : 'null');
+      logger.info('🔍 Token disponible:', token ? 'Sí' : 'No');
+      logger.info('🔍 Token preview:', token ? token.substring(0, 20) + '...' : 'null');
       
       const result = await jigService.getAllJigs();
       
-      if (result.success) {
-        console.log('✅ Jigs cargados:', result.data.length);
-        console.log('📊 Sample jig data:', result.data[0]);
-        console.log('📊 Jig types found:', [...new Set(result.data.map(jig => jig.tipo))]);
-        console.log('📊 Jig models found:', [...new Set(result.data.map(jig => jig.modelo_actual))]);
+      if (result.success && result.data) {
+        // Manejar estructura paginada (con items) o array directo
+        let jigsArray = [];
+        
+        if (result.data.items && Array.isArray(result.data.items)) {
+          // Estructura paginada: usar items
+          jigsArray = result.data.items;
+          logger.info('✅ Jigs cargados (paginados):', jigsArray.length, 'de', result.data.total);
+        } else if (Array.isArray(result.data)) {
+          // Array directo (compatibilidad hacia atrás)
+          jigsArray = result.data;
+          logger.info('✅ Jigs cargados (array directo):', jigsArray.length);
+        } else {
+          logger.error('❌ result.data no tiene formato válido:', result.data);
+          Alert.alert('Error', 'Formato de datos inválido del servidor');
+          return;
+        }
+        
+        logger.info('✅ Jigs cargados:', jigsArray.length);
+        logger.info('📊 Sample jig data:', jigsArray[0]);
+        logger.info('📊 Jig types found:', [...new Set(jigsArray.map(jig => jig.tipo))]);
+        logger.info('📊 Jig models found:', [...new Set(jigsArray.map(jig => jig.modelo_actual))]);
         
         // Debug: Mostrar todos los jigs con su tipo
-        console.log('📊 All jigs with types:');
-        result.data.forEach((jig, index) => {
-          console.log(`  ${index + 1}. ${jig.numero_jig} - ${jig.tipo} - ${jig.modelo_actual}`);
+        logger.info('📊 All jigs with types:');
+        jigsArray.forEach((jig, index) => {
+          logger.info(`  ${index + 1}. ${jig.numero_jig} - ${jig.tipo} - ${jig.modelo_actual}`);
         });
         
         // Agregar jigs ficticios para probar la funcionalidad
@@ -208,9 +226,9 @@ export default function AllJigsScreen({ navigation }) {
         ];
 
         // Combinar jigs reales con jigs ficticios
-        const allJigs = [...result.data, ...mockJigs];
-        console.log('📊 Total jigs (reales + ficticios):', allJigs.length);
-        console.log('📊 Jig types with mock data:', [...new Set(allJigs.map(jig => jig.tipo))]);
+        const allJigs = [...jigsArray, ...mockJigs];
+        logger.info('📊 Total jigs (reales + ficticios):', allJigs.length);
+        logger.info('📊 Jig types with mock data:', [...new Set(allJigs.map(jig => jig.tipo))]);
 
         setJigs(allJigs);
         setFilteredJigs(allJigs);
@@ -218,9 +236,9 @@ export default function AllJigsScreen({ navigation }) {
         // Agrupar jigs por tipo
         const grouped = groupJigsByType(allJigs);
         setTypeGroups(grouped);
-        console.log('📊 Initial type groups:', Object.keys(grouped));
+        logger.info('📊 Initial type groups:', Object.keys(grouped));
       } else {
-        console.error('❌ Error cargando jigs:', result.error);
+        logger.error('❌ Error cargando jigs:', result.error);
         
         // Manejar diferentes tipos de errores
         if (result.error === 'UNAUTHORIZED') {
@@ -249,7 +267,7 @@ export default function AllJigsScreen({ navigation }) {
         }
       }
     } catch (error) {
-      console.error('❌ Error en loadJigs:', error);
+      logger.error('❌ Error en loadJigs:', error);
       Alert.alert('Error', 'Error de conexión. Verifica tu internet.');
     } finally {
       setLoading(false);
@@ -267,12 +285,12 @@ export default function AllJigsScreen({ navigation }) {
     if (!jigToDelete) return;
 
     try {
-      console.log('🗑️ Eliminando jig:', jigToDelete);
+      logger.info('🗑️ Eliminando jig:', jigToDelete);
       
       const result = await jigService.deleteJig(jigToDelete.id);
       
       if (result.success) {
-        console.log('✅ Jig eliminado exitosamente');
+        logger.info('✅ Jig eliminado exitosamente');
         
         // Actualizar la lista de jigs
         const updatedJigs = jigs.filter(jig => jig.id !== jigToDelete.id);
@@ -303,7 +321,7 @@ export default function AllJigsScreen({ navigation }) {
         
         Alert.alert('Éxito', 'Jig eliminado correctamente');
       } else {
-        console.error('❌ Error al eliminar jig:', result.error);
+        logger.error('❌ Error al eliminar jig:', result.error);
         
         let errorMessage = 'Error al eliminar el jig';
         switch (result.error) {
@@ -326,7 +344,7 @@ export default function AllJigsScreen({ navigation }) {
         Alert.alert('Error', errorMessage);
       }
     } catch (error) {
-      console.error('❌ Error inesperado al eliminar jig:', error);
+      logger.error('❌ Error inesperado al eliminar jig:', error);
       Alert.alert('Error', 'Error inesperado al eliminar el jig');
     } finally {
       setShowDeleteModal(false);
@@ -345,24 +363,24 @@ export default function AllJigsScreen({ navigation }) {
   };
 
   const filterJigs = (query, type) => {
-    console.log('🔍 filterJigs called with:', { query, type });
+    logger.info('🔍 filterJigs called with:', { query, type });
     let filtered = [...jigs];
-    console.log('📊 Total jigs before filtering:', jigs.length);
+    logger.info('📊 Total jigs before filtering:', jigs.length);
 
     // Filtrar por tipo
     if (type !== 'Todos') {
-      console.log(`🔧 Filtering by type "${type}"...`);
-      console.log('🔧 Available types in data:', [...new Set(jigs.map(jig => jig.tipo))]);
-      console.log('🔧 Looking for exact match:', type);
+      logger.info(`🔧 Filtering by type "${type}"...`);
+      logger.info('🔧 Available types in data:', [...new Set(jigs.map(jig => jig.tipo))]);
+      logger.info('🔧 Looking for exact match:', type);
       
       filtered = filtered.filter(jig => {
         const matches = jig.tipo === type;
         if (jig.tipo.includes('semi') || type.includes('semi')) {
-          console.log(`🔧 Checking jig ${jig.numero_jig}: tipo="${jig.tipo}" vs "${type}" = ${matches}`);
+          logger.info(`🔧 Checking jig ${jig.numero_jig}: tipo="${jig.tipo}" vs "${type}" = ${matches}`);
         }
         return matches;
       });
-      console.log(`🔧 Filtered by type "${type}":`, filtered.length, 'jigs');
+      logger.info(`🔧 Filtered by type "${type}":`, filtered.length, 'jigs');
     }
 
     // Filtrar por búsqueda
@@ -374,26 +392,26 @@ export default function AllJigsScreen({ navigation }) {
         jig.modelo_actual?.toLowerCase().includes(searchLower) ||
         jig.tipo?.toLowerCase().includes(searchLower)
       );
-      console.log('🔍 After search filter:', filtered.length, 'jigs');
+      logger.info('🔍 After search filter:', filtered.length, 'jigs');
     }
 
     setFilteredJigs(filtered);
     
     // Actualizar grupos según el tipo seleccionado
     if (type === 'Todos') {
-      console.log('📋 Grouping by TYPE for "Todos"');
+      logger.info('📋 Grouping by TYPE for "Todos"');
       // Para "Todos", agrupar por tipo
       const grouped = groupJigsByType(filtered);
-      console.log('📋 Type groups created:', Object.keys(grouped));
+      logger.info('📋 Type groups created:', Object.keys(grouped));
       setTypeGroups(grouped);
       setModelGroups({}); // Limpiar grupos de modelo
       setCurrentView('types'); // Mostrar vista de tipos
     } else {
-      console.log(`📋 Grouping by MODEL for type "${type}"`);
+      logger.info(`📋 Grouping by MODEL for type "${type}"`);
       // Para cualquier tipo específico (manual, semiautomatic, new semiautomatic), agrupar por modelo
       const grouped = groupJigsByModel(filtered);
-      console.log('📋 Model groups created:', Object.keys(grouped));
-      console.log('📋 Model groups details:', grouped);
+      logger.info('📋 Model groups created:', Object.keys(grouped));
+      logger.info('📋 Model groups details:', grouped);
       setModelGroups(grouped);
       setTypeGroups({}); // Limpiar grupos de tipo
       setCurrentView('models'); // Mostrar vista de modelos
@@ -404,7 +422,7 @@ export default function AllJigsScreen({ navigation }) {
     const jigsInType = typeGroups[typeName] || [];
     const activeCount = jigsInType.filter(jig => jig.estado === 'activo').length;
     const totalCount = jigsInType.length;
-    console.log('🎨 renderTypeCard for:', typeName, 'with', totalCount, 'jigs');
+    logger.info('🎨 renderTypeCard for:', typeName, 'with', totalCount, 'jigs');
     
     // Capitalizar el nombre del tipo para mostrar
     const displayTypeName = typeName.charAt(0).toUpperCase() + typeName.slice(1);
@@ -476,7 +494,7 @@ export default function AllJigsScreen({ navigation }) {
     const jigsInModel = modelGroups[modelName] || [];
     const activeCount = jigsInModel.filter(jig => jig.estado === 'activo').length;
     const totalCount = jigsInModel.length;
-    console.log('🎨 renderModelCard for:', modelName, 'with', totalCount, 'jigs');
+    logger.info('🎨 renderModelCard for:', modelName, 'with', totalCount, 'jigs');
     
     return (
       <TouchableOpacity 
@@ -724,7 +742,7 @@ export default function AllJigsScreen({ navigation }) {
           keyExtractor={(item) => item.id || item.numero_jig}
           renderItem={renderJigItem}
           onLayout={() => {
-            console.log('🎯 FlatList rendering LIST with:', {
+            logger.info('🎯 FlatList rendering LIST with:', {
               selectedType,
               currentView,
               filteredJigsCount: filteredJigs.length
@@ -748,7 +766,7 @@ export default function AllJigsScreen({ navigation }) {
           keyExtractor={(item) => item}
           renderItem={renderTypeCard}
           onLayout={() => {
-            console.log('🎯 FlatList rendering TYPES with:', {
+            logger.info('🎯 FlatList rendering TYPES with:', {
               selectedType,
               currentView,
               typeGroupsKeys: Object.keys(typeGroups)
@@ -772,7 +790,7 @@ export default function AllJigsScreen({ navigation }) {
           keyExtractor={(item) => item}
           renderItem={renderModelCard}
           onLayout={() => {
-            console.log('🎯 FlatList rendering MODELS with:', {
+            logger.info('🎯 FlatList rendering MODELS with:', {
               selectedType,
               currentView,
               modelGroupsKeys: Object.keys(modelGroups)
