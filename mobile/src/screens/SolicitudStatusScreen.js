@@ -10,11 +10,13 @@ import {
   RefreshControl
 } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
-import AuthService from '../services/AuthService';
+import { authService } from '../services/AuthService';
+import { useLanguage } from '../contexts/LanguageContext';
 import { formatDate, formatTime12Hour } from '../utils/dateUtils';
 import logger from '../utils/logger';
 
 const SolicitudStatusScreen = () => {
+  const { t } = useLanguage();
   const route = useRoute();
   const navigation = useNavigation();
   const { usuario } = route.params;
@@ -30,7 +32,7 @@ const SolicitudStatusScreen = () => {
   const loadSolicitudStatus = async () => {
     try {
       setLoading(true);
-      const result = await AuthService.getSolicitudStatus(usuario);
+      const result = await authService.getSolicitudStatus(usuario);
       
       if (result.success) {
         setSolicitud(result.data);
@@ -39,7 +41,7 @@ const SolicitudStatusScreen = () => {
       }
     } catch (error) {
       logger.error('Error al cargar estado de solicitud:', error);
-      Alert.alert('Error', 'Error de conexión');
+      Alert.alert(t('error'), t('connectionError'));
     } finally {
       setLoading(false);
     }
@@ -83,7 +85,7 @@ const SolicitudStatusScreen = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
-        <Text style={styles.loadingText}>Cargando estado de solicitud...</Text>
+        <Text style={styles.loadingText}>{t('loadingRequestStatus')}</Text>
       </View>
     );
   }
@@ -91,9 +93,9 @@ const SolicitudStatusScreen = () => {
   if (!solicitud) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>No se pudo cargar la información de la solicitud</Text>
+        <Text style={styles.errorText}>{t('couldNotLoadRequest')}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={loadSolicitudStatus}>
-          <Text style={styles.retryButtonText}>Reintentar</Text>
+          <Text style={styles.retryButtonText}>{t('retry')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -111,8 +113,8 @@ const SolicitudStatusScreen = () => {
       }
     >
       <View style={styles.header}>
-        <Text style={styles.title}>Estado de Solicitud</Text>
-        <Text style={styles.subtitle}>Usuario: {solicitud.usuario}</Text>
+        <Text style={styles.title}>{t('requestStatus')}</Text>
+        <Text style={styles.subtitle}>{t('user')} {solicitud.usuario}</Text>
       </View>
 
       <View style={styles.statusCard}>
@@ -124,33 +126,33 @@ const SolicitudStatusScreen = () => {
         </View>
         
         <Text style={styles.statusDescription}>
-          {solicitud.estado === 'pendiente' && 'Tu solicitud está siendo revisada por el administrador.'}
-          {solicitud.estado === 'aprobada' && '¡Felicidades! Tu solicitud ha sido aprobada. Ya puedes iniciar sesión.'}
-          {solicitud.estado === 'rechazada' && 'Tu solicitud ha sido rechazada. Revisa los comentarios del administrador.'}
+          {solicitud.estado === 'pendiente' && t('pendingDesc')}
+          {solicitud.estado === 'aprobada' && t('approvedDesc')}
+          {solicitud.estado === 'rechazada' && t('rejectedDesc')}
         </Text>
       </View>
 
       <View style={styles.infoCard}>
-        <Text style={styles.cardTitle}>Información de la Solicitud</Text>
+        <Text style={styles.cardTitle}>{t('requestInformation')}</Text>
         
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Nombre completo:</Text>
+          <Text style={styles.infoLabel}>{t('fullName')}</Text>
           <Text style={styles.infoValue}>{solicitud.nombre}</Text>
         </View>
         
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Número de empleado:</Text>
+          <Text style={styles.infoLabel}>{t('employeeNumber')}</Text>
           <Text style={styles.infoValue}>{solicitud.numero_empleado}</Text>
         </View>
         
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Fecha de solicitud:</Text>
+          <Text style={styles.infoLabel}>{t('requestDate')}</Text>
           <Text style={styles.infoValue}>{formatDate(solicitud.fecha_solicitud)} {formatTime12Hour(solicitud.fecha_solicitud)}</Text>
         </View>
         
         {solicitud.fecha_respuesta && (
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Fecha de respuesta:</Text>
+            <Text style={styles.infoLabel}>{t('responseDate')}</Text>
             <Text style={styles.infoValue}>{formatDate(solicitud.fecha_respuesta)} {formatTime12Hour(solicitud.fecha_respuesta)}</Text>
           </View>
         )}
@@ -158,49 +160,49 @@ const SolicitudStatusScreen = () => {
 
       {solicitud.comentarios_admin && (
         <View style={styles.commentsCard}>
-          <Text style={styles.cardTitle}>Comentarios del Administrador</Text>
+          <Text style={styles.cardTitle}>{t('adminComments')}</Text>
           <Text style={styles.commentsText}>{solicitud.comentarios_admin}</Text>
         </View>
       )}
 
       {solicitud.estado === 'aprobada' && (
         <View style={styles.actionCard}>
-          <Text style={styles.actionTitle}>¡Tu cuenta está lista!</Text>
+          <Text style={styles.actionTitle}>{t('accountReady')}</Text>
           <Text style={styles.actionDescription}>
-            Ya puedes iniciar sesión en la aplicación con tus credenciales.
+            {t('accountReadyDesc')}
           </Text>
           <TouchableOpacity
             style={styles.loginButton}
             onPress={() => navigation.navigate('Login')}
           >
-            <Text style={styles.loginButtonText}>Ir a Iniciar Sesión</Text>
+            <Text style={styles.loginButtonText}>{t('goToLogin')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {solicitud.estado === 'rechazada' && (
         <View style={styles.actionCard}>
-          <Text style={styles.actionTitle}>Solicitud Rechazada</Text>
+          <Text style={styles.actionTitle}>{t('requestRejected')}</Text>
           <Text style={styles.actionDescription}>
-            Si crees que esto es un error, contacta al administrador del sistema.
+            {t('requestRejectedDesc')}
           </Text>
           <TouchableOpacity
             style={styles.contactButton}
             onPress={() => {
               // Aquí podrías agregar funcionalidad para contactar al admin
-              Alert.alert('Contactar Administrador', 'Contacta al administrador del sistema para más información.');
+              Alert.alert(t('contactAdmin'), t('contactAdminMessage'));
             }}
           >
-            <Text style={styles.contactButtonText}>Contactar Administrador</Text>
+            <Text style={styles.contactButtonText}>{t('contactAdmin')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {solicitud.estado === 'pendiente' && (
         <View style={styles.actionCard}>
-          <Text style={styles.actionTitle}>Solicitud en Revisión</Text>
+          <Text style={styles.actionTitle}>{t('requestUnderReview')}</Text>
           <Text style={styles.actionDescription}>
-            Tu solicitud está siendo revisada. Te notificaremos cuando haya una respuesta.
+            {t('requestUnderReviewDesc')}
           </Text>
           <TouchableOpacity
             style={styles.refreshButton}

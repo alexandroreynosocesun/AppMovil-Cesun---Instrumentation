@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from fastapi.responses import FileResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from typing import List
-from datetime import datetime
+from datetime import datetime, timezone
 import os
 from ..database import get_db
 from ..models.models import Validacion, Reparacion, Jig, JigNG, AuditoriaPDF
@@ -25,9 +25,12 @@ async def create_validation(
 ):
     """Crear nueva validación"""
     # Si viene jig_id, verificar que el jig existe
+    # Convertir jig_id = 0 a None (para asignaciones sin jig específico)
+    jig_id = validation_data.jig_id if validation_data.jig_id and validation_data.jig_id > 0 else None
+    
     jig = None
-    if validation_data.jig_id and validation_data.jig_id > 0:
-        jig = db.query(Jig).filter(Jig.id == validation_data.jig_id).first()
+    if jig_id:
+        jig = db.query(Jig).filter(Jig.id == jig_id).first()
         if not jig:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -36,9 +39,9 @@ async def create_validation(
     
     # Verificar si el jig está marcado como NG (solo si hay jig_id)
     jig_ng_activo = None
-    if validation_data.jig_id and validation_data.jig_id > 0:
+    if jig_id:
         jig_ng_activo = db.query(JigNG).filter(
-            JigNG.jig_id == validation_data.jig_id,
+            JigNG.jig_id == jig_id,
             JigNG.estado.in_(["pendiente", "en_reparacion"])
         ).first()
     
@@ -62,18 +65,66 @@ async def create_validation(
     # Crear validación
     # Si viene tecnico_asignado_id en los datos, usarlo (para asignaciones)
     validation_dict = validation_data.dict()
+    # Asegurar que jig_id sea None si es 0 o None (para asignaciones sin jig específico)
+    validation_dict['jig_id'] = jig_id
     tecnico_asignado_id = validation_dict.pop('tecnico_asignado_id', None)
     modelo_actual = validation_dict.pop('modelo_actual', None)
+    fecha_cliente = validation_dict.pop('fecha', None)  # Fecha ISO string del cliente
     
     # Si se proporciona un modelo y hay un jig, actualizar el jig
     if modelo_actual and jig:
         jig.modelo_actual = modelo_actual
+
+    # Actualizar campos de última validación en el jig
+    turno_actual = validation_data.turno
+    if jig:
+        # Usar datetime.now() para obtener la hora local naive
+        jig.fecha_ultima_validacion = datetime.now()
+        jig.tecnico_ultima_validacion_id = current_user.id
+        jig.turno_ultima_validacion = turno_actual
+
+        # Invalidar caché del jig
+        from ..services.cache_service import cache_service
+        cache_key = f"jig:qr:{jig.codigo_qr}"
+        cache_service.delete(cache_key)
+
+    # Procesar fecha: si viene del cliente (ISO string), parsearla; si no, usar utcnow()
+    if fecha_cliente:
+        try:
+            # Parsear fecha ISO string del cliente (viene como "2024-01-09T16:00:00.000Z")
+            # Convertir a datetime naive en UTC (SQLAlchemy espera naive datetime)
+            if isinstance(fecha_cliente, str):
+                # Manejar formato ISO con 'Z' (UTC)
+                if fecha_cliente.endswith('Z'):
+                    fecha_str = fecha_cliente[:-1] + '+00:00'
+                elif '+' in fecha_cliente or fecha_cliente.count('-') > 2:
+                    # Ya tiene timezone
+                    fecha_str = fecha_cliente
+                else:
+                    # No tiene timezone, asumir UTC
+                    fecha_str = fecha_cliente + '+00:00'
+                
+                # Parsear y convertir a naive datetime (asumiendo UTC)
+                fecha_con_tz = datetime.fromisoformat(fecha_str.replace('Z', '+00:00'))
+                # Convertir a UTC y luego quitar timezone para SQLAlchemy
+                if fecha_con_tz.tzinfo:
+                    fecha_utc = fecha_con_tz.astimezone(timezone.utc).replace(tzinfo=None)
+                else:
+                    fecha_utc = fecha_con_tz
+            else:
+                fecha_utc = datetime.utcnow()
+        except Exception as e:
+            print(f"Error parseando fecha del cliente: {e}, usando utcnow()")
+            fecha_utc = datetime.utcnow()
+    else:
+        # Si no viene fecha del cliente, usar hora actual del servidor en UTC
+        fecha_utc = datetime.utcnow()
     
     db_validation = Validacion(
         **validation_dict,
         tecnico_id=current_user.id,
         tecnico_asignado_id=tecnico_asignado_id,
-        fecha=datetime.utcnow()
+        fecha=fecha_utc
     )
     
     db.add(db_validation)
@@ -81,7 +132,7 @@ async def create_validation(
     db.refresh(db_validation)
     
     # Si el estado es NG y hay jig_id, crear reparación automáticamente
-    if validation_data.estado == "NG" and validation_data.jig_id:
+    if validation_data.estado == "NG" and jig_id:
         reparacion = Reparacion(
             jig_id=validation_data.jig_id,
             tecnico_id=current_user.id,
@@ -127,19 +178,24 @@ async def get_validations(
     - **turno**: Filtrar por turno A, B, C (opcional)
     - **tecnico_asignado_id**: Filtrar por técnico asignado (opcional)
     
-    Los técnicos solo verán las validaciones asignadas a ellos.
+    Los usuarios de gestión no pueden acceder a este endpoint.
+    Todos los demás roles pueden ver las validaciones.
     """
     from ..utils.pagination import paginate_query
     
-    query = db.query(Validacion)
+    query = db.query(Validacion).options(joinedload(Validacion.jig))
     
-    # Si es técnico, solo mostrar las asignadas a él
-    if current_user.tipo_usuario == "tecnico":
-        query = query.filter(Validacion.tecnico_asignado_id == current_user.id)
+    # Si es gestión, no debe ver validaciones (solo gestiona QRs)
+    if current_user.tipo_usuario == "gestion" or current_user.tipo_usuario == "Gestion":
+        # Retornar lista vacía para gestión
+        query = query.filter(Validacion.id == -1)  # Condición imposible para retornar vacío
+    # Si es técnico, puede ver todas las validaciones (para ver estatus)
+    elif current_user.tipo_usuario == "tecnico":
+        pass  # Ver todas las validaciones
     # Si es asignaciones/ingeniero, puede ver todas
     elif current_user.tipo_usuario == "asignaciones" or current_user.tipo_usuario == "ingeniero":
         pass  # Ver todas
-    # Si es gestión/inventario, ver todas (para ver QRs dañados)
+    # Para otros roles, ver todas
     else:
         pass
     
@@ -155,8 +211,28 @@ async def get_validations(
     
     items, total, pages = paginate_query(query, page, page_size)
     
+    serialized_items = []
+    for v in items:
+        data = ValidacionSchema.model_validate(v).model_dump()
+        if not data.get("modelo_actual"):
+            if v.jig:
+                data["modelo_actual"] = v.jig.modelo_actual
+            elif v.comentario:
+                comentario_lower = v.comentario.lower()
+                if "modelo:" in comentario_lower:
+                    try:
+                        for part in v.comentario.split("|"):
+                            if "modelo:" in part.lower():
+                                value = part.split(":", 1)[1].strip()
+                                if value:
+                                    data["modelo_actual"] = value
+                                    break
+                    except Exception:
+                        pass
+        serialized_items.append(data)
+
     return PaginatedResponse(
-        items=[ValidacionSchema.from_orm(v) for v in items],
+        items=serialized_items,
         total=total,
         page=page,
         page_size=page_size,
@@ -254,6 +330,37 @@ async def marcar_completada(
         "validation": ValidacionSchema.model_validate(validacion)
     }
 
+@router.delete("/{validation_id}")
+async def delete_validation(
+    validation_id: int,
+    db: Session = Depends(get_db),
+    current_user: Tecnico = Depends(get_current_user)
+):
+    """Eliminar una validación (solo administradores)"""
+    # Verificar que el usuario es administrador
+    ADMIN_USERS = ["admin", "superadmin"]
+    if current_user.usuario not in ADMIN_USERS:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado. Solo administradores pueden eliminar validaciones."
+        )
+    
+    validacion = db.query(Validacion).filter(Validacion.id == validation_id).first()
+    if not validacion:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Validación no encontrada"
+        )
+    
+    # Eliminar la validación
+    db.delete(validacion)
+    db.commit()
+    
+    return {
+        "message": "Validación eliminada correctamente",
+        "validation_id": validation_id
+    }
+
 @router.get("/sync-pending")
 async def sync_pending_validations(
     db: Session = Depends(get_db),
@@ -315,27 +422,12 @@ async def generate_validation_report(
 ):
     """Generar reporte de validación individual"""
     try:
-        # Crear la validación en la base de datos
-        validation = Validacion(
-            jig_id=report_data.get("jig_id"),
-            tecnico_id=report_data.get("tecnico_id"),
-            fecha=report_data.get("fecha"),
-            turno=report_data.get("turno"),
-            estado="OK",  # Por defecto OK para reportes
-            comentario=report_data.get("comentario", ""),
-            cantidad=report_data.get("cantidad", 1)
-        )
-        
-        db.add(validation)
-        db.commit()
-        db.refresh(validation)
-        
         # Generar PDF del reporte
         pdf_path = generate_validation_report_pdf(report_data)
         
         return {
             "success": True,
-            "validation_id": validation.id,
+            "validation_id": None,
             "pdf_path": pdf_path,
             "pdf_filename": os.path.basename(pdf_path)
         }
@@ -394,10 +486,10 @@ async def generate_batch_validation_report(
                         print(f"✅ Línea encontrada en otra validación: '{linea}'")
                         break
         
-        # Crear validaciones en la base de datos
-        created_validations = []
+        # Preparar validaciones para PDF SIN crear registros en BD
+        validaciones_para_pdf = []
         print(f"📊 INICIO: Total validaciones recibidas: {len(validations)}")
-        
+
         for i, validation_data in enumerate(validations):
             print(f"\n{'='*60}")
             print(f"🔍 Procesando validación {i+1}/{len(validations)}")
@@ -418,13 +510,11 @@ async def generate_batch_validation_report(
             
             # Validar campos requeridos
             jig_id = validation_data.get("jig_id")
-            tecnico_id = validation_data.get("tecnico_id") or report_data.get("tecnico_id")
             
             print(f"   jig_id: {jig_id} (tipo: {type(jig_id)})")
-            print(f"   tecnico_id: {tecnico_id} (tipo: {type(tecnico_id)})")
             
-            if not jig_id or not tecnico_id:
-                print(f"   ❌ ERROR: Campos faltantes - jig_id={jig_id}, tecnico_id={tecnico_id}")
+            if not jig_id:
+                print(f"   ❌ ERROR: Campos faltantes - jig_id={jig_id}")
                 print(f"   ⏭️ OMITIENDO esta validación")
                 continue
             
@@ -434,84 +524,43 @@ async def generate_batch_validation_report(
                 print(f"   ❌ ERROR: Jig {jig_id} no existe en la BD")
                 print(f"   ⏭️ OMITIENDO esta validación")
                 continue
-            
+
             print(f"   ✅ Jig {jig_id} existe: {jig_exists.numero_jig}")
-            
-            validation = Validacion(
-                jig_id=jig_id,
-                tecnico_id=tecnico_id,
-                fecha=validation_fecha,
-                turno=validation_turno,
-                estado=validation_data.get("estado", "OK"),
-                comentario=validation_data.get("comentario", ""),
-                cantidad=validation_data.get("cantidad", 1)
-            )
-            db.add(validation)
-            created_validations.append(validation)
-            print(f"   ✅ Validación {i+1} AGREGADA - Jig: {jig_exists.numero_jig}, ID temporal: {validation.id}")
-        
-        print(f"\n{'='*60}")
-        print(f"📊 RESUMEN ANTES DE COMMIT:")
-        print(f"   Total recibidas: {len(validations)}")
-        print(f"   Total agregadas a sesión: {len(created_validations)}")
-        print(f"   IDs temporales: {[v.id for v in created_validations]}")
-        
-        print(f"\n💾 Guardando {len(created_validations)} validaciones en la base de datos...")
-        try:
-            db.commit()
-            print(f"✅ Validaciones guardadas exitosamente")
-            # Refrescar para obtener los IDs reales
-            for v in created_validations:
-                db.refresh(v)
-            print(f"📋 IDs después del commit: {[v.id for v in created_validations]}")
-        except Exception as commit_error:
-            print(f"❌ Error guardando validaciones: {commit_error}")
-            import traceback
-            print(f"🔍 Traceback commit: {traceback.format_exc()}")
-            db.rollback()
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Error guardando validaciones: {str(commit_error)}"
-            )
-        
+
+            # Actualizar campos de última validación en el jig
+            jig_exists.fecha_ultima_validacion = datetime.now()
+            jig_exists.tecnico_ultima_validacion_id = current_user.id
+            jig_exists.turno_ultima_validacion = validation_turno
+            print(f"   ✅ Actualizando última validación del Jig {jig_exists.numero_jig}")
+
+            # Invalidar caché del jig
+            from ..services.cache_service import cache_service
+            cache_key = f"jig:qr:{jig_exists.codigo_qr}"
+            cache_service.delete(cache_key)
+            print(f"   🗑️ Caché invalidado para {jig_exists.codigo_qr}")
+
+            validaciones_para_pdf.append({
+                'numero_jig': jig_exists.numero_jig,
+                'tipo': jig_exists.tipo,
+                'estado': validation_data.get("estado", "OK"),
+                'comentario': validation_data.get("comentario", "") or 'Sin comentarios',
+                'turno': validation_turno,
+                'created_at': validation_fecha.isoformat() if validation_fecha else ''
+            })
+            print(f"   ✅ Validación {i+1} agregada al PDF - Jig: {jig_exists.numero_jig}")
+
+        # Guardar todos los cambios en la base de datos
+        db.commit()
+        print(f"✅ Actualizaciones de última validación guardadas en la BD")
+
         # Generar PDF del reporte por lotes
         print(f"\n📄 Generando PDF del reporte...")
+        pdf_path = None
         try:
-            from sqlalchemy.orm import joinedload
-            
-            # Obtener los IDs reales después del commit
-            validation_ids = [v.id for v in created_validations]
-            api_logger.debug(f"IDs de validaciones a buscar en BD: {validation_ids} (cantidad: {len(validation_ids)})")
-            
-            # Obtener las validaciones recién creadas con la relación jig cargada
-            created_validations_with_jigs = db.query(Validacion).options(
-                joinedload(Validacion.jig)
-            ).filter(
-                Validacion.id.in_(validation_ids)
-            ).all()
-            
-            if len(created_validations_with_jigs) != len(created_validations):
-                api_logger.warning(f"Se esperaban {len(created_validations)} validaciones pero se encontraron {len(created_validations_with_jigs)}")
-                missing_ids = set(validation_ids) - set([v.id for v in created_validations_with_jigs])
-                api_logger.warning(f"IDs faltantes: {missing_ids}")
-            
-            # Preparar datos para el PDF usando las validaciones de la BD
-            validaciones_para_pdf = []
-            for v in created_validations_with_jigs:
-                if v.jig:
-                    validaciones_para_pdf.append({
-                        'numero_jig': v.jig.numero_jig,
-                        'tipo': v.jig.tipo,
-                        'estado': v.estado,
-                        'comentario': v.comentario or 'Sin comentarios',
-                        'turno': v.turno,
-                        'created_at': v.fecha.isoformat() if v.fecha else ''
-                    })
-                    api_logger.debug(f"Agregada al PDF: Jig {v.jig.numero_jig}")
-                else:
-                    api_logger.warning(f"Validación {v.id} sin jig, omitiendo del PDF")
-            
             api_logger.info(f"Total validaciones para PDF: {len(validaciones_para_pdf)}")
+            
+            if not validaciones_para_pdf:
+                raise ValueError("No hay validaciones válidas para generar el PDF")
             
             # Obtener número de empleado del usuario actual (current_user)
             numero_empleado = current_user.numero_empleado if current_user else 'N/A'
@@ -534,33 +583,54 @@ async def generate_batch_validation_report(
             
             # Guardar PDF en auditoría
             try:
+                api_logger.info(f"💾 Iniciando guardado en auditoría...")
                 fecha_obj = datetime.fromisoformat(fecha.replace('Z', '+00:00')) if isinstance(fecha, str) else fecha
                 if isinstance(fecha_obj, str):
                     fecha_obj = datetime.fromisoformat(fecha_obj.replace('Z', '+00:00'))
                 
+                # Convertir a UTC si tiene timezone, o usar directamente si es naive
+                if fecha_obj.tzinfo is not None:
+                    # Convertir a UTC para evitar problemas de zona horaria
+                    fecha_utc = fecha_obj.astimezone(timezone.utc)
+                    fecha_date = fecha_utc.date()
+                else:
+                    # Si no tiene timezone, asumir que ya está en la zona correcta
+                    fecha_date = fecha_obj.date()
+                
+                # Extraer día, mes y año de la fecha (sin hora) para evitar problemas de zona horaria
+                fecha_dia = fecha_date.day
+                fecha_mes = fecha_date.month
+                fecha_anio = fecha_date.year
+                
+                api_logger.info(f"📅 Fecha procesada: {fecha_obj} -> fecha_date={fecha_date} (día={fecha_dia}, mes={fecha_mes}, año={fecha_anio})")
+                
                 # Verificar si ya existe un PDF con los mismos datos (modelo, fecha, turno, tecnico, linea)
                 tecnico_id = current_user.id if current_user else report_data.get('tecnico_id', 1)
+                api_logger.info(f"🔍 Buscando PDF existente: modelo={modelo}, fecha={fecha_date}, turno={turno.upper()}, tecnico_id={tecnico_id}, linea={linea}")
+                
                 existing_pdf = db.query(AuditoriaPDF).filter(
                     AuditoriaPDF.modelo == modelo,
-                    AuditoriaPDF.fecha_dia == fecha_obj.day,
-                    AuditoriaPDF.fecha_mes == fecha_obj.month,
-                    AuditoriaPDF.fecha_anio == fecha_obj.year,
+                    AuditoriaPDF.fecha_dia == fecha_dia,
+                    AuditoriaPDF.fecha_mes == fecha_mes,
+                    AuditoriaPDF.fecha_anio == fecha_anio,
                     AuditoriaPDF.turno == turno.upper(),
                     AuditoriaPDF.tecnico_id == tecnico_id,
                     AuditoriaPDF.linea == linea
                 ).first()
                 
                 if existing_pdf:
-                    api_logger.warning(f"PDF duplicado detectado. Ya existe un PDF con modelo={modelo}, fecha={fecha_obj.date()}, turno={turno}, tecnico_id={tecnico_id}, linea={linea}")
+                    api_logger.warning(f"⚠️ PDF duplicado detectado. Ya existe un PDF con ID={existing_pdf.id}, modelo={modelo}, fecha={fecha_date}, turno={turno}, tecnico_id={tecnico_id}, linea={linea}")
+                    api_logger.warning(f"   PDF existente: {existing_pdf.nombre_archivo}")
                     # No guardar el duplicado, pero continuar con el proceso
                     # Eliminar el archivo PDF generado para no dejar archivos huérfanos
                     try:
                         if os.path.exists(pdf_path):
                             os.remove(pdf_path)
-                            api_logger.info(f"Archivo PDF duplicado eliminado: {pdf_path}")
+                            api_logger.info(f"🗑️ Archivo PDF duplicado eliminado: {pdf_path}")
                     except Exception as del_error:
-                        api_logger.warning(f"Error eliminando PDF duplicado: {del_error}")
+                        api_logger.warning(f"⚠️ Error eliminando PDF duplicado: {del_error}")
                 else:
+                    api_logger.info(f"✅ No se encontró PDF duplicado. Guardando nuevo PDF en auditoría...")
                     auditoria_pdf = AuditoriaPDF(
                         nombre_archivo=os.path.basename(pdf_path),
                         ruta_archivo=pdf_path,
@@ -569,19 +639,60 @@ async def generate_batch_validation_report(
                         tecnico_nombre=tecnico_nombre,
                         numero_empleado=numero_empleado,
                         fecha=fecha_obj,
-                        fecha_dia=fecha_obj.day,
-                        fecha_mes=fecha_obj.month,
-                        fecha_anio=fecha_obj.year,
-                        turno=turno,
-                        linea=linea,
+                        fecha_dia=fecha_dia,  # Usar la fecha extraída de fecha_date
+                        fecha_mes=fecha_mes,   # Usar la fecha extraída de fecha_date
+                        fecha_anio=fecha_anio, # Usar la fecha extraída de fecha_date
+                        turno=turno.upper(),
+                        linea=str(linea).strip() if linea and str(linea).strip() != '-' else None,  # Normalizar línea al guardar
                         cantidad_validaciones=len(validaciones_para_pdf)
                     )
                     db.add(auditoria_pdf)
                     db.commit()
-                    api_logger.info(f"✅ PDF guardado en auditoría: ID={auditoria_pdf.id}, modelo={modelo}, linea={linea}, fecha={fecha_obj.date()}, turno={turno}, tecnico_id={tecnico_id}")
+                    db.refresh(auditoria_pdf)
+                    api_logger.info(f"✅ PDF guardado en auditoría exitosamente: ID={auditoria_pdf.id}, modelo={modelo}, linea={linea}, fecha={fecha_date}, turno={turno}, tecnico_id={tecnico_id}, nombre={auditoria_pdf.nombre_archivo}")
             except Exception as audit_error:
-                api_logger.error(f"Error guardando en auditoría: {audit_error}", exc_info=True)
-                # No fallar si no se puede guardar en auditoría
+                error_str = str(audit_error)
+                # Si es un error de llave duplicada en auditoria_pdfs, corregir la secuencia y reintentar
+                if "UniqueViolation" in error_str and "auditoria_pdfs_pkey" in error_str:
+                    api_logger.warning(f"⚠️ Error de llave duplicada en auditoría detectado. Corrigiendo secuencia...")
+                    try:
+                        from sqlalchemy import text
+                        # Obtener el máximo ID actual
+                        max_id_result = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM auditoria_pdfs"))
+                        max_id = max_id_result.scalar()
+                        # Actualizar la secuencia al siguiente valor disponible
+                        db.execute(text(f"SELECT setval('auditoria_pdfs_id_seq', {max_id}, true)"))
+                        db.commit()
+                        api_logger.info(f"✅ Secuencia de auditoría corregida. Reintentando guardar PDF...")
+                        
+                        # Reintentar el guardado (usar las mismas variables fecha_dia, fecha_mes, fecha_anio calculadas arriba)
+                        auditoria_pdf = AuditoriaPDF(
+                            nombre_archivo=os.path.basename(pdf_path),
+                            ruta_archivo=pdf_path,
+                            modelo=modelo,
+                            tecnico_id=tecnico_id,
+                            tecnico_nombre=tecnico_nombre,
+                            numero_empleado=numero_empleado,
+                            fecha=fecha_obj,
+                            fecha_dia=fecha_dia,  # Usar la fecha extraída de fecha_date
+                            fecha_mes=fecha_mes,   # Usar la fecha extraída de fecha_date
+                            fecha_anio=fecha_anio, # Usar la fecha extraída de fecha_date
+                            turno=turno.upper(),
+                            linea=str(linea).strip() if linea and str(linea).strip() != '-' else None,  # Normalizar línea al guardar
+                            cantidad_validaciones=len(validaciones_para_pdf)
+                        )
+                        db.add(auditoria_pdf)
+                        db.commit()
+                        db.refresh(auditoria_pdf)
+                        api_logger.info(f"✅ PDF guardado en auditoría exitosamente después de corregir secuencia: ID={auditoria_pdf.id}, modelo={modelo}, linea={linea}, fecha={fecha_date}, turno={turno}, tecnico_id={tecnico_id}, nombre={auditoria_pdf.nombre_archivo}")
+                    except Exception as retry_error:
+                        api_logger.error(f"❌ Error al reintentar después de corregir secuencia de auditoría: {retry_error}", exc_info=True)
+                        # No fallar si no se puede guardar en auditoría, pero loguear el error
+                else:
+                    api_logger.error(f"❌ Error guardando en auditoría: {audit_error}", exc_info=True)
+                    import traceback
+                    api_logger.error(f"❌ Traceback completo: {traceback.format_exc()}")
+                    # No fallar si no se puede guardar en auditoría, pero loguear el error
         except Exception as pdf_error:
             api_logger.error(f"Error generando PDF: {pdf_error}", exc_info=True)
             raise HTTPException(
@@ -589,18 +700,32 @@ async def generate_batch_validation_report(
                 detail=f"Error generando PDF: {str(pdf_error)}"
             )
         
+        if not pdf_path:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Error: No se pudo generar el PDF (ruta no disponible)"
+            )
+        
         return {
             "success": True,
             "modelo": modelo,
-            "validations_count": len(created_validations),
+            "validations_count": len(validaciones_para_pdf),
             "pdf_filename": os.path.basename(pdf_path),
             "pdf_path": pdf_path
         }
             
+    except HTTPException:
+        # Re-lanzar HTTPExceptions sin modificar
+        raise
     except Exception as e:
+        import traceback
+        error_traceback = traceback.format_exc()
+        error_message = str(e) if str(e) else type(e).__name__
+        api_logger.error(f"Error generando reporte por lotes: {error_message}", exc_info=True)
+        api_logger.error(f"Traceback completo: {error_traceback}")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error generando reporte por lotes: {str(e)}"
+            detail=f"Error generando reporte por lotes: {error_message}"
         )
 
 @router.get("/download-pdf/{filename}")

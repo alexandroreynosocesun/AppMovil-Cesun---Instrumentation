@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { authService } from '../services/AuthService';
+import { storage } from '../utils/storage';
 import logger from '../utils/logger';
 
 const AuthContext = createContext();
@@ -26,47 +26,49 @@ export const AuthProvider = ({ children }) => {
 
   const checkStoredUser = async () => {
     try {
-      // Cargar datos sensibles desde SecureStore
-      const storedUser = await SecureStore.getItemAsync('user_data');
-      const storedToken = await SecureStore.getItemAsync('auth_token');
+      // Cargar datos sensibles desde almacenamiento (usando módulo unificado)
+      const storedUser = await storage.getItem('user_data');
+      const storedToken = await storage.getItem('auth_token');
       
       if (storedUser && storedToken) {
         setUser(JSON.parse(storedUser));
         setIsAuthenticated(true);
-        logger.info('✅ Datos de autenticación cargados desde almacenamiento seguro');
+        logger.info('✅ Datos de autenticación cargados desde almacenamiento');
 
         // Asegurar que el token también esté disponible en AsyncStorage
         // para servicios que leen de allí (por ejemplo, AdminService)
         try {
           await AsyncStorage.setItem('token', storedToken);
+          await AsyncStorage.setItem('auth_token', storedToken);
           logger.info('✅ Token sincronizado a AsyncStorage al iniciar la app');
         } catch (syncError) {
           logger.error('Error sincronizando token a AsyncStorage al iniciar:', syncError);
         }
+      } else {
+        // Fallback a AsyncStorage para migración
+        try {
+          const storedUserFallback = await AsyncStorage.getItem('user');
+          const storedTokenFallback = await AsyncStorage.getItem('token');
+          
+          if (storedUserFallback && storedTokenFallback) {
+            setUser(JSON.parse(storedUserFallback));
+            setIsAuthenticated(true);
+            logger.info('⚠️ Datos cargados desde AsyncStorage (migración)');
+            
+            // Migrar al almacenamiento apropiado
+            await storage.setItem('user_data', typeof storedUserFallback === 'string' ? storedUserFallback : JSON.stringify(storedUserFallback));
+            await storage.setItem('auth_token', typeof storedTokenFallback === 'string' ? storedTokenFallback : String(storedTokenFallback));
+            logger.info('✅ Datos migrados');
+            
+            // Sincronizar token para compatibilidad
+            await authService.syncTokenToAsyncStorage();
+          }
+        } catch (fallbackError) {
+          logger.error('Error en fallback:', fallbackError);
+        }
       }
     } catch (error) {
       logger.error('Error verificando usuario guardado:', error);
-      // Fallback a AsyncStorage para migración
-      try {
-        const storedUser = await AsyncStorage.getItem('user');
-        const storedToken = await AsyncStorage.getItem('token');
-        
-        if (storedUser && storedToken) {
-          setUser(JSON.parse(storedUser));
-          setIsAuthenticated(true);
-          logger.info('⚠️ Datos cargados desde AsyncStorage (migración)');
-          
-          // Migrar a SecureStore (asegurar que sean strings)
-          await SecureStore.setItemAsync('user_data', typeof storedUser === 'string' ? storedUser : JSON.stringify(storedUser));
-          await SecureStore.setItemAsync('auth_token', typeof storedToken === 'string' ? storedToken : String(storedToken));
-          logger.info('✅ Datos migrados a SecureStore');
-          
-          // Sincronizar token para compatibilidad
-          await authService.syncTokenToAsyncStorage();
-        }
-      } catch (fallbackError) {
-        logger.error('Error en fallback:', fallbackError);
-      }
     } finally {
       setLoading(false);
     }
@@ -82,10 +84,11 @@ export const AuthProvider = ({ children }) => {
         logger.info('🔍 Tipo de response.data:', typeof response.data);
         logger.info('🔍 Keys de response.data:', Object.keys(response.data || {}));
         
-        const { tecnico, access_token } = response.data;
+        const { tecnico, access_token, refresh_token } = response.data;
         
         logger.info('🔍 tecnico:', typeof tecnico, tecnico ? 'existe' : 'null/undefined');
         logger.info('🔍 access_token:', typeof access_token, access_token ? 'existe' : 'null/undefined');
+        logger.info('🔍 refresh_token:', typeof refresh_token, refresh_token ? 'existe' : 'null/undefined');
         
         // Validar y convertir datos antes de guardar
         if (!tecnico) {
@@ -96,6 +99,10 @@ export const AuthProvider = ({ children }) => {
         if (!access_token) {
           logger.error('❌ Error: access_token es null o undefined');
           return { success: false, error: 'Token de acceso inválido' };
+        }
+        
+        if (!refresh_token) {
+          logger.warn('⚠️ Advertencia: refresh_token no recibido');
         }
         
         // Convertir tecnico a string JSON de forma segura
@@ -115,8 +122,9 @@ export const AuthProvider = ({ children }) => {
           return { success: false, error: 'Error procesando datos de usuario' };
         }
         
-        // Convertir access_token a string
+        // Convertir access_token y refresh_token a string
         const tokenString = typeof access_token === 'string' ? access_token : String(access_token);
+        const refreshTokenString = refresh_token ? (typeof refresh_token === 'string' ? refresh_token : String(refresh_token)) : null;
         
         // Validar que los strings no estén vacíos
         if (!userDataString || userDataString === 'null' || userDataString === 'undefined') {
@@ -129,12 +137,20 @@ export const AuthProvider = ({ children }) => {
           return { success: false, error: 'Token de acceso inválido' };
         }
         
-        // Guardar datos sensibles en SecureStore (asegurar que sean strings)
-        await SecureStore.setItemAsync('user_data', userDataString);
-        await SecureStore.setItemAsync('auth_token', tokenString);
+        // Guardar datos sensibles usando módulo de storage unificado
+        await storage.setItem('user_data', userDataString);
+        await storage.setItem('auth_token', tokenString);
+        if (refreshTokenString) {
+          await storage.setItem('refresh_token', refreshTokenString);
+        }
         
-        // Sincronizar token a AsyncStorage para compatibilidad
-        await authService.syncTokenToAsyncStorage();
+        // También guardar en AsyncStorage para compatibilidad
+        await AsyncStorage.setItem('user', userDataString);
+        await AsyncStorage.setItem('token', tokenString);
+        await AsyncStorage.setItem('auth_token', tokenString);
+        if (refreshTokenString) {
+          await AsyncStorage.setItem('refresh_token', refreshTokenString);
+        }
         
         logger.info('🔍 Usuario logueado - tipo_usuario:', tecnico.tipo_usuario);
         setUser(tecnico);
@@ -155,19 +171,22 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
-      // Eliminar datos sensibles de SecureStore
-      await SecureStore.deleteItemAsync('user_data');
-      await SecureStore.deleteItemAsync('auth_token');
-      await SecureStore.deleteItemAsync('user_signature');
+      // Eliminar datos sensibles del almacenamiento usando módulo unificado
+      await storage.removeItem('user_data');
+      await storage.removeItem('auth_token');
+      await storage.removeItem('refresh_token');
+      await storage.removeItem('user_signature');
       
       // Limpiar también AsyncStorage por compatibilidad
       await AsyncStorage.removeItem('user');
       await AsyncStorage.removeItem('token');
+      await AsyncStorage.removeItem('auth_token');
+      await AsyncStorage.removeItem('refresh_token');
       
       setUser(null);
       setIsAuthenticated(false);
       
-      logger.info('✅ Datos de autenticación eliminados de forma segura');
+      logger.info('✅ Datos de autenticación eliminados');
     } catch (error) {
       logger.error('Error en logout:', error);
     }
@@ -183,8 +202,9 @@ export const AuthProvider = ({ children }) => {
         logger.info('AuthContext - Usuario actualizado:', updatedUser);
         setUser(updatedUser);
         
-        // Actualizar datos en SecureStore
-        await SecureStore.setItemAsync('user_data', JSON.stringify(updatedUser));
+        // Actualizar datos en almacenamiento usando módulo unificado
+        await storage.setItem('user_data', JSON.stringify(updatedUser));
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
         logger.info('✅ Perfil actualizado en almacenamiento seguro');
         
         return { success: true };
@@ -202,8 +222,9 @@ export const AuthProvider = ({ children }) => {
       if (response.success) {
         setUser(response.data);
         
-        // Actualizar datos en SecureStore
-        await SecureStore.setItemAsync('user_data', JSON.stringify(response.data));
+        // Actualizar datos en almacenamiento usando módulo unificado
+        await storage.setItem('user_data', JSON.stringify(response.data));
+        await AsyncStorage.setItem('user', JSON.stringify(response.data));
         logger.info('✅ Perfil refrescado en almacenamiento seguro');
         
         return { success: true };

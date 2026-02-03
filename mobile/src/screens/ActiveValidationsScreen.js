@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Platform,
   Modal,
+  Alert,
 } from 'react-native';
 import {
   Card,
@@ -37,6 +38,7 @@ export default function ActiveValidationsScreen() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'pending', 'completed'
+  const canBulkDelete = user?.tipo_usuario === 'admin' || user?.usuario === 'admin' || user?.usuario === 'superadmin';
 
   // Función para determinar el turno actual según la hora
   const getCurrentTurno = () => {
@@ -116,6 +118,80 @@ export default function ActiveValidationsScreen() {
     return new Date(d.getFullYear(), d.getMonth(), d.getDate());
   };
 
+  // Función para verificar si una validación ya expiró según su turno y día
+  const isValidationExpired = (validation) => {
+    if (!validation.fecha || !validation.turno) {
+      return false; // Si no tiene fecha o turno, no expirar
+    }
+    
+    const now = new Date();
+    const validationDate = new Date(validation.fecha);
+    const validationDay = validationDate.getDay(); // 0 = domingo, 1 = lunes, ..., 6 = sábado
+    const currentHour = now.getHours();
+    const currentMinute = now.getMinutes();
+    
+    // Normalizar fechas para comparar solo día/mes/año (sin hora)
+    const validationDateOnly = new Date(validationDate.getFullYear(), validationDate.getMonth(), validationDate.getDate());
+    const currentDateOnly = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const diffTime = currentDateOnly.getTime() - validationDateOnly.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+    
+    // Turno A: Lunes (1), Martes (2), Miércoles (3), Jueves (4)
+    // Se borra el mismo día a las 6:30 PM
+    if (validation.turno === 'A') {
+      // Verificar que el día de la validación sea lunes, martes, miércoles o jueves
+      if (validationDay >= 1 && validationDay <= 4) {
+        // Si pasó más de un día desde la validación, expiró
+        if (diffDays > 0) {
+          return true;
+        } else if (diffDays === 0) {
+          // Mismo día: verificar si ya pasó las 6:30 PM
+          if (currentHour > 18 || (currentHour === 18 && currentMinute >= 30)) {
+            return true;
+          }
+        }
+      }
+    }
+    
+    // Turno B: Martes (2), Miércoles (3), Jueves (4), Viernes (5)
+    // Se borra al día siguiente a las 6:30 AM
+    if (validation.turno === 'B') {
+      // Verificar que el día de la validación sea martes, miércoles, jueves o viernes
+      if (validationDay >= 2 && validationDay <= 5) {
+        // El turno B cruza medianoche, así que se borra a las 6:30 AM del día siguiente
+        // Si pasó más de un día desde la validación, expiró
+        if (diffDays > 1) {
+          return true;
+        } else if (diffDays === 1) {
+          // Día siguiente: verificar si ya pasó las 6:30 AM
+          if (currentHour > 6 || (currentHour === 6 && currentMinute >= 30)) {
+            return true;
+          }
+        }
+        // Si diffDays === 0 (mismo día), no expira hasta el día siguiente a las 6:30 AM
+      }
+    }
+    
+    // Turno C: Viernes (5), Sábado (6), Domingo (0)
+    // Se borra cada día a las 6:30 PM
+    if (validation.turno === 'C') {
+      // Verificar que el día de la validación sea viernes, sábado o domingo
+      if (validationDay === 0 || validationDay === 5 || validationDay === 6) {
+        // Si pasó más de un día desde la validación, expiró
+        if (diffDays > 0) {
+          return true;
+        } else if (diffDays === 0) {
+          // Mismo día: verificar si ya pasó las 6:30 PM
+          if (currentHour > 18 || (currentHour === 18 && currentMinute >= 30)) {
+            return true;
+          }
+        }
+      }
+    }
+    
+    return false;
+  };
+
   // Función para filtrar validaciones por fecha y estado
   const filterValidations = (validations, filterType, customDate = null, statusFilterType = 'all') => {
     let targetDate = null;
@@ -140,9 +216,9 @@ export default function ActiveValidationsScreen() {
 
     let filtered = validations;
     
-    // Solo filtrar por fecha si se especificó un filtro de fecha
+    // PRIMERO: Filtrar por fecha si se especificó un filtro de fecha
     if (targetDate !== null) {
-      filtered = validations.filter(v => {
+      filtered = filtered.filter(v => {
         if (!v.fecha) {
           logger.debug(`⚠️ [filterValidations] Validación ${v.id} sin fecha, excluyendo del filtro de fecha`);
           return false;
@@ -159,7 +235,7 @@ export default function ActiveValidationsScreen() {
       });
     }
 
-    // Aplicar filtro de estado (solo 'pending' o 'all')
+    // SEGUNDO: Aplicar filtro de estado (solo 'pending' o 'all')
     if (statusFilterType === 'pending') {
       filtered = filtered.filter(v => !v.completada);
     }
@@ -195,26 +271,37 @@ export default function ActiveValidationsScreen() {
         }
         
         logger.info(`📊 [ActiveValidationsScreen] Total de validaciones recibidas: ${all.length}`);
+        logger.info(`👤 [ActiveValidationsScreen] Usuario actual ID: ${user?.id} (tipo: ${typeof user?.id}), Rol: ${user?.tipo_usuario}`);
         
-        // Solo mostrar las validaciones asignadas por este usuario (tecnico_id que creó la asignación)
-        const mine = Array.isArray(all) ? all.filter(v => {
-          const matches = v.tecnico_id === user?.id;
-          if (!matches) {
-            logger.debug(`❌ [ActiveValidationsScreen] Excluyendo validación ${v.id}: tecnico_id=${v.tecnico_id} !== user.id=${user?.id}`);
+        // Mostrar TODAS las validaciones para todos los usuarios (ingenieros y técnicos)
+        // Ya no se filtra por rol - todos pueden ver todas las validaciones
+        const allValidationsArray = Array.isArray(all) ? all : [];
+        logger.info(`✅ [ActiveValidationsScreen] Mostrando todas las validaciones para todos los usuarios: ${allValidationsArray.length}`);
+
+        let cleanedValidations = allValidationsArray;
+        if (canBulkDelete) {
+          const expiredValidations = allValidationsArray.filter(isValidationExpired);
+          if (expiredValidations.length) {
+            logger.info(`🧹 [ActiveValidationsScreen] Eliminando expiradas: ${expiredValidations.length}`);
+            const results = await Promise.allSettled(
+              expiredValidations.map(v => validationService.deleteValidation(v.id))
+            );
+            const deletedIds = [];
+            results.forEach((result, index) => {
+              if (result.status === 'fulfilled' && result.value?.success) {
+                deletedIds.push(expiredValidations[index].id);
+              }
+            });
+            if (deletedIds.length) {
+              cleanedValidations = allValidationsArray.filter(v => !deletedIds.includes(v.id));
+            }
           }
-          return matches;
-        }) : [];
-        
-        logger.info(`✅ [ActiveValidationsScreen] Validaciones creadas por este usuario: ${mine.length}`);
-        logger.info(`📋 [ActiveValidationsScreen] Detalles de validaciones:`);
-        mine.forEach(v => {
-          logger.info(`  - ID: ${v.id}, Modelo: ${v.modelo_actual || 'N/A'}, Completada: ${v.completada}, Fecha: ${v.fecha}, Técnico asignado: ${v.tecnico_asignado_id}`);
-        });
-        
-        setAllValidations(mine);
+        }
+
+        setAllValidations(cleanedValidations);
         
         // Aplicar filtros de fecha y estado
-        const filtered = filterValidations(mine, dateFilter, selectedDate, statusFilter);
+        const filtered = filterValidations(cleanedValidations, dateFilter, selectedDate, statusFilter);
         logger.info(`🔍 [ActiveValidationsScreen] Validaciones después de filtros: ${filtered.length}`);
         logger.info(`🔍 [ActiveValidationsScreen] Filtro de fecha: ${dateFilter}, Filtro de estado: ${statusFilter}`);
         setFilteredValidations(filtered);
@@ -263,14 +350,22 @@ export default function ActiveValidationsScreen() {
           });
         }
         setTecnicosMap(map);
+        logger.info(`✅ Técnicos cargados: ${tecnicosList.length}`);
+      } else {
+        // Si no tiene permisos o hay error, continuar sin cargar técnicos
+        logger.warn('⚠️ No se pudieron cargar los técnicos, continuando sin nombres:', result.error || 'Error desconocido');
+        setTecnicosMap({});
       }
     } catch (error) {
-      logger.error('Error cargando técnicos para mapa:', error);
+      // Manejar error silenciosamente - las validaciones se mostrarán con IDs en lugar de nombres
+      logger.warn('⚠️ Error cargando técnicos para mapa (continuando sin nombres):', error.message || error);
+      setTecnicosMap({});
     }
   };
 
   useEffect(() => {
-    if (user?.tipo_usuario === 'asignaciones') {
+    // Cargar validaciones para todos los roles excepto gestión
+    if (user?.tipo_usuario !== 'gestion' && user?.tipo_usuario !== 'Gestion') {
       loadValidations();
       loadTecnicos();
     }
@@ -299,11 +394,94 @@ export default function ActiveValidationsScreen() {
     setRefreshing(false);
   };
 
-  if (user?.tipo_usuario !== 'asignaciones') {
+  const handleDeleteValidation = async (validationId) => {
+    Alert.alert(
+      'Eliminar Validación',
+      '¿Estás seguro de que quieres eliminar esta validación? Esta acción no se puede deshacer.',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel'
+        },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const result = await validationService.deleteValidation(validationId);
+              if (result.success) {
+                setAllValidations(prev => prev.filter(v => v.id !== validationId));
+                setFilteredValidations(prev => prev.filter(v => v.id !== validationId));
+                Alert.alert('Éxito', 'Validación eliminada correctamente');
+              } else {
+                Alert.alert('Error', result.error || 'Error al eliminar validación');
+              }
+            } catch (error) {
+              logger.error('Error eliminando validación:', error);
+              Alert.alert('Error', 'Error al eliminar validación');
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleDeleteUnassignedValidations = async () => {
+    const targets = allValidations.filter(v => !v.tecnico_asignado_id && !v.completada);
+    if (!targets.length) {
+      Alert.alert('Sin cambios', 'No hay validaciones sin técnico para eliminar.');
+      return;
+    }
+    Alert.alert(
+      'Eliminar validaciones',
+      `Se eliminarán ${targets.length} validaciones sin técnico asignado. ¿Continuar?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const results = await Promise.allSettled(
+                targets.map(v => validationService.deleteValidation(v.id))
+              );
+              const deletedIds = [];
+              let failed = 0;
+              results.forEach((result, index) => {
+                if (result.status === 'fulfilled' && result.value?.success) {
+                  deletedIds.push(targets[index].id);
+                } else {
+                  failed += 1;
+                }
+              });
+              if (deletedIds.length) {
+                setAllValidations(prev => prev.filter(v => !deletedIds.includes(v.id)));
+                setFilteredValidations(prev => prev.filter(v => !deletedIds.includes(v.id)));
+              }
+              if (failed) {
+                Alert.alert('Aviso', `Se eliminaron ${deletedIds.length}. Fallaron ${failed}.`);
+              } else {
+                Alert.alert('Éxito', 'Validaciones eliminadas correctamente');
+              }
+            } catch (error) {
+              logger.error('Error eliminando validaciones sin técnico:', error);
+              Alert.alert('Error', 'Error al eliminar validaciones');
+            } finally {
+              setLoading(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Permitir acceso a todos los roles excepto gestión
+  if (user?.tipo_usuario === 'gestion' || user?.tipo_usuario === 'Gestion') {
     return (
       <View style={styles.container}>
         <Text style={styles.errorText}>
-          Esta pantalla solo está disponible para usuarios con rol de Asignaciones.
+          Esta pantalla no está disponible para usuarios de Gestión.
         </Text>
       </View>
     );
@@ -329,7 +507,7 @@ export default function ActiveValidationsScreen() {
           <Card.Content>
             <Title style={styles.title}>Estatus de Validaciones</Title>
             <Paragraph style={styles.subtitle}>
-              Validaciones creadas por {user?.nombre}
+              Validaciones creadas por {user?.nombre || 'usuario'}
             </Paragraph>
           </Card.Content>
         </Card>
@@ -370,6 +548,17 @@ export default function ActiveValidationsScreen() {
               </TouchableOpacity>
 
             </View>
+            {canBulkDelete && (
+              <Button
+                mode="outlined"
+                onPress={handleDeleteUnassignedValidations}
+                style={styles.deleteUnassignedButton}
+                icon="delete"
+                textColor="#F44336"
+              >
+                Eliminar sin técnico
+              </Button>
+            )}
           </Card.Content>
         </Card>
 
@@ -449,7 +638,7 @@ export default function ActiveValidationsScreen() {
             <Card.Content>
               <Paragraph style={styles.emptyText}>
                 {allValidations.length === 0 
-                  ? 'No has creado validaciones aún.'
+                  ? 'No hay validaciones activas.'
                   : `No hay validaciones para la fecha seleccionada.`}
               </Paragraph>
             </Card.Content>
@@ -457,75 +646,216 @@ export default function ActiveValidationsScreen() {
         )}
 
         {!loading && filteredValidations.length > 0 && (
-          <Card style={styles.listCard}>
-            <Card.Content>
-              <Title style={styles.sectionTitle}>
-                Validaciones activas: {filteredValidations.length}
-              </Title>
-              <Divider style={styles.divider} />
+          <View style={styles.listContainer}>
+            <Card style={styles.summaryCard}>
+              <Card.Content>
+                <Title style={styles.sectionTitle}>
+                  Validaciones activas: {filteredValidations.length}
+                </Title>
+              </Card.Content>
+            </Card>
 
-              {filteredValidations.map((v) => {
+            {filteredValidations.map((v) => {
+                // Debug: Log de datos de validación
+                logger.debug('📋 Validación:', {
+                  id: v.id,
+                  tecnico_asignado_id: v.tecnico_asignado_id,
+                  comentario: v.comentario?.substring(0, 100),
+                  modelo_actual: v.modelo_actual
+                });
+                
                 const tecnicoAsignado = tecnicosMap[v.tecnico_asignado_id];
                 const tecnicoLabel = tecnicoAsignado
                   ? `${tecnicoAsignado.nombre} - #${tecnicoAsignado.numero_empleado}`
                   : (v.tecnico_asignado_id ? `ID: ${v.tecnico_asignado_id}` : 'Sin técnico asignado');
+                
+                // Debug: Log del técnico encontrado
+                if (v.tecnico_asignado_id) {
+                  logger.debug(`👤 Técnico asignado ID ${v.tecnico_asignado_id}:`, tecnicoAsignado ? 'Encontrado' : 'No encontrado en mapa');
+                }
 
-                const fechaTexto = v.fecha ? new Date(v.fecha).toLocaleString('es-MX') : 'Sin fecha';
-
-                // Intentar obtener el modelo: primero del campo modelo_actual, luego del comentario
-                let modeloTexto = v.modelo_actual;
-                if (!modeloTexto && v.comentario) {
+                // Convertir fecha UTC del backend a hora local
+                let fechaTexto = 'Sin fecha';
+                if (v.fecha) {
                   try {
-                    const firstPart = v.comentario.split('|')[0].trim(); // ej. "Modelo: 12345"
-                    const match = firstPart.match(/Modelo:\s*(.+)/i);
-                    if (match && match[1]) {
-                      modeloTexto = match[1].trim();
+                    let fechaStr = String(v.fecha);
+                    
+                    // El backend ahora siempre envía fechas con 'Z' al final (UTC)
+                    // Si por alguna razón no tiene timezone, agregarlo
+                    if (!/[Zz]$|[+-]\d{2}:\d{2}$/.test(fechaStr)) {
+                      if (fechaStr.includes('T')) {
+                        fechaStr = fechaStr + 'Z';
+                      } else {
+                        fechaStr = fechaStr + 'T00:00:00Z';
+                      }
+                    }
+                    
+                    // Crear objeto Date (JavaScript interpreta 'Z' como UTC)
+                    const fechaObj = new Date(fechaStr);
+                    
+                    // Verificar que la fecha es válida
+                    if (isNaN(fechaObj.getTime())) {
+                      fechaTexto = 'Fecha inválida';
+                      logger.warn('Fecha inválida recibida:', v.fecha);
+                    } else {
+                      // toLocaleString automáticamente convierte UTC a la zona horaria local del dispositivo
+                      fechaTexto = fechaObj.toLocaleString('es-MX', { 
+                        weekday: 'short', 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: true
+                      });
                     }
                   } catch (e) {
-                    // Si falla el parseo, dejamos modeloTexto como undefined
+                    logger.error('Error formateando fecha:', e, v.fecha);
+                    fechaTexto = 'Fecha inválida';
                   }
                 }
 
+                // Parsear comentario para extraer información estructurada
+                // Usar modelo_actual directamente, y solo parsear del comentario si no existe
+                let modeloTexto = v.modelo_actual || '';
+                let lineaTexto = '';
+                let toolsTexto = '';
+                let convertidoresTexto = '';
+                let adaptadoresTexto = '';
+                
+                if (v.comentario) {
+                  try {
+                    const parts = v.comentario.split('|').map(p => p.trim());
+                    parts.forEach(part => {
+                      if (part.toLowerCase().startsWith('modelo:')) {
+                        // Solo sobrescribir si modelo_actual no existe
+                        if (!modeloTexto) {
+                          modeloTexto = part.split(':').slice(1).join(':').trim();
+                        }
+                      } else if (part.toLowerCase().startsWith('línea:') || part.toLowerCase().startsWith('linea:')) {
+                        lineaTexto = part.split(':').slice(1).join(':').trim();
+                      } else if (part.toLowerCase().startsWith('tools:') || part.toLowerCase().startsWith('emulador de panel:')) {
+                        toolsTexto = part.split(':').slice(1).join(':').trim();
+                      } else if (part.toLowerCase().startsWith('convertidores:')) {
+                        convertidoresTexto = part.split(':').slice(1).join(':').trim();
+                      } else if (part.toLowerCase().startsWith('adaptadores:')) {
+                        adaptadoresTexto = part.split(':').slice(1).join(':').trim();
+                      }
+                    });
+                  } catch (e) {
+                    // Si falla el parseo, usar comentario completo
+                  }
+                }
+
+                const statusInfo = (() => {
+                  const estado = String(v.estado || '').toLowerCase();
+                  if (estado === 'no_validado' || estado === 'no validado') {
+                    return { label: '⚠️ No validado', isCompleted: false, isNoValidado: true };
+                  }
+                  if (v.completada) {
+                    return { label: '✓ Completada', isCompleted: true, isNoValidado: false };
+                  }
+                  return { label: '⏳ Pendiente', isCompleted: false, isNoValidado: false };
+                })();
+
                 return (
-                  <View key={v.id} style={styles.itemContainer}>
-                    {/* Fila superior: fecha izquierda, estado derecha */}
-                    <View style={styles.itemTopRow}>
-                      <Text style={styles.itemDateMain}>{fechaTexto}</Text>
-                      <Chip
-                        mode="outlined"
-                        style={[
-                          styles.statusChip,
-                          v.completada && styles.statusChipCompleted,
-                        ]}
-                        textStyle={{
-                          color: v.completada ? '#4CAF50' : '#FFC107',
-                          fontWeight: 'bold',
-                        }}
-                      >
-                        {v.completada ? 'Completada' : 'Pendiente'}
-                      </Chip>
-                    </View>
+                  <Card key={v.id} style={styles.validationCard}>
+                    <Card.Content style={styles.validationCardContent}>
+                      {/* Header con Estado */}
+                      <View style={styles.validationHeader}>
+                        <View style={styles.validationHeaderLeft}>
+                          <Text style={styles.validationDate}>{fechaTexto}</Text>
+                          <Text style={styles.validationTurno}>Turno {v.turno || 'N/A'}</Text>
+                        </View>
+                        <Chip
+                          mode="outlined"
+                          style={[
+                            styles.statusChip,
+                            statusInfo.isCompleted && styles.statusChipCompleted,
+                            statusInfo.isNoValidado && styles.statusChipNoValidado,
+                          ]}
+                          textStyle={{
+                            color: statusInfo.isNoValidado
+                              ? '#EF5350'
+                              : (statusInfo.isCompleted ? '#4CAF50' : '#FFC107'),
+                            fontWeight: 'bold',
+                            fontSize: 12,
+                          }}
+                        >
+                          {statusInfo.label}
+                        </Chip>
+                      </View>
 
-                    <View style={styles.itemHeader}>
-                      <Text style={styles.itemTitle}>
-                        Modelo: {modeloTexto || 'Sin modelo'}
-                      </Text>
-                    </View>
+                      <Divider style={styles.validationDivider} />
 
-                    <Text style={styles.itemSubtext}>
-                      Técnico asignado: {tecnicoLabel}
-                    </Text>
-                    <Text style={styles.itemSubtext}>
-                      Turno: {v.turno}
-                    </Text>
-                    <Text style={styles.itemSubtext}>
-                      Detalle: {v.comentario || 'Sin detalles'}
-                    </Text>
-                  </View>
+                      {/* Información Principal */}
+                      <View style={styles.validationInfoSection}>
+                        <View style={styles.validationInfoRow}>
+                          <Text style={styles.validationLabel}>Modelo:</Text>
+                          <Text style={styles.validationValue}>{modeloTexto || 'N/A'}</Text>
+                        </View>
+                        {lineaTexto ? (
+                          <View style={styles.validationInfoRow}>
+                            <Text style={styles.validationLabel}>Línea:</Text>
+                            <Text style={styles.validationValue}>{lineaTexto}</Text>
+                          </View>
+                        ) : null}
+                        <View style={styles.validationInfoRow}>
+                          <Text style={styles.validationLabel}>Técnico Asignado:</Text>
+                          <Text style={styles.validationValue}>{tecnicoLabel}</Text>
+                        </View>
+                      </View>
+
+                      {/* Herramientas y Equipos */}
+                      {(toolsTexto || convertidoresTexto || adaptadoresTexto) && (
+                        <>
+                          <Divider style={styles.validationDivider} />
+                          <View style={styles.validationEquipmentSection}>
+                            {toolsTexto ? (
+                              <View style={styles.validationEquipmentItem}>
+                                <Text style={styles.validationEquipmentLabel}>🔧 Emulador de Panel:</Text>
+                                <Text style={styles.validationEquipmentValue}>{toolsTexto}</Text>
+                              </View>
+                            ) : null}
+                            {convertidoresTexto ? (
+                              <View style={styles.validationEquipmentItem}>
+                                <Text style={styles.validationEquipmentLabel}>⚡ Convertidores:</Text>
+                                <Text style={styles.validationEquipmentValue}>{convertidoresTexto}</Text>
+                              </View>
+                            ) : null}
+                            {adaptadoresTexto ? (
+                              <View style={styles.validationEquipmentItem}>
+                                <Text style={styles.validationEquipmentLabel}>🔌 Adaptadores:</Text>
+                                <Text style={styles.validationEquipmentValue}>{adaptadoresTexto}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        </>
+                      )}
+
+                      {/* Botón de Eliminar (solo para admin) */}
+                      {(user?.usuario === 'admin' || user?.usuario === 'superadmin') && (
+                        <>
+                          <Divider style={styles.validationDivider} />
+                          <View style={styles.deleteButtonContainer}>
+                            <Button
+                              mode="outlined"
+                              onPress={() => handleDeleteValidation(v.id)}
+                              icon="delete"
+                              buttonColor="#d32f2f"
+                              textColor="#fff"
+                              style={styles.deleteButton}
+                            >
+                              Eliminar
+                            </Button>
+                          </View>
+                        </>
+                      )}
+                    </Card.Content>
+                  </Card>
                 );
-              })}
-            </Card.Content>
-          </Card>
+            })}
+          </View>
         )}
       </ScrollView>
     </View>
@@ -582,9 +912,12 @@ const styles = StyleSheet.create({
     color: '#B0B0B0',
     textAlign: 'center',
   },
-  listCard: {
+  listContainer: {
     marginTop: 8,
-    borderRadius: 16,
+  },
+  summaryCard: {
+    marginBottom: 16,
+    borderRadius: 12,
     backgroundColor: '#1E1E1E',
     borderWidth: 1,
     borderColor: '#3C3C3C',
@@ -593,50 +926,105 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 8,
+    marginBottom: 0,
   },
   divider: {
     marginVertical: 8,
     backgroundColor: '#3C3C3C',
   },
-  itemContainer: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2C2C2C',
+  validationCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: '#1E1E1E',
+    borderWidth: 2,
+    borderColor: '#2C2C2C',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
-  itemTopRow: {
+  validationCardContent: {
+    padding: 16,
+  },
+  validationHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+    alignItems: 'flex-start',
+    marginBottom: 12,
   },
-  itemDateMain: {
+  validationHeaderLeft: {
+    flex: 1,
+  },
+  validationDate: {
     color: '#FFFFFF',
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
-    marginBottom: 6,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
     marginBottom: 4,
   },
-  itemTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  validationTurno: {
+    color: '#2196F3',
+    fontSize: 13,
     fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  validationDivider: {
+    backgroundColor: '#3C3C3C',
+    marginVertical: 12,
+    height: 1,
+  },
+  validationInfoSection: {
+    marginBottom: 8,
+  },
+  validationInfoRow: {
+    flexDirection: 'row',
+    marginBottom: 10,
+    alignItems: 'flex-start',
+  },
+  validationLabel: {
+    color: '#B0B0B0',
+    fontSize: 14,
+    fontWeight: '600',
+    width: 130,
+    marginRight: 8,
+  },
+  validationValue: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
+  },
+  validationEquipmentSection: {
+    marginTop: 4,
+  },
+  validationEquipmentItem: {
+    marginBottom: 12,
+    paddingLeft: 4,
+  },
+  validationEquipmentLabel: {
+    color: '#2196F3',
+    fontSize: 13,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  validationEquipmentValue: {
+    color: '#E0E0E0',
+    fontSize: 13,
+    fontWeight: '400',
+    lineHeight: 18,
   },
   statusChip: {
     borderColor: '#FFC107',
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(255, 193, 7, 0.1)',
+    borderWidth: 1.5,
   },
   statusChipCompleted: {
     borderColor: '#4CAF50',
+    backgroundColor: 'rgba(76, 175, 80, 0.1)',
   },
-  itemSubtext: {
-    color: '#B0B0B0',
-    fontSize: 14,
+  statusChipNoValidado: {
+    borderColor: '#EF5350',
+    backgroundColor: 'rgba(239, 83, 80, 0.1)',
   },
   errorText: {
     color: '#F44336',
@@ -706,6 +1094,10 @@ const styles = StyleSheet.create({
   statusFilterButtonTextActive: {
     color: '#FFFFFF',
   },
+  deleteUnassignedButton: {
+    marginTop: 12,
+    borderColor: '#F44336',
+  },
   datePickerModal: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -741,6 +1133,13 @@ const styles = StyleSheet.create({
   datePickerConfirmButton: {
     marginTop: 20,
     backgroundColor: '#2196F3',
+  },
+  deleteButtonContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+  },
+  deleteButton: {
+    borderColor: '#d32f2f',
   },
 });
 

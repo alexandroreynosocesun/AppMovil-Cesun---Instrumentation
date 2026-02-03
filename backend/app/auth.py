@@ -11,7 +11,7 @@ from .schemas import Token
 from .utils.logger import auth_logger
 
 # Configuración de seguridad
-from app.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES
+from app.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, REFRESH_TOKEN_EXPIRE_DAYS
 
 ALGORITHM = "HS256"
 
@@ -48,6 +48,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
+
+def create_refresh_token(data: dict):
+    """Crear refresh token (larga duración)"""
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    to_encode.update({"exp": expire, "type": "refresh"})
+    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+    return encoded_jwt
+
+def verify_refresh_token(token: str) -> Optional[str]:
+    """Verificar refresh token y retornar el nombre de usuario"""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("type") != "refresh":
+            auth_logger.warning("Token no es de tipo refresh")
+            return None
+        usuario: str = payload.get("sub")
+        return usuario
+    except JWTError as e:
+        auth_logger.warning(f"Error decodificando refresh token: {e}")
+        return None
 
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """Obtener usuario actual desde token"""

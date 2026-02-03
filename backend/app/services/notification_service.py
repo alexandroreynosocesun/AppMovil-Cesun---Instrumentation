@@ -1,5 +1,5 @@
 """
-Servicio de notificaciones para el sistema de validación de jigs
+Servicio de notificaciones para Hisense CheckApp
 """
 
 import smtplib
@@ -34,7 +34,7 @@ class NotificationService:
                 return True
                 
             # Crear el mensaje
-            subject = "✅ Solicitud de Registro Aprobada - Sistema de Validación de Jigs"
+            subject = "✅ Solicitud de Registro Aprobada - Hisense CheckApp"
             
             body = f"""
             <html>
@@ -43,7 +43,7 @@ class NotificationService:
                 
                 <p>Hola <strong>{nombre}</strong>,</p>
                 
-                <p>Tu solicitud de registro en el Sistema de Validación de Jigs ha sido <strong>aprobada</strong>.</p>
+                <p>Tu solicitud de registro en Hisense CheckApp ha sido <strong>aprobada</strong>.</p>
                 
                 <div style="background-color: #e8f5e8; padding: 15px; border-radius: 5px; margin: 15px 0;">
                     <h3>Información de tu cuenta:</h3>
@@ -60,7 +60,7 @@ class NotificationService:
                 
                 <hr>
                 <p style="color: #666; font-size: 12px;">
-                    Este es un mensaje automático del Sistema de Validación de Jigs.
+                    Este es un mensaje automático de Hisense CheckApp.
                 </p>
             </body>
             </html>
@@ -106,7 +106,7 @@ class NotificationService:
                 return True
                 
             # Crear el mensaje
-            subject = "❌ Solicitud de Registro Rechazada - Sistema de Validación de Jigs"
+            subject = "❌ Solicitud de Registro Rechazada - Hisense CheckApp"
             
             body = f"""
             <html>
@@ -115,7 +115,7 @@ class NotificationService:
                 
                 <p>Hola <strong>{nombre}</strong>,</p>
                 
-                <p>Tu solicitud de registro en el Sistema de Validación de Jigs ha sido <strong>rechazada</strong>.</p>
+                <p>Tu solicitud de registro en Hisense CheckApp ha sido <strong>rechazada</strong>.</p>
                 
                 <div style="background-color: #ffe8e8; padding: 15px; border-radius: 5px; margin: 15px 0;">
                     <h3>Motivo del rechazo:</h3>
@@ -126,7 +126,7 @@ class NotificationService:
                 
                 <hr>
                 <p style="color: #666; font-size: 12px;">
-                    Este es un mensaje automático del Sistema de Validación de Jigs.
+                    Este es un mensaje automático de Hisense CheckApp.
                 </p>
             </body>
             </html>

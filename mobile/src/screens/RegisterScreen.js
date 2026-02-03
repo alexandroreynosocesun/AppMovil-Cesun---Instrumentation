@@ -19,23 +19,30 @@ import {
   HelperText,
   ActivityIndicator,
   Surface,
-  Divider
+  Divider,
+  IconButton
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { authService } from '../services/AuthService';
+import { useLanguage } from '../contexts/LanguageContext';
 
 const { width, height } = Dimensions.get('window');
 
 export default function RegisterScreen({ navigation }) {
+  const { t } = useLanguage();
   const [formData, setFormData] = useState({
     usuario: '',
     nombre: '',
+    apellido: '',
     numero_empleado: '',
+    turno_actual: 'A',
     password: '',
     confirmPassword: '',
     tipo_usuario: 'validaciones' // validaciones, asignaciones, gestion
   });
   const [dropdownVisible, setDropdownVisible] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   // Mapeo de valores mostrados a valores del backend
   const tipoUsuarioMap = {
@@ -45,14 +52,14 @@ export default function RegisterScreen({ navigation }) {
   };
   
   const tipoUsuarioOptions = [
-    { value: 'asignaciones', label: 'Asignaciones' },
-    { value: 'validaciones', label: 'Validaciones' },
-    { value: 'gestion', label: 'Gestión' }
+    { value: 'asignaciones', label: t('userTypeAssignments') },
+    { value: 'validaciones', label: t('userTypeValidations') },
+    { value: 'gestion', label: t('userTypeManagement') }
   ];
   
   const getSelectedLabel = () => {
     const option = tipoUsuarioOptions.find(opt => opt.value === formData.tipo_usuario);
-    return option ? option.label : 'Selecciona un tipo';
+    return option ? option.label : t('selectUserType');
   };
   const [loading, setLoading] = useState(false);
   
@@ -75,6 +82,23 @@ export default function RegisterScreen({ navigation }) {
     ]).start();
   }, []);
 
+  useEffect(() => {
+    const first = formData.nombre.trim();
+    const last = formData.apellido.trim();
+    if (!first || !last) {
+      setFormData(prev => ({ ...prev, usuario: '' }));
+      return;
+    }
+    const normalize = (value) =>
+      value
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/\s+/g, '');
+    const username = `${normalize(first)}.${normalize(last)}`;
+    setFormData(prev => ({ ...prev, usuario: username }));
+  }, [formData.nombre, formData.apellido]);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
@@ -83,24 +107,28 @@ export default function RegisterScreen({ navigation }) {
   };
 
   const validateForm = () => {
-    if (!formData.usuario.trim()) {
-      Alert.alert('Error', 'El usuario es requerido');
+    if (!formData.nombre.trim()) {
+      Alert.alert(t('error'), t('firstNameRequired'));
       return false;
     }
-    if (!formData.nombre.trim()) {
-      Alert.alert('Error', 'El nombre es requerido');
+    if (!formData.apellido.trim()) {
+      Alert.alert(t('error'), t('lastNameRequired'));
       return false;
     }
     if (!formData.numero_empleado.trim()) {
-      Alert.alert('Error', 'El número de empleado es requerido');
+      Alert.alert(t('error'), t('employeeNumberRequired'));
+      return false;
+    }
+    if (!formData.turno_actual) {
+      Alert.alert(t('error'), t('shiftRequired'));
       return false;
     }
     if (formData.password.length < 6) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      Alert.alert(t('error'), t('passwordMinLength'));
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas no coinciden');
+      Alert.alert(t('error'), t('passwordsDontMatch'));
       return false;
     }
     return true;
@@ -114,34 +142,31 @@ export default function RegisterScreen({ navigation }) {
       
       const registerData = {
         usuario: formData.usuario.trim(),
-        nombre: formData.nombre.trim(),
+        nombre: `${formData.nombre.trim()} ${formData.apellido.trim()}`,
         numero_empleado: formData.numero_empleado.trim(),
         password: formData.password,
         tipo_usuario: tipoUsuarioMap[formData.tipo_usuario] || 'tecnico', // Mapear al valor del backend
+        turno_actual: formData.turno_actual
       };
 
       const result = await authService.register(registerData);
       
       if (result.success) {
         Alert.alert(
-          'Solicitud Enviada',
-          'Tu solicitud de registro ha sido enviada al administrador. Recibirás una notificación cuando sea aprobada.',
+          t('requestSent'),
+          t('requestSentMessage'),
           [
             {
-              text: 'Ver Estado',
-              onPress: () => navigation.navigate('SolicitudStatus', { usuario: formData.usuario })
-            },
-            {
-              text: 'Ir a Login',
+              text: t('ok'),
               onPress: () => navigation.navigate('Login')
             }
           ]
         );
       } else {
-        Alert.alert('Error', result.error);
+        Alert.alert(t('error'), result.error);
       }
     } catch (error) {
-      Alert.alert('Error', 'Error enviando solicitud de registro');
+      Alert.alert(t('error'), t('requestError'));
     } finally {
       setLoading(false);
     }
@@ -180,9 +205,9 @@ export default function RegisterScreen({ navigation }) {
           />
           <View style={styles.headerContent}>
             <Text style={styles.headerIcon}>👤</Text>
-            <Title style={styles.headerTitle}>Registro de Usuario</Title>
+            <Title style={styles.headerTitle}>{t('registerTitle')}</Title>
             <Paragraph style={styles.headerSubtitle}>
-            Completa tus datos para solicitar acceso al sistema
+            {t('registerSubtitle')}
           </Paragraph>
             <View style={styles.headerLine} />
           </View>
@@ -202,122 +227,187 @@ export default function RegisterScreen({ navigation }) {
             <Card.Content style={styles.cardContent}>
           
           <TextInput
-            label="Usuario *"
-            value={formData.usuario}
-            onChangeText={(text) => handleInputChange('usuario', text)}
-                style={[styles.input, { color: '#F5F5F5' }]}
-            mode="outlined"
-            autoCapitalize="none"
-            placeholder="Ej: juan.perez"
-                theme={{
-                  colors: {
-                    primary: '#4A4A4A',
-                    background: 'transparent',
-                    surface: '#0F0F0F',
-                    text: '#F5F5F5',
-                    placeholder: '#666666',
-                    onSurface: '#F5F5F5',
-                  }
-                }}
-                outlineColor="#333333"
-                activeOutlineColor="#4A4A4A"
-                textColor="#F5F5F5"
-          />
-          
-          <TextInput
-            label="Nombre Completo *"
+            label={`${t('firstName')} *`}
             value={formData.nombre}
             onChangeText={(text) => handleInputChange('nombre', text)}
-                style={[styles.input, { color: '#F5F5F5' }]}
+            style={[styles.input, { color: '#F5F5F5' }]}
             mode="outlined"
-            placeholder="Ej: Juan Pérez García"
-                theme={{
-                  colors: {
-                    primary: '#4A4A4A',
-                    background: 'transparent',
-                    surface: '#0F0F0F',
-                    text: '#F5F5F5',
-                    placeholder: '#666666',
-                    onSurface: '#F5F5F5',
-                  }
-                }}
-                outlineColor="#333333"
-                activeOutlineColor="#4A4A4A"
-                textColor="#F5F5F5"
+            placeholder="Ej: Juan"
+            theme={{
+              colors: {
+                primary: '#6A9BD8',
+                background: 'transparent',
+                surface: '#0F0F0F',
+                text: '#F5F5F5',
+                placeholder: '#666666',
+                onSurface: '#FFFFFF',
+              }
+            }}
+            outlineColor="#333333"
+            activeOutlineColor="#6A9BD8"
+            textColor="#F5F5F5"
+            labelStyle={styles.labelText}
+          />
+
+          <TextInput
+            label={`${t('lastName')} *`}
+            value={formData.apellido}
+            onChangeText={(text) => handleInputChange('apellido', text)}
+            style={[styles.input, { color: '#F5F5F5' }]}
+            mode="outlined"
+            placeholder="Ej: Pérez"
+            theme={{
+              colors: {
+                primary: '#6A9BD8',
+                background: 'transparent',
+                surface: '#0F0F0F',
+                text: '#F5F5F5',
+                placeholder: '#666666',
+                onSurface: '#FFFFFF',
+              }
+            }}
+            outlineColor="#333333"
+            activeOutlineColor="#6A9BD8"
+            textColor="#F5F5F5"
+            labelStyle={styles.labelText}
+          />
+
+          <TextInput
+            label={`${t('username')} *`}
+            value={formData.usuario}
+            editable={false}
+            disabled
+            style={[styles.input, { color: '#F5F5F5' }]}
+            mode="outlined"
+            placeholder="Ej: juan.perez"
+            theme={{
+              colors: {
+                primary: '#6A9BD8',
+                background: 'transparent',
+                surface: '#0F0F0F',
+                text: '#F5F5F5',
+                placeholder: '#666666',
+                onSurface: '#FFFFFF',
+              }
+            }}
+            outlineColor="#333333"
+            activeOutlineColor="#6A9BD8"
+            textColor="#F5F5F5"
+            labelStyle={styles.labelText}
           />
           
           <TextInput
-            label="Número de Empleado *"
+            label={`${t('employeeNumber')} *`}
             value={formData.numero_empleado}
             onChangeText={(text) => handleInputChange('numero_empleado', text)}
-                style={[styles.input, { color: '#F5F5F5' }]}
+            style={[styles.input, { color: '#F5F5F5' }]}
             mode="outlined"
             keyboardType="numeric"
             placeholder="Ej: 12345"
-                theme={{
-                  colors: {
-                    primary: '#4A4A4A',
-                    background: 'transparent',
-                    surface: '#0F0F0F',
-                    text: '#F5F5F5',
-                    placeholder: '#666666',
-                    onSurface: '#F5F5F5',
-                  }
-                }}
-                outlineColor="#333333"
-                activeOutlineColor="#4A4A4A"
-                textColor="#F5F5F5"
+            theme={{
+              colors: {
+                primary: '#6A9BD8',
+                background: 'transparent',
+                surface: '#0F0F0F',
+                text: '#F5F5F5',
+                placeholder: '#666666',
+                onSurface: '#FFFFFF',
+              }
+            }}
+            outlineColor="#333333"
+            activeOutlineColor="#6A9BD8"
+            textColor="#F5F5F5"
+            labelStyle={styles.labelText}
           />
+
+          <Text style={styles.sectionLabel}>{t('shift')} *</Text>
+          <View style={styles.turnoRow}>
+            {['A', 'B', 'C'].map(turno => (
+              <TouchableOpacity
+                key={turno}
+                style={[
+                  styles.turnoButton,
+                  formData.turno_actual === turno && styles.turnoButtonActive
+                ]}
+                onPress={() => handleInputChange('turno_actual', turno)}
+              >
+                <Text
+                  style={[
+                    styles.turnoButtonText,
+                    formData.turno_actual === turno && styles.turnoButtonTextActive
+                  ]}
+                >
+                  {turno}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           
           <TextInput
-            label="Contraseña *"
+            label={`${t('password')} *`}
             value={formData.password}
             onChangeText={(text) => handleInputChange('password', text)}
-                style={[styles.input, { color: '#F5F5F5' }]}
+            style={[styles.input, { color: '#F5F5F5' }]}
             mode="outlined"
-            secureTextEntry
+            secureTextEntry={!showPassword}
             placeholder="Mínimo 6 caracteres"
-                theme={{
-                  colors: {
-                    primary: '#4A4A4A',
-                    background: 'transparent',
-                    surface: '#0F0F0F',
-                    text: '#F5F5F5',
-                    placeholder: '#666666',
-                    onSurface: '#F5F5F5',
-                  }
-                }}
-                outlineColor="#333333"
-                activeOutlineColor="#4A4A4A"
-                textColor="#F5F5F5"
+            right={
+              <TextInput.Icon
+                icon={showPassword ? 'eye-off' : 'eye'}
+                onPress={() => setShowPassword(!showPassword)}
+                iconColor="#9E9E9E"
+              />
+            }
+            theme={{
+              colors: {
+                primary: '#6A9BD8',
+                background: 'transparent',
+                surface: '#0F0F0F',
+                text: '#F5F5F5',
+                placeholder: '#666666',
+                onSurface: '#FFFFFF',
+              }
+            }}
+            outlineColor="#333333"
+            activeOutlineColor="#6A9BD8"
+            textColor="#F5F5F5"
+            labelStyle={styles.labelText}
           />
           
           <TextInput
-            label="Confirmar Contraseña *"
+            label={`${t('confirmPassword')} *`}
             value={formData.confirmPassword}
             onChangeText={(text) => handleInputChange('confirmPassword', text)}
-                style={[styles.input, { color: '#F5F5F5' }]}
+            style={[styles.input, { color: '#F5F5F5' }]}
             mode="outlined"
-            secureTextEntry
-            placeholder="Repite tu contraseña"
-                theme={{
-                  colors: {
-                    primary: '#4A4A4A',
-                    background: 'transparent',
-                    surface: '#0F0F0F',
-                    text: '#F5F5F5',
-                    placeholder: '#666666',
-                    onSurface: '#F5F5F5',
-                  }
-                }}
-                outlineColor="#333333"
-                activeOutlineColor="#4A4A4A"
-                textColor="#F5F5F5"
+            secureTextEntry={!showConfirmPassword}
+            placeholder={t('confirmPasswordPlaceholder')}
+            right={
+              <TextInput.Icon
+                icon={showConfirmPassword ? 'eye-off' : 'eye'}
+                onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                iconColor="#9E9E9E"
+              />
+            }
+            theme={{
+              colors: {
+                primary: '#6A9BD8',
+                background: 'transparent',
+                surface: '#0F0F0F',
+                text: '#F5F5F5',
+                placeholder: '#666666',
+                onSurface: '#FFFFFF',
+              }
+            }}
+            outlineColor="#333333"
+            activeOutlineColor="#6A9BD8"
+            textColor="#F5F5F5"
+            labelStyle={styles.labelText}
           />
 
           {/* Selector de Tipo de Usuario */}
           <View style={styles.dropdownContainer}>
-            <Text style={styles.dropdownLabel}>Tipo de Usuario *</Text>
+            <Text style={styles.dropdownLabel}>{t('userType')} *</Text>
             <TouchableOpacity
               style={styles.dropdownButton}
               onPress={() => setDropdownVisible(true)}
@@ -346,7 +436,7 @@ export default function RegisterScreen({ navigation }) {
             >
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Selecciona Tipo de Usuario</Text>
+                  <Text style={styles.modalTitle}>{t('selectUserTypeTitle')}</Text>
                   <TouchableOpacity
                     onPress={() => setDropdownVisible(false)}
                     style={styles.modalCloseButton}
@@ -414,7 +504,7 @@ export default function RegisterScreen({ navigation }) {
                     <ActivityIndicator color="#E0E0E0" size="small" />
                   ) : (
                     <Text style={styles.submitButtonText}>
-                      Enviar Solicitud de Registro
+                      {t('submitRegistration')}
                     </Text>
                   )}
                 </LinearGradient>
@@ -425,7 +515,7 @@ export default function RegisterScreen({ navigation }) {
             onPress={() => navigation.navigate('Login')}
           >
                 <Text style={styles.cancelButtonText}>
-            Ya tengo cuenta
+            {t('alreadyHaveAccount')}
                 </Text>
               </TouchableOpacity>
         </Card.Content>
@@ -525,6 +615,38 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderWidth: 1,
     borderColor: '#333333',
+  },
+  sectionLabel: {
+    color: '#B0B0B0',
+    fontSize: 14,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
+  turnoRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 16,
+  },
+  turnoButton: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3C3C3C',
+    backgroundColor: '#1E1E1E',
+    alignItems: 'center',
+  },
+  turnoButtonActive: {
+    backgroundColor: '#4CAF50',
+    borderColor: '#4CAF50',
+  },
+  turnoButtonText: {
+    color: '#B0B0B0',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  turnoButtonTextActive: {
+    color: '#FFFFFF',
   },
   sectionTitle: {
     fontSize: 20,
@@ -680,5 +802,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#2196F3',
     fontWeight: 'bold',
+  },
+  labelText: {
+    color: '#E0E0E0',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

@@ -11,14 +11,18 @@ import {
   Modal,
   ScrollView,
   Linking,
+  Platform,
 } from 'react-native';
-import { Card, Title, Paragraph, Chip, Button, IconButton } from 'react-native-paper';
+import { Card, Title, Paragraph, Chip, Button, IconButton, TextInput, FAB } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import auditoriaService from '../services/AuditoriaService';
 import { useAuth } from '../contexts/AuthContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import logger from '../utils/logger';
+import { API_BASE_URL } from '../utils/apiClient';
+
+const isWeb = Platform.OS === 'web';
 
 export default function AuditoriaScreen({ navigation }) {
   const { user } = useAuth();
@@ -28,6 +32,9 @@ export default function AuditoriaScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState(null);
   const [downloadedPDFs, setDownloadedPDFs] = useState(new Set()); // Track downloaded PDFs
+  const [aniosDisponibles, setAniosDisponibles] = useState(null); // Años disponibles desde el backend (null = no cargado, [] = sin PDFs)
+  const [lineasDisponibles, setLineasDisponibles] = useState([]); // Líneas disponibles desde el backend
+  const [tecnicos, setTecnicos] = useState([]); // Técnicos con reportes
   
   // Verificar si el usuario es adminAlex
   const isAdminAlex = user?.usuario === 'adminAlex';
@@ -36,15 +43,17 @@ export default function AuditoriaScreen({ navigation }) {
   const [filtroDia, setFiltroDia] = useState(null);
   const [filtroMes, setFiltroMes] = useState(null);
   const [filtroAnio, setFiltroAnio] = useState(null);
-  const [filtroTurno, setFiltroTurno] = useState(null);
   const [filtroLinea, setFiltroLinea] = useState(null);
+  const [filtroTurno, setFiltroTurno] = useState(null);
+  const [filtroTecnico, setFiltroTecnico] = useState(null);
   
   // Modales para seleccionar filtros
   const [showDiaModal, setShowDiaModal] = useState(false);
   const [showMesModal, setShowMesModal] = useState(false);
   const [showAnioModal, setShowAnioModal] = useState(false);
-  const [showTurnoModal, setShowTurnoModal] = useState(false);
   const [showLineaModal, setShowLineaModal] = useState(false);
+  const [showTurnoModal, setShowTurnoModal] = useState(false);
+  const [showTecnicoModal, setShowTecnicoModal] = useState(false);
 
   // Cargar PDFs de auditoría
   const loadPDFs = useCallback(async () => {
@@ -54,16 +63,21 @@ export default function AuditoriaScreen({ navigation }) {
       if (filtroDia) filters.dia = filtroDia;
       if (filtroMes) filters.mes = filtroMes;
       if (filtroAnio) filters.anio = filtroAnio;
-      if (filtroTurno) filters.turno = filtroTurno;
       if (filtroLinea) filters.linea = filtroLinea;
+      if (filtroTurno) filters.turno = filtroTurno;
+      if (filtroTecnico) {
+        filters.tecnico_id = filtroTecnico.id;
+      }
 
-      const result = await auditoriaService.getAuditoriaPDFs(filters);
+      // Cargar todos los PDFs (todas las páginas automáticamente)
+      const result = await auditoriaService.getAuditoriaPDFs(filters, true);
       
       if (result.success) {
-        // Manejar respuesta paginada o array directo
-        const pdfsData = Array.isArray(result.data) ? result.data : (result.data?.items || []);
+        // El servicio ya maneja la paginación y devuelve todos los PDFs
+        const pdfsData = Array.isArray(result.data) ? result.data : [];
         setPdfs(pdfsData);
         setFilteredPdfs(pdfsData);
+        logger.info(`✅ ${pdfsData.length} PDFs cargados con los filtros aplicados`);
       } else {
         if (result.error === 'UNAUTHORIZED') {
           Alert.alert(
@@ -109,32 +123,114 @@ export default function AuditoriaScreen({ navigation }) {
     } finally {
       setLoading(false);
     }
-  }, [filtroDia, filtroMes, filtroAnio, filtroTurno, filtroLinea, navigation]);
+  }, [filtroDia, filtroMes, filtroAnio, filtroLinea, filtroTurno, filtroTecnico, navigation]);
 
   // Cargar estadísticas
   const loadStats = useCallback(async () => {
     try {
-      const result = await auditoriaService.getStats();
-      if (result.success) {
+      // Timeout de seguridad para evitar que se quede cargando
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT')), 35000);
+      });
+      
+      const result = await Promise.race([
+        auditoriaService.getStats(),
+        timeoutPromise
+      ]);
+      
+      if (result && result.success) {
         setStats(result.data);
-      } else {
-        if (result.error === 'UNAUTHORIZED') {
-          logger.warn('⚠️ Sesión expirada al cargar estadísticas');
-          // No mostrar alerta aquí para no interrumpir la experiencia del usuario
-          // El error ya se manejará en loadPDFs si es necesario
+        // Obtener años disponibles desde el backend
+        if (result.data.anios_disponibles && Array.isArray(result.data.anios_disponibles)) {
+          setAniosDisponibles(result.data.anios_disponibles);
+          logger.info('📅 Años disponibles cargados:', result.data.anios_disponibles);
         } else {
-          logger.warn('⚠️ Error cargando estadísticas:', result.message);
+          // Fallback: generar años si no vienen del backend
+          const anioActual = new Date().getFullYear();
+          const aniosFallback = Array.from({ length: 10 }, (_, i) => anioActual + i)
+            .filter(anio => anio >= anioActual)
+            .sort((a, b) => b - a);
+          setAniosDisponibles(aniosFallback);
+          logger.warn('⚠️ No se obtuvieron años del backend, usando fallback');
         }
+        // Obtener líneas disponibles desde el backend
+        if (result.data.lineas_disponibles && Array.isArray(result.data.lineas_disponibles)) {
+          setLineasDisponibles(result.data.lineas_disponibles);
+          logger.info('📋 Líneas disponibles cargadas:', result.data.lineas_disponibles);
+        } else {
+          setLineasDisponibles([]);
+          logger.warn('⚠️ No se obtuvieron líneas del backend');
+        }
+      } else {
+        if (result?.error === 'UNAUTHORIZED') {
+          logger.warn('⚠️ Sesión expirada al cargar estadísticas');
+        } else {
+          logger.warn('⚠️ Error cargando estadísticas:', result?.message);
+        }
+        // Fallback: generar años si hay error
+        const anioActual = new Date().getFullYear();
+        const aniosFallback = Array.from({ length: 10 }, (_, i) => anioActual + i)
+          .filter(anio => anio >= anioActual)
+          .sort((a, b) => b - a);
+        setAniosDisponibles(aniosFallback);
       }
     } catch (error) {
       logger.error('Error cargando estadísticas:', error);
+      // Fallback: generar años si hay error
+      const anioActual = new Date().getFullYear();
+      const aniosFallback = Array.from({ length: 10 }, (_, i) => anioActual + i)
+        .filter(anio => anio >= anioActual)
+        .sort((a, b) => b - a);
+      setAniosDisponibles(aniosFallback);
       // No mostrar alerta para estadísticas, es información secundaria
+    }
+  }, []);
+
+  // Cargar técnicos con reportes
+  const loadTecnicos = useCallback(async () => {
+    try {
+      logger.info('👥 Cargando técnicos...');
+      
+      // Timeout de seguridad para evitar que se quede cargando
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT')), 35000);
+      });
+      
+      const result = await Promise.race([
+        auditoriaService.getTecnicosConReportes(),
+        timeoutPromise
+      ]);
+      
+      if (result && result.success) {
+        const tecnicosData = result.data.tecnicos || [];
+        setTecnicos(tecnicosData);
+        logger.info('👥 Técnicos cargados:', tecnicosData.length, 'técnicos');
+        logger.info('👥 Lista de técnicos:', tecnicosData.map(t => t.nombre));
+      } else {
+        logger.warn('⚠️ Error cargando técnicos:', result?.message);
+        setTecnicos([]);
+      }
+    } catch (error) {
+      logger.error('❌ Error cargando técnicos:', error);
+      setTecnicos([]);
     }
   }, []);
 
   // Verificar PDFs descargados al cargar
   const checkDownloadedPDFs = useCallback(async () => {
+    // FileSystem no está disponible en web
+    if (Platform.OS === 'web' || isWeb) {
+      logger.info('ℹ️ [AuditoriaScreen] FileSystem no disponible en web, omitiendo verificación de PDFs descargados');
+      return;
+    }
+    
     try {
+      // Verificar que FileSystem esté disponible
+      if (!FileSystem || !FileSystem.documentDirectory) {
+        logger.warn('⚠️ [AuditoriaScreen] FileSystem no disponible');
+        return;
+      }
+      
       const auditoriaDir = FileSystem.documentDirectory + 'auditoria/';
       const dirInfo = await FileSystem.getInfoAsync(auditoriaDir);
       if (dirInfo.exists) {
@@ -149,19 +245,26 @@ export default function AuditoriaScreen({ navigation }) {
         setDownloadedPDFs(downloadedIds);
       }
     } catch (error) {
-      logger.error('Error verificando PDFs descargados:', error);
+      // Solo loguear errores que no sean por falta de FileSystem en web
+      if (error.message && !error.message.includes('not available on web')) {
+        logger.error('Error verificando PDFs descargados:', error);
+      } else {
+        logger.debug('FileSystem no disponible en web (esperado)');
+      }
     }
   }, [pdfs]);
 
   // Verificar si hay filtros activos
-  const hasActiveFilters = filtroDia || filtroMes || filtroAnio || filtroTurno || filtroLinea;
+  // Nota: El año solo no cuenta como filtro activo (requiere otro filtro para evitar cargar demasiados PDFs)
+  const hasActiveFilters = filtroDia || filtroMes || filtroLinea || filtroTurno || filtroTecnico || (filtroAnio && (filtroDia || filtroMes || filtroLinea || filtroTurno || filtroTecnico));
 
   // Cargar datos solo cuando hay filtros activos
   useFocusEffect(
     useCallback(() => {
-      // Solo cargar estadísticas, no PDFs
+      // Cargar estadísticas y técnicos
       loadStats();
-    }, [loadStats])
+      loadTecnicos();
+    }, [loadStats, loadTecnicos])
   );
 
   // Cargar PDFs cuando cambian los filtros
@@ -169,12 +272,12 @@ export default function AuditoriaScreen({ navigation }) {
     if (hasActiveFilters) {
       loadPDFs();
     } else {
-      // Limpiar PDFs cuando no hay filtros
+      // Limpiar PDFs cuando no hay filtros activos
       setPdfs([]);
       setFilteredPdfs([]);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtroDia, filtroMes, filtroAnio, filtroTurno, filtroLinea]);
+  }, [filtroDia, filtroMes, filtroAnio, filtroLinea, filtroTurno, filtroTecnico]);
 
   // Verificar PDFs descargados cuando cambian los PDFs
   useEffect(() => {
@@ -213,16 +316,18 @@ export default function AuditoriaScreen({ navigation }) {
                   return newSet;
                 });
                 
-                // Intentar eliminar el archivo local si existe
-                try {
-                  const auditoriaDir = FileSystem.documentDirectory + 'auditoria/';
-                  const fileUri = auditoriaDir + pdf.nombre_archivo;
-                  const fileInfo = await FileSystem.getInfoAsync(fileUri);
-                  if (fileInfo.exists) {
-                    await FileSystem.deleteAsync(fileUri);
+                // Intentar eliminar el archivo local si existe (solo en móvil)
+                if (!isWeb) {
+                  try {
+                    const auditoriaDir = FileSystem.documentDirectory + 'auditoria/';
+                    const fileUri = auditoriaDir + pdf.nombre_archivo;
+                    const fileInfo = await FileSystem.getInfoAsync(fileUri);
+                    if (fileInfo.exists) {
+                      await FileSystem.deleteAsync(fileUri);
+                    }
+                  } catch (fsError) {
+                    logger.error('Error eliminando archivo local:', fsError);
                   }
-                } catch (fsError) {
-                  logger.error('Error eliminando archivo local:', fsError);
                 }
                 
                 Alert.alert('Éxito', 'PDF eliminado correctamente');
@@ -239,9 +344,244 @@ export default function AuditoriaScreen({ navigation }) {
     );
   };
 
-  // Ver PDF descargado
-  const handleViewPDF = async (fileUri) => {
+  // Eliminar todos los PDFs (solo admin)
+  const handleDeleteAllPDFs = useCallback(async () => {
     try {
+      const isAdmin = user?.tipo_usuario === 'admin' || user?.usuario === 'admin' || user?.usuario === 'adminAlex' || user?.usuario === 'superadmin';
+      
+      if (!isAdmin) {
+        Alert.alert('Acceso Denegado', 'Solo administradores pueden eliminar todos los PDFs');
+        return;
+      }
+
+      // Usar stats?.total_pdfs en lugar de pdfs.length para obtener el total real del backend
+      const totalPDFs = stats?.total_pdfs ?? 0;
+
+      // Si no hay PDFs, no permitir borrar
+      if (totalPDFs === 0) {
+        Alert.alert(
+          'Sin PDFs',
+          'No hay PDFs de auditoría para eliminar.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      Alert.alert(
+        'ELIMINAR TODOS LOS PDFs',
+        `¿Estás seguro de que quieres eliminar TODOS los PDFs de auditoría?\n\nEsta acción NO se puede deshacer.\n\nTotal de PDFs: ${totalPDFs}`,
+        [
+          {
+            text: 'Cancelar',
+            style: 'cancel'
+          },
+          {
+            text: 'ELIMINAR TODOS',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                setLoading(true);
+                logger.info('Eliminando TODOS los PDFs de auditoría...');
+                
+                // Timeout de seguridad para evitar que se quede cargando indefinidamente
+                const timeoutPromise = new Promise((_, reject) => {
+                  setTimeout(() => {
+                    reject(new Error('TIMEOUT'));
+                  }, 125000); // 2 minutos + 5 segundos de margen
+                });
+                
+                const result = await Promise.race([
+                  auditoriaService.deleteAllPDFs(),
+                  timeoutPromise
+                ]);
+                
+                if (result && result.success) {
+                  logger.info('Todos los PDFs eliminados');
+                  
+                  const deletedCount = result.data?.deleted_count || 0;
+                  
+                  // Limpiar la lista inmediatamente
+                  setPdfs([]);
+                  setFilteredPdfs([]);
+                  setDownloadedPDFs(new Set());
+                  
+                  // Limpiar todos los filtros para evitar mostrar datos antiguos
+                  setFiltroDia(null);
+                  setFiltroMes(null);
+                  setFiltroAnio(null);
+                  setFiltroLinea(null);
+                  setFiltroTurno(null);
+                  setFiltroTecnico(null);
+                  
+                  // Recargar estadísticas y técnicos de forma segura (sin await para no bloquear)
+                  if (loadStats && typeof loadStats === 'function') {
+                    loadStats().catch(err => {
+                      logger.error('Error en loadStats:', err);
+                    });
+                  }
+                  if (loadTecnicos && typeof loadTecnicos === 'function') {
+                    loadTecnicos().catch(err => {
+                      logger.error('Error en loadTecnicos:', err);
+                    });
+                  }
+                  
+                  // Mostrar alerta solo si se eliminaron PDFs
+                  if (deletedCount > 0) {
+                    Alert.alert(
+                      'Éxito',
+                      `Se eliminaron ${deletedCount} PDFs correctamente.\n\nNota: Los nuevos reportes generados después de esta eliminación aparecerán normalmente.`,
+                      [{ text: 'OK' }]
+                    );
+                  } else {
+                    Alert.alert(
+                      'Sin cambios',
+                      'No había PDFs para eliminar.',
+                      [{ text: 'OK' }]
+                    );
+                  }
+                } else {
+                  const errorMsg = result?.message || result?.error || 'Error al eliminar todos los PDFs';
+                  
+                  // Si es timeout, mostrar mensaje especial
+                  if (result?.error === 'TIMEOUT') {
+                    Alert.alert(
+                      'Operación en progreso',
+                      'La eliminación está tomando más tiempo del esperado. Los PDFs pueden estar eliminándose en segundo plano. Por favor, espera unos momentos y recarga la pantalla.',
+                      [
+                        {
+                          text: 'Recargar ahora',
+                          onPress: () => {
+                            setPdfs([]);
+                            setFilteredPdfs([]);
+                            setDownloadedPDFs(new Set());
+                            if (loadStats) {
+                              loadStats();
+                            }
+                          }
+                        },
+                        { text: 'OK' }
+                      ]
+                    );
+                  } else {
+                    Alert.alert('Error', errorMsg);
+                  }
+                }
+              } catch (error) {
+                logger.error('Error eliminando todos los PDFs:', error);
+                
+                // Si es timeout, limpiar estado y mostrar mensaje
+                if (error?.message === 'TIMEOUT' || error?.code === 'ECONNABORTED') {
+                  Alert.alert(
+                    'Tiempo de espera agotado',
+                    'La operación está tomando más tiempo del esperado. Los PDFs pueden estar eliminándose en segundo plano. Por favor, espera unos momentos y recarga la pantalla.',
+                    [
+                      {
+                        text: 'Recargar ahora',
+                        onPress: () => {
+                          setPdfs([]);
+                          setFilteredPdfs([]);
+                          setDownloadedPDFs(new Set());
+                          if (loadStats) {
+                            loadStats();
+                          }
+                        }
+                      },
+                      { text: 'OK' }
+                    ]
+                  );
+                } else {
+                  const errorMessage = error?.message || 'Error inesperado al eliminar todos los PDFs';
+                  Alert.alert('Error', errorMessage);
+                }
+              } finally {
+                setLoading(false);
+              }
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      logger.error('Error en handleDeleteAllPDFs:', error);
+      Alert.alert('Error', 'Error inesperado al intentar eliminar PDFs');
+    }
+  }, [user, stats, loadStats, loadTecnicos]);
+
+  // Ver PDF descargado
+  const handleViewPDF = async (fileUri, pdfId = null) => {
+    try {
+      // En web, descargar el PDF autenticado y abrirlo en una nueva pestaña
+      if (Platform.OS === 'web' || isWeb) {
+        if (pdfId) {
+          try {
+            // Descargar el PDF usando el servicio (que incluye autenticación)
+            const result = await auditoriaService.downloadPDF(pdfId);
+            if (result.success) {
+              // Crear blob URL y abrirlo en nueva pestaña
+              const blob = result.data;
+              const url = window.URL.createObjectURL(blob);
+              
+              // Intentar abrir en nueva pestaña
+              const newWindow = window.open(url, '_blank');
+              
+              // Si window.open fue bloqueado, mostrar el PDF en un iframe o descargarlo
+              if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+                // Fallback: crear un link y hacer click programáticamente
+                const link = document.createElement('a');
+                link.href = url;
+                link.target = '_blank';
+                link.rel = 'noopener noreferrer';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                
+                // Limpiar el URL después de un tiempo
+                setTimeout(() => {
+                  try {
+                    window.URL.revokeObjectURL(url);
+                  } catch (e) {
+                    // Ignorar errores al revocar URL
+                  }
+                }, 100);
+              } else {
+                // Limpiar el URL cuando se cierre la ventana o después de un tiempo
+                const cleanup = () => {
+                  try {
+                    window.URL.revokeObjectURL(url);
+                  } catch (e) {
+                    // Ignorar errores al revocar URL
+                  }
+                };
+                
+                // Intentar detectar cuando se cierra la ventana
+                const checkClosed = setInterval(() => {
+                  if (newWindow.closed) {
+                    clearInterval(checkClosed);
+                    cleanup();
+                  }
+                }, 1000);
+                
+                // Limpiar después de 5 minutos como respaldo
+                setTimeout(() => {
+                  clearInterval(checkClosed);
+                  cleanup();
+                }, 300000);
+              }
+              
+              logger.info('✅ PDF abierto en nueva pestaña');
+            } else {
+              Alert.alert('Error', result.message || 'Error al obtener el PDF');
+            }
+          } catch (error) {
+            logger.error('Error obteniendo PDF para ver:', error);
+            Alert.alert('Error', 'Error al obtener el PDF');
+          }
+        } else {
+          Alert.alert('Error', 'No se pudo obtener el ID del PDF');
+        }
+        return;
+      }
+
+      // En móvil, usar Sharing o Linking
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(fileUri, {
           mimeType: 'application/pdf',
@@ -265,6 +605,44 @@ export default function AuditoriaScreen({ navigation }) {
   // Descargar PDF
   const handleDownloadPDF = async (pdf) => {
     try {
+      // En web, usar confirm y descargar directamente el blob
+      if (Platform.OS === 'web' || isWeb) {
+        if (window.confirm(`¿Deseas descargar el PDF: ${pdf.nombre_archivo}?`)) {
+          try {
+            const result = await auditoriaService.downloadPDF(pdf.id);
+            if (result.success) {
+              // Descargar directamente usando blob
+              const blob = result.data;
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = pdf.nombre_archivo;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+              
+              // Marcar como descargado en web
+              setDownloadedPDFs(prev => new Set([...prev, pdf.id]));
+              
+              // Mostrar opción de ver PDF
+              if (window.confirm('PDF descargado exitosamente. ¿Deseas ver el PDF en una nueva pestaña?')) {
+                handleViewPDF(null, pdf.id);
+              }
+              
+              logger.info('✅ PDF descargado exitosamente en web:', pdf.nombre_archivo);
+            } else {
+              Alert.alert('Error', result.message || 'Error al descargar PDF');
+            }
+          } catch (error) {
+            logger.error('Error descargando PDF:', error);
+            Alert.alert('Error', 'Error al descargar PDF');
+          }
+        }
+        return;
+      }
+      
+      // En móvil, usar Alert.alert
       Alert.alert(
         'Descargar PDF',
         `¿Deseas descargar el PDF: ${pdf.nombre_archivo}?`,
@@ -280,6 +658,13 @@ export default function AuditoriaScreen({ navigation }) {
                   const reader = new FileReader();
                   reader.onloadend = async () => {
                     try {
+                      
+                      // Verificar que FileSystem esté disponible
+                      if (!FileSystem || !FileSystem.documentDirectory) {
+                        Alert.alert('Error', 'FileSystem no disponible');
+                        return;
+                      }
+                      
                       const base64data = reader.result.split(',')[1];
                       
                       // Crear carpeta "auditoria" si no existe
@@ -338,9 +723,14 @@ export default function AuditoriaScreen({ navigation }) {
     setFiltroDia(null);
     setFiltroMes(null);
     setFiltroAnio(null);
-    setFiltroTurno(null);
     setFiltroLinea(null);
+    setFiltroTurno(null);
+    setFiltroTecnico(null);
   };
+  
+  // Determinar si un filtro debe estar habilitado según la jerarquía
+  const isMesEnabled = filtroAnio !== null;
+  const isDiaEnabled = filtroMes !== null && filtroAnio !== null;
 
   // Renderizar tarjeta de PDF
   const renderPDFCard = ({ item: pdf }) => (
@@ -353,7 +743,7 @@ export default function AuditoriaScreen({ navigation }) {
               style={[styles.turnoChip, { backgroundColor: getTurnoColor(pdf.turno) }]}
               textStyle={styles.turnoChipText}
             >
-              Turno {pdf.turno}
+              Turno {normalizeTurno(pdf.turno)}
             </Chip>
           </View>
         </View>
@@ -397,19 +787,36 @@ export default function AuditoriaScreen({ navigation }) {
             <Button
               mode="outlined"
               onPress={async () => {
+                // En web, abrir directamente en nueva pestaña
+                if (Platform.OS === 'web' || isWeb) {
+                  handleViewPDF(null, pdf.id);
+                  return;
+                }
+                
+                // En móvil, verificar que FileSystem esté disponible
+                if (!FileSystem || !FileSystem.documentDirectory) {
+                  Alert.alert('Error', 'FileSystem no disponible');
+                  return;
+                }
+                
                 const auditoriaDir = FileSystem.documentDirectory + 'auditoria/';
                 const fileUri = auditoriaDir + pdf.nombre_archivo;
-                const fileInfo = await FileSystem.getInfoAsync(fileUri);
-                if (fileInfo.exists) {
-                  handleViewPDF(fileUri);
-                } else {
-                  // Si el archivo no existe, remover del set
-                  setDownloadedPDFs(prev => {
-                    const newSet = new Set(prev);
-                    newSet.delete(pdf.id);
-                    return newSet;
-                  });
-                  Alert.alert('PDF no encontrado', 'El PDF no está descargado. Por favor, descárgalo primero.');
+                try {
+                  const fileInfo = await FileSystem.getInfoAsync(fileUri);
+                  if (fileInfo.exists) {
+                    handleViewPDF(fileUri);
+                  } else {
+                    // Si el archivo no existe, remover del set
+                    setDownloadedPDFs(prev => {
+                      const newSet = new Set(prev);
+                      newSet.delete(pdf.id);
+                      return newSet;
+                    });
+                    Alert.alert('PDF no encontrado', 'El PDF no está descargado. Por favor, descárgalo primero.');
+                  }
+                } catch (error) {
+                  logger.error('Error verificando archivo:', error);
+                  Alert.alert('Error', 'Error al verificar el archivo');
                 }
               }}
               style={styles.viewButton}
@@ -435,9 +842,34 @@ export default function AuditoriaScreen({ navigation }) {
     </Card>
   );
 
+  // Normalizar turno: convertir "mañana", "noche", "fines" a "A", "B", "C"
+  const normalizeTurno = (turno) => {
+    if (!turno) return 'N/A';
+    const turnoLower = turno.toLowerCase().trim();
+    switch (turnoLower) {
+      case 'mañana':
+      case 'manana':
+      case 'a':
+        return 'A';
+      case 'noche':
+      case 'b':
+        return 'B';
+      case 'fines':
+      case 'c':
+        return 'C';
+      default:
+        // Si ya es A, B o C, retornarlo en mayúsculas
+        if (turnoLower === 'a' || turnoLower === 'b' || turnoLower === 'c') {
+          return turnoLower.toUpperCase();
+        }
+        return turno.toUpperCase();
+    }
+  };
+
   // Obtener color del turno
   const getTurnoColor = (turno) => {
-    switch (turno?.toUpperCase()) {
+    const normalizedTurno = normalizeTurno(turno);
+    switch (normalizedTurno) {
       case 'A': return '#2196F3';
       case 'B': return '#4CAF50';
       case 'C': return '#FF9800';
@@ -462,14 +894,19 @@ export default function AuditoriaScreen({ navigation }) {
     { value: 12, label: 'Diciembre' }
   ];
   
-  // Obtener años únicos de los PDFs
-  const anioActual = new Date().getFullYear();
-  // Generar años desde el actual hasta 2035 (10 años)
-  const anios = Array.from({ length: 10 }, (_, i) => anioActual + i)
-    .filter(anio => anio >= anioActual)
-    .sort((a, b) => a - b);
+  // Usar años disponibles del backend, o fallback solo si no se han cargado
+  const anios = aniosDisponibles !== null 
+    ? aniosDisponibles // Usar los años del backend (pueden ser array vacío si no hay PDFs)
+    : (() => {
+        // Fallback: generar años solo si aún no se han cargado del backend
+        const anioActual = new Date().getFullYear();
+        return Array.from({ length: 10 }, (_, i) => anioActual + i)
+          .filter(anio => anio >= anioActual)
+          .sort((a, b) => b - a);
+      })();
   const turnos = ['A', 'B', 'C'];
-  const lineas = ['1', '2', '3', '4', '5', '6'];
+  // Usar líneas disponibles del backend en lugar de lista hardcodeada
+  const lineas = lineasDisponibles.length > 0 ? lineasDisponibles : [];
 
   if (loading && !pdfs.length) {
     return (
@@ -482,42 +919,62 @@ export default function AuditoriaScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      {/* Filtros */}
+      {/* Filtros - Jerarquía mejorada */}
       <View style={styles.filtersContainer}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filtersScroll}>
+          {/* Filtros principales */}
           <TouchableOpacity
-            style={[styles.filterButton, filtroDia && styles.filterButtonActive]}
-            onPress={() => setShowDiaModal(true)}
+            style={[styles.filterButton, styles.filterButtonPrimary, filtroAnio && styles.filterButtonActive]}
+            onPress={() => setShowAnioModal(true)}
           >
-            <Text style={[styles.filterButtonText, filtroDia && styles.filterButtonTextActive]}>
-              Día {filtroDia ? `(${filtroDia})` : ''}
+            <Text style={[styles.filterButtonText, filtroAnio && styles.filterButtonTextActive]}>
+              📅 Año {filtroAnio ? `(${filtroAnio})` : '*'}
             </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.filterButton, filtroMes && styles.filterButtonActive]}
-            onPress={() => setShowMesModal(true)}
+            style={[styles.filterButton, styles.filterButtonPrimary, filtroTecnico && styles.filterButtonActive]}
+            onPress={() => setShowTecnicoModal(true)}
           >
-            <Text style={[styles.filterButtonText, filtroMes && styles.filterButtonTextActive]}>
+            <Text style={[styles.filterButtonText, filtroTecnico && styles.filterButtonTextActive]}>
+              👤 {filtroTecnico ? filtroTecnico.nombre.split(' ')[0] : 'Técnico'}
+            </Text>
+          </TouchableOpacity>
+          
+          {/* Filtros secundarios */}
+          <TouchableOpacity
+            style={[
+              styles.filterButton, 
+              filtroMes && styles.filterButtonActive,
+              !isMesEnabled && styles.filterButtonDisabled
+            ]}
+            onPress={() => isMesEnabled && setShowMesModal(true)}
+            disabled={!isMesEnabled}
+          >
+            <Text style={[
+              styles.filterButtonText, 
+              filtroMes && styles.filterButtonTextActive,
+              !isMesEnabled && styles.filterButtonTextDisabled
+            ]}>
               Mes {filtroMes ? `(${meses.find(m => m.value === filtroMes)?.label})` : ''}
             </Text>
           </TouchableOpacity>
           
           <TouchableOpacity
-            style={[styles.filterButton, filtroAnio && styles.filterButtonActive]}
-            onPress={() => setShowAnioModal(true)}
+            style={[
+              styles.filterButton, 
+              filtroDia && styles.filterButtonActive,
+              !isDiaEnabled && styles.filterButtonDisabled
+            ]}
+            onPress={() => isDiaEnabled && setShowDiaModal(true)}
+            disabled={!isDiaEnabled}
           >
-            <Text style={[styles.filterButtonText, filtroAnio && styles.filterButtonTextActive]}>
-              Año {filtroAnio ? `(${filtroAnio})` : ''}
-            </Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[styles.filterButton, filtroTurno && styles.filterButtonActive]}
-            onPress={() => setShowTurnoModal(true)}
-          >
-            <Text style={[styles.filterButtonText, filtroTurno && styles.filterButtonTextActive]}>
-              Turno {filtroTurno ? `(${filtroTurno})` : ''}
+            <Text style={[
+              styles.filterButtonText, 
+              filtroDia && styles.filterButtonTextActive,
+              !isDiaEnabled && styles.filterButtonTextDisabled
+            ]}>
+              Día {filtroDia ? `(${filtroDia})` : ''}
             </Text>
           </TouchableOpacity>
           
@@ -530,7 +987,16 @@ export default function AuditoriaScreen({ navigation }) {
             </Text>
           </TouchableOpacity>
           
-          {(filtroDia || filtroMes || filtroAnio || filtroTurno || filtroLinea) && (
+          <TouchableOpacity
+            style={[styles.filterButton, filtroTurno && styles.filterButtonActive]}
+            onPress={() => setShowTurnoModal(true)}
+          >
+            <Text style={[styles.filterButtonText, filtroTurno && styles.filterButtonTextActive]}>
+              Turno {filtroTurno ? `(${filtroTurno})` : ''}
+            </Text>
+          </TouchableOpacity>
+          
+          {(filtroDia || filtroMes || filtroAnio || filtroLinea || filtroTurno || filtroTecnico) && (
             <TouchableOpacity
               style={[styles.filterButton, styles.clearFilterButton]}
               onPress={clearFilters}
@@ -540,6 +1006,20 @@ export default function AuditoriaScreen({ navigation }) {
           )}
         </ScrollView>
       </View>
+      
+      {/* Estadísticas rápidas */}
+      {hasActiveFilters && (
+        <View style={styles.statsContainer}>
+          <Card style={styles.statsCard}>
+            <Card.Content>
+              <Text style={styles.statsText}>
+                📊 {filteredPdfs.length} {filteredPdfs.length === 1 ? 'reporte encontrado' : 'reportes encontrados'}
+                {stats?.total_pdfs !== undefined && ` • Total en sistema: ${stats.total_pdfs}`}
+              </Text>
+            </Card.Content>
+          </Card>
+        </View>
+      )}
 
       {/* Mostrar información cuando no hay filtros */}
       {!hasActiveFilters ? (
@@ -554,12 +1034,16 @@ export default function AuditoriaScreen({ navigation }) {
                 Puedes filtrar por:
               </Paragraph>
               <View style={styles.infoList}>
-                <Text style={styles.infoListItem}>• Día del mes</Text>
-                <Text style={styles.infoListItem}>• Mes</Text>
-                <Text style={styles.infoListItem}>• Año</Text>
-                <Text style={styles.infoListItem}>• Turno (A, B, C)</Text>
-                <Text style={styles.infoListItem}>• Línea de producción</Text>
+                <Text style={styles.infoListItem}>• <Text style={styles.infoListItemBold}>Año</Text> (selecciona primero, pero requiere otro filtro)</Text>
+                <Text style={styles.infoListItem}>• <Text style={styles.infoListItemBold}>Técnico</Text> (quien generó el reporte)</Text>
+                <Text style={styles.infoListItem}>• Mes (requiere año)</Text>
+                <Text style={styles.infoListItem}>• Día (requiere mes y año)</Text>
+                <Text style={styles.infoListItem}>• Línea (1-6) - opcional</Text>
+                <Text style={styles.infoListItem}>• Turno (A, B, C) - opcional</Text>
               </View>
+              <Paragraph style={[styles.infoText, { marginTop: 16, fontStyle: 'italic', color: '#FF9800' }]}>
+                ⚠️ Nota: El año solo no mostrará resultados. Debes seleccionar al menos otro filtro (técnico, mes, día, línea o turno) para ver los PDFs.
+              </Paragraph>
               <Paragraph style={[styles.infoText, { marginTop: 16, fontStyle: 'italic' }]}>
                 Selecciona uno o más filtros para comenzar la búsqueda.
               </Paragraph>
@@ -611,29 +1095,28 @@ export default function AuditoriaScreen({ navigation }) {
           <View style={styles.modalContent}>
             <Title style={styles.modalTitle}>Seleccionar Día</Title>
             <ScrollView style={styles.modalList}>
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => {
-                  setFiltroDia(null);
-                  setShowDiaModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>Todos</Text>
-              </TouchableOpacity>
-              {dias.map((dia) => (
-                <TouchableOpacity
-                  key={dia}
-                  style={[styles.modalItem, filtroDia === dia && styles.modalItemSelected]}
-                  onPress={() => {
-                    setFiltroDia(dia);
-                    setShowDiaModal(false);
-                  }}
-                >
-                  <Text style={[styles.modalItemText, filtroDia === dia && styles.modalItemTextSelected]}>
-                    {dia}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {dias.map((dia, index) => {
+                const isSelected = filtroDia === dia;
+                return (
+                  <TouchableOpacity
+                    key={`dia-${dia}-${index}`}
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      // Si el día ya está seleccionado, deseleccionarlo (toggle)
+                      if (isSelected) {
+                        setFiltroDia(null);
+                      } else {
+                        setFiltroDia(dia);
+                      }
+                      setShowDiaModal(false);
+                    }}
+                  >
+                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                      {dia}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
             <Button onPress={() => setShowDiaModal(false)}>Cerrar</Button>
           </View>
@@ -651,29 +1134,28 @@ export default function AuditoriaScreen({ navigation }) {
           <View style={styles.modalContent}>
             <Title style={styles.modalTitle}>Seleccionar Mes</Title>
             <ScrollView style={styles.modalList}>
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => {
-                  setFiltroMes(null);
-                  setShowMesModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>Todos</Text>
-              </TouchableOpacity>
-              {meses.map((mes) => (
-                <TouchableOpacity
-                  key={mes.value}
-                  style={[styles.modalItem, filtroMes === mes.value && styles.modalItemSelected]}
-                  onPress={() => {
-                    setFiltroMes(mes.value);
-                    setShowMesModal(false);
-                  }}
-                >
-                  <Text style={[styles.modalItemText, filtroMes === mes.value && styles.modalItemTextSelected]}>
-                    {mes.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {meses.map((mes, index) => {
+                const isSelected = filtroMes === mes.value;
+                return (
+                  <TouchableOpacity
+                    key={`mes-${mes.value}-${index}`}
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      // Si el mes ya está seleccionado, deseleccionarlo (toggle)
+                      if (isSelected) {
+                        setFiltroMes(null);
+                      } else {
+                        setFiltroMes(mes.value);
+                      }
+                      setShowMesModal(false);
+                    }}
+                  >
+                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                      {mes.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
             <Button onPress={() => setShowMesModal(false)}>Cerrar</Button>
           </View>
@@ -691,75 +1173,36 @@ export default function AuditoriaScreen({ navigation }) {
           <View style={styles.modalContent}>
             <Title style={styles.modalTitle}>Seleccionar Año</Title>
             <ScrollView style={styles.modalList}>
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => {
-                  setFiltroAnio(null);
-                  setShowAnioModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>Todos</Text>
-              </TouchableOpacity>
               {anios.length > 0 ? (
-                anios.map((anio) => (
-                  <TouchableOpacity
-                    key={anio}
-                    style={[styles.modalItem, filtroAnio === anio && styles.modalItemSelected]}
-                    onPress={() => {
-                      setFiltroAnio(anio);
-                      setShowAnioModal(false);
-                    }}
-                  >
-                    <Text style={[styles.modalItemText, filtroAnio === anio && styles.modalItemTextSelected]}>
-                      {anio}
-                    </Text>
-                  </TouchableOpacity>
-                ))
+                anios.map((anio, index) => {
+                  const isSelected = filtroAnio === anio;
+                  return (
+                    <TouchableOpacity
+                      key={`anio-${anio}-${index}`}
+                      style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                      onPress={() => {
+                        // Si el año ya está seleccionado, deseleccionarlo (toggle)
+                        if (isSelected) {
+                          setFiltroAnio(null);
+                        } else {
+                          setFiltroAnio(anio);
+                        }
+                        setShowAnioModal(false);
+                      }}
+                    >
+                      <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                        {anio} {stats?.por_anio?.[String(anio)] ? `(${stats.por_anio[String(anio)]} PDFs)` : ''}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : aniosDisponibles !== null ? (
+                <Text style={styles.modalItemText}>No hay reportes disponibles</Text>
               ) : (
-                <Text style={styles.modalItemText}>No hay años disponibles</Text>
+                <Text style={styles.modalItemText}>Cargando años disponibles...</Text>
               )}
             </ScrollView>
             <Button onPress={() => setShowAnioModal(false)}>Cerrar</Button>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Modal para seleccionar turno */}
-      <Modal
-        visible={showTurnoModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowTurnoModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Title style={styles.modalTitle}>Seleccionar Turno</Title>
-            <ScrollView style={styles.modalList}>
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => {
-                  setFiltroTurno(null);
-                  setShowTurnoModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>Todos</Text>
-              </TouchableOpacity>
-              {turnos.map((turno) => (
-                <TouchableOpacity
-                  key={turno}
-                  style={[styles.modalItem, filtroTurno === turno && styles.modalItemSelected]}
-                  onPress={() => {
-                    setFiltroTurno(turno);
-                    setShowTurnoModal(false);
-                  }}
-                >
-                  <Text style={[styles.modalItemText, filtroTurno === turno && styles.modalItemTextSelected]}>
-                    Turno {turno}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-            <Button onPress={() => setShowTurnoModal(false)}>Cerrar</Button>
           </View>
         </View>
       </Modal>
@@ -775,34 +1218,143 @@ export default function AuditoriaScreen({ navigation }) {
           <View style={styles.modalContent}>
             <Title style={styles.modalTitle}>Seleccionar Línea</Title>
             <ScrollView style={styles.modalList}>
-              <TouchableOpacity
-                style={styles.modalItem}
-                onPress={() => {
-                  setFiltroLinea(null);
-                  setShowLineaModal(false);
-                }}
-              >
-                <Text style={styles.modalItemText}>Todas</Text>
-              </TouchableOpacity>
-              {lineas.map((linea) => (
-                <TouchableOpacity
-                  key={linea}
-                  style={[styles.modalItem, filtroLinea === linea && styles.modalItemSelected]}
-                  onPress={() => {
-                    setFiltroLinea(linea);
-                    setShowLineaModal(false);
-                  }}
-                >
-                  <Text style={[styles.modalItemText, filtroLinea === linea && styles.modalItemTextSelected]}>
-                    {linea}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {lineas.map((linea, index) => {
+                const isSelected = filtroLinea === linea;
+                return (
+                  <TouchableOpacity
+                    key={`linea-${linea}-${index}`}
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      // Si la línea ya está seleccionada, deseleccionarla (toggle)
+                      if (isSelected) {
+                        setFiltroLinea(null);
+                      } else {
+                        setFiltroLinea(linea);
+                      }
+                      setShowLineaModal(false);
+                    }}
+                  >
+                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                      {linea}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
             <Button onPress={() => setShowLineaModal(false)}>Cerrar</Button>
           </View>
         </View>
       </Modal>
+
+      {/* Modal para seleccionar turno */}
+      <Modal
+        visible={showTurnoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTurnoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Title style={styles.modalTitle}>Seleccionar Turno</Title>
+            <ScrollView style={styles.modalList}>
+              {turnos.map((turno, index) => {
+                const isSelected = filtroTurno === turno;
+                return (
+                  <TouchableOpacity
+                    key={`turno-${turno}-${index}`}
+                    style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                    onPress={() => {
+                      // Si el turno ya está seleccionado, deseleccionarlo (toggle)
+                      if (isSelected) {
+                        setFiltroTurno(null);
+                      } else {
+                        setFiltroTurno(turno);
+                      }
+                      setShowTurnoModal(false);
+                    }}
+                  >
+                    <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                      Turno {turno}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <Button onPress={() => setShowTurnoModal(false)}>Cerrar</Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para seleccionar técnico */}
+      <Modal
+        visible={showTecnicoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowTecnicoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Title style={styles.modalTitle}>Seleccionar Técnico</Title>
+            <ScrollView style={styles.modalList}>
+              {tecnicos.length > 0 ? (
+                tecnicos.map((tecnico, index) => {
+                  const isSelected = filtroTecnico?.id === tecnico.id;
+                  return (
+                    <TouchableOpacity
+                      key={`tecnico-${tecnico.id}-${index}`}
+                      style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                      onPress={() => {
+                        // Si el técnico ya está seleccionado, deseleccionarlo (toggle)
+                        if (isSelected) {
+                          setFiltroTecnico(null);
+                        } else {
+                          setFiltroTecnico(tecnico);
+                        }
+                        setShowTecnicoModal(false);
+                      }}
+                    >
+                      <View style={styles.modalItemContent}>
+                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                          {tecnico.nombre}
+                        </Text>
+                        <Text style={[styles.modalItemSubtext, isSelected && styles.modalItemSubtextSelected]}>
+                          {tecnico.numero_empleado} • {tecnico.total_reportes} {tecnico.total_reportes === 1 ? 'reporte' : 'reportes'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.modalItemText}>No se encontraron técnicos</Text>
+                  <Text style={[styles.modalItemText, { fontSize: 12, color: '#B0B0B0', marginTop: 8 }]}>
+                    No hay técnicos con rol 'tecnico' o 'validaciones' activos
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+            <Button onPress={() => setShowTecnicoModal(false)}>Cerrar</Button>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Botón para eliminar todos los PDFs - Solo Admin */}
+      {(user?.tipo_usuario === 'admin' || user?.usuario === 'admin' || user?.usuario === 'adminAlex' || user?.usuario === 'superadmin') && (
+        <FAB
+          icon="delete"
+          style={styles.fabDeleteAll}
+          onPress={() => {
+            try {
+              handleDeleteAllPDFs();
+            } catch (error) {
+              logger.error('Error al presionar botón eliminar todos:', error);
+              Alert.alert('Error', 'Error inesperado al intentar eliminar PDFs');
+            }
+          }}
+          label="Borrar Todos"
+          color="#FFFFFF"
+        />
+      )}
     </View>
   );
 }
@@ -855,9 +1407,36 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
   },
+  filterButtonPrimary: {
+    backgroundColor: '#3C3C3C',
+    borderWidth: 2,
+    borderColor: '#9C27B0',
+  },
+  filterButtonDisabled: {
+    opacity: 0.4,
+    backgroundColor: '#1C1C1C',
+  },
+  filterButtonTextDisabled: {
+    color: '#666666',
+  },
   clearFilterButton: {
     backgroundColor: '#F44336',
     borderColor: '#F44336',
+  },
+  statsContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  statsCard: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 8,
+  },
+  statsText: {
+    color: '#E0E0E0',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   listContainer: {
     padding: 16,
@@ -969,6 +1548,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     lineHeight: 28,
   },
+  infoListItemBold: {
+    fontWeight: 'bold',
+    color: '#9C27B0',
+  },
+  searchInput: {
+    marginBottom: 16,
+    backgroundColor: '#2C2C2C',
+  },
+  modalItemContent: {
+    flexDirection: 'column',
+  },
+  modalItemSubtext: {
+    color: '#B0B0B0',
+    fontSize: 12,
+    marginTop: 4,
+  },
+  modalItemSubtextSelected: {
+    color: '#E0E0E0',
+  },
   emptyState: {
     flex: 1,
     justifyContent: 'center',
@@ -1029,4 +1627,12 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
   },
+  fabDeleteAll: {
+    position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#F44336',
+  },
 });
+

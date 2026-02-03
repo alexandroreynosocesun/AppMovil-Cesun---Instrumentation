@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -21,7 +21,9 @@ import {
   ActivityIndicator,
   Chip
 } from 'react-native-paper';
+import { useFocusEffect } from '@react-navigation/native';
 import AdminService from '../services/AdminService';
+import logger from '../utils/logger';
 
 export default function AdminScreen({ navigation }) {
   const [users, setUsers] = useState([]);
@@ -32,17 +34,20 @@ export default function AdminScreen({ navigation }) {
   // Estados para el diálogo de usuario
   const [showUserDialog, setShowUserDialog] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const [userForm, setUserForm] = useState({
     usuario: '',
     nombre: '',
     password: '',
-    numero_empleado: '',
-    tipo_tecnico: 'Técnico de Instrumentación'
+    numero_empleado: ''
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
+  // Cargar datos cuando la pantalla recibe foco
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const loadData = async () => {
     setLoading(true);
@@ -96,24 +101,24 @@ export default function AdminScreen({ navigation }) {
 
   const handleCreateUser = () => {
     setEditingUser(null);
+    setShowPassword(false);
     setUserForm({ 
       usuario: '', 
       nombre: '', 
       password: '', 
-      numero_empleado: '',
-      tipo_tecnico: 'Técnico de Instrumentación'
+      numero_empleado: ''
     });
     setShowUserDialog(true);
   };
 
   const handleEditUser = (user) => {
     setEditingUser(user);
+    setShowPassword(false);
     setUserForm({
       usuario: user.usuario,
       nombre: user.nombre,
       password: '',
-      numero_empleado: user.numero_empleado || '',
-      tipo_tecnico: user.tipo_tecnico || 'Técnico de Instrumentación'
+      numero_empleado: user.numero_empleado || ''
     });
     setShowUserDialog(true);
   };
@@ -138,14 +143,23 @@ export default function AdminScreen({ navigation }) {
       }
 
       if (result.success) {
-        Alert.alert('Éxito', 'Usuario guardado correctamente');
+        Alert.alert(
+          'Éxito', 
+          editingUser ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente',
+          [{ text: 'OK', onPress: () => {
+            setShowUserDialog(false);
+            loadData();
+          }}]
+        );
         setShowUserDialog(false);
+        // Recargar datos inmediatamente
         loadData();
       } else {
-        Alert.alert('Error', result.error);
+        Alert.alert('Error', result.error || 'Error guardando usuario');
       }
     } catch (error) {
-      Alert.alert('Error', 'Error guardando usuario');
+      logger.error('Error guardando usuario:', error);
+      Alert.alert('Error', error?.response?.data?.detail || error?.message || 'Error guardando usuario');
     }
   };
 
@@ -162,13 +176,20 @@ export default function AdminScreen({ navigation }) {
             try {
               const result = await AdminService.deleteUser(user.id);
               if (result.success) {
-                Alert.alert('Éxito', 'Usuario eliminado correctamente');
+                Alert.alert(
+                  'Éxito', 
+                  'Usuario eliminado correctamente',
+                  [{ text: 'OK', onPress: () => loadData() }]
+                );
+                // Recargar datos inmediatamente
                 loadData();
               } else {
-                Alert.alert('Error', result.error);
+                Alert.alert('Error', result.error || 'Error eliminando usuario');
               }
             } catch (error) {
-              Alert.alert('Error', 'Error eliminando usuario');
+              logger.error('Error eliminando usuario:', error);
+              const errorMessage = error?.response?.data?.detail || error?.message || 'Error eliminando usuario';
+              Alert.alert('Error', errorMessage);
             }
           }
         }
@@ -240,7 +261,16 @@ export default function AdminScreen({ navigation }) {
                 <List.Item
                   key={user.id}
                   title={user.nombre}
-                  description={`Usuario: ${user.usuario} | Empleado: ${user.numero_empleado || 'N/A'}`}
+                  description={
+                    <View>
+                      <Paragraph style={styles.userDescription}>
+                        Usuario: {user.usuario} | Empleado: {user.numero_empleado || 'N/A'}
+                      </Paragraph>
+                      <Paragraph style={styles.userRole}>
+                        Rol: {(['admin', 'superadmin'].includes(user.usuario?.toLowerCase())) ? 'admin' : (user.tipo_usuario || 'N/A')}
+                      </Paragraph>
+                    </View>
+                  }
                   left={(props) => <List.Icon {...props} icon="account" />}
                   right={(props) => (
                     <View style={styles.userActions}>
@@ -304,14 +334,13 @@ export default function AdminScreen({ navigation }) {
               onChangeText={(text) => setUserForm({...userForm, password: text})}
               style={styles.input}
               mode="outlined"
-              secureTextEntry
-            />
-            <TextInput
-              label="Tipo de Técnico"
-              value={userForm.tipo_tecnico}
-              onChangeText={(text) => setUserForm({...userForm, tipo_tecnico: text})}
-              style={styles.input}
-              mode="outlined"
+              secureTextEntry={!showPassword}
+              right={
+                <TextInput.Icon
+                  icon={showPassword ? 'eye-off' : 'eye'}
+                  onPress={() => setShowPassword(!showPassword)}
+                />
+              }
             />
           </Dialog.Content>
           <Dialog.Actions>
@@ -393,6 +422,17 @@ const styles = StyleSheet.create({
   },
   userActions: {
     flexDirection: 'row'
+  },
+  userDescription: {
+    fontSize: 14,
+    color: '#666666',
+    marginBottom: 4,
+  },
+  userRole: {
+    fontSize: 14,
+    color: '#2196F3',
+    fontWeight: '600',
+    marginTop: 2,
   },
   fab: {
     position: 'absolute',

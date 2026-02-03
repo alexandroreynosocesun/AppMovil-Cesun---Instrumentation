@@ -26,15 +26,27 @@ import {
 import { jigNGService } from '../services/JigNGService';
 import { jigService } from '../services/JigService';
 import { authService } from '../services/AuthService';
+import { useLanguage } from '../contexts/LanguageContext';
 import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
 
 export default function AddJigNGScreen({ navigation, route }) {
+  const { t } = useLanguage();
+  const isManualEntry = route?.params?.manualEntry === true;
   const [loading, setLoading] = useState(false);
   const [searchingJig, setSearchingJig] = useState(false);
   const [jigInfo, setJigInfo] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [manualModel, setManualModel] = useState('');
+  const [manualNumber, setManualNumber] = useState('');
+  const [manualType, setManualType] = useState('manual');
+  const [manualModelQuery, setManualModelQuery] = useState('');
+  const [modelTypes, setModelTypes] = useState({});
+  const [modelMatches, setModelMatches] = useState([]);
+  const [availableTypes, setAvailableTypes] = useState([]);
+  const [numberOptions, setNumberOptions] = useState([]);
+  const [loadingNumbers, setLoadingNumbers] = useState(false);
   const [formData, setFormData] = useState({
     jig_id: 0,
     qrCode: '',
@@ -57,15 +69,19 @@ export default function AddJigNGScreen({ navigation, route }) {
   ];
 
   const prioridadOptions = [
-    { value: 'baja', label: 'Baja', color: '#4CAF50' },
-    { value: 'media', label: 'Media', color: '#FF9800' },
-    { value: 'alta', label: 'Alta', color: '#F44336' },
-    { value: 'critica', label: 'Crítica', color: '#9C27B0' },
+    { value: 'baja', label: t('low'), color: '#4CAF50' },
+    { value: 'media', label: t('medium'), color: '#FF9800' },
+    { value: 'alta', label: t('high'), color: '#F44336' },
+    { value: 'critica', label: t('critical'), color: '#9C27B0' },
   ];
 
   // Cargar perfil del usuario al montar el componente
   useEffect(() => {
     loadUserProfile();
+
+    if (isManualEntry) {
+      loadModelTypes();
+    }
     
     // Si se pasó información del jig desde la navegación, cargarla directamente
     if (route?.params?.jigData) {
@@ -78,11 +94,139 @@ export default function AddJigNGScreen({ navigation, route }) {
       logger.info('✅ Información del jig cargada desde navegación:', route.params.jigData);
     }
     // Si se pasó un código QR desde la navegación, buscarlo automáticamente
-    else if (route?.params?.qrCode) {
+    else if (!isManualEntry && route?.params?.qrCode) {
       setFormData(prev => ({ ...prev, qrCode: route.params.qrCode }));
       searchJigByQR(route.params.qrCode);
     }
-  }, []);
+  }, [isManualEntry, route?.params?.jigData, route?.params?.qrCode]);
+
+  useEffect(() => {
+    if (!isManualEntry) return;
+    const query = manualModelQuery.trim().toLowerCase();
+    if (!query || query.length < 4) {
+      setModelMatches([]);
+      return;
+    }
+    const matches = Object.keys(modelTypes)
+      .filter(model => model.toLowerCase().includes(query))
+      .slice(0, 20);
+    setModelMatches(matches);
+  }, [isManualEntry, manualModelQuery, modelTypes]);
+
+  useEffect(() => {
+    if (!isManualEntry) return;
+    if (!manualModel || !manualType) {
+      setNumberOptions([]);
+      return;
+    }
+    const fetchNumbers = async () => {
+      setLoadingNumbers(true);
+      const result = await jigService.searchJigs(manualModel, 1, 1500);
+      setLoadingNumbers(false);
+      if (!result.success || !result.data) {
+        setNumberOptions([]);
+        return;
+      }
+      const items = Array.isArray(result.data?.items)
+        ? result.data.items
+        : (Array.isArray(result.data) ? result.data : []);
+      const numbers = items
+        .filter(jig => jig.modelo_actual === manualModel && (!manualType || jig.tipo === manualType))
+        .map(jig => jig.numero_jig)
+        .filter(Boolean);
+      const unique = Array.from(new Set(numbers));
+      unique.sort((a, b) => {
+        const numA = parseInt(String(a).replace(/\D/g, '') || '0');
+        const numB = parseInt(String(b).replace(/\D/g, '') || '0');
+        return numA - numB;
+      });
+      setNumberOptions(unique);
+    };
+    fetchNumbers();
+  }, [isManualEntry, manualModel, manualType]);
+
+  useEffect(() => {
+    if (!isManualEntry) return;
+    if (!manualModel || !manualNumber || !manualType) return;
+    const qrCode = buildManualQrCode(manualModel.trim(), manualNumber.trim(), manualType);
+    setFormData(prev => ({ ...prev, qrCode }));
+  }, [isManualEntry, manualModel, manualNumber, manualType]);
+
+  const loadModelTypes = async () => {
+    const result = await jigService.getModelosConTipos();
+    if (result.success && result.data) {
+      setModelTypes(result.data);
+    }
+  };
+
+  const buildManualQrCode = (model, number, type) => {
+    const normalizedModel = (model || '').replace(/\s+/g, '');
+    const typeMap = {
+      manual: 'M',
+      semiautomatic: 'S',
+      'new semiautomatic': 'NS',
+    };
+    const typePrefix = typeMap[type] || 'X';
+    return `N/A-${typePrefix}-${normalizedModel}-${number}`;
+  };
+
+  const handleManualLookup = async () => {
+    const modelValue = (manualModel || manualModelQuery).trim();
+    if (!modelValue || !manualNumber.trim()) {
+      Alert.alert(t('error'), 'Completa modelo y número de jig.');
+      return;
+    }
+    const qrCode = buildManualQrCode(modelValue, manualNumber.trim(), manualType);
+    setFormData(prev => ({ ...prev, qrCode }));
+    await searchJigByQR(qrCode);
+  };
+
+  const handleManualLoadJig = async () => {
+    const modelValue = (manualModel || manualModelQuery).trim();
+    if (!modelValue || !manualNumber.trim()) {
+      Alert.alert(t('error'), 'Completa modelo y número de jig.');
+      return;
+    }
+    setSearchingJig(true);
+    try {
+      const result = await jigService.searchJigs(modelValue, 1, 1500);
+      const items = Array.isArray(result.data?.items)
+        ? result.data.items
+        : (Array.isArray(result.data) ? result.data : []);
+      const match = items.find(jig =>
+        jig.modelo_actual === modelValue &&
+        String(jig.numero_jig) === String(manualNumber).trim() &&
+        (!manualType || jig.tipo === manualType)
+      );
+      if (match) {
+        setJigInfo(match);
+        setFormData(prev => ({
+          ...prev,
+          jig_id: match.id,
+          qrCode: match.codigo_qr
+        }));
+        return;
+      }
+      Alert.alert(t('error'), t('noJigInfoAvailable'));
+    } catch (error) {
+      logger.error('❌ Error buscando jig manual:', error);
+      Alert.alert(t('error'), t('unexpectedErrorCreatingNG'));
+    } finally {
+      setSearchingJig(false);
+    }
+  };
+
+  const handleSelectModel = (modelName) => {
+    setManualModel(modelName);
+    setManualModelQuery(modelName);
+    const types = modelTypes[modelName] || [];
+    setAvailableTypes(types);
+    if (types.length === 1) {
+      setManualType(types[0]);
+    } else if (types.length && !types.includes(manualType)) {
+      setManualType(types[0]);
+    }
+  };
 
   // Función para cargar perfil del usuario
   const loadUserProfile = async () => {
@@ -148,8 +292,8 @@ export default function AddJigNGScreen({ navigation, route }) {
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert(
-          'Permisos requeridos',
-          'Necesitamos acceso a la cámara para tomar la foto del jig.'
+          t('cameraPermissionRequired'),
+          t('cameraPermissionDesc')
         );
         return;
       }
@@ -172,7 +316,7 @@ export default function AddJigNGScreen({ navigation, route }) {
       }
     } catch (error) {
       logger.error('Error tomando foto:', error);
-      Alert.alert('Error', 'No se pudo tomar la foto. Intenta nuevamente.');
+      Alert.alert(t('error'), t('photoError'));
     }
   };
 
@@ -186,15 +330,15 @@ export default function AddJigNGScreen({ navigation, route }) {
 
   const validateForm = () => {
     if (!formData.jig_id || formData.jig_id <= 0) {
-      Alert.alert('Error', 'Debe escanear o ingresar un código QR válido');
+      Alert.alert(t('error'), t('validQRRequired'));
       return false;
     }
     if (!formData.usuario_reporte.trim()) {
-      Alert.alert('Error', 'No se pudo obtener la información del usuario. Intenta cerrar sesión y volver a iniciar.');
+      Alert.alert(t('error'), t('userInfoError'));
       return false;
     }
     if (!formData.motivo.trim()) {
-      Alert.alert('Error', 'La descripción del problema es requerida');
+      Alert.alert(t('error'), t('problemDescriptionRequired'));
       return false;
     }
     return true;
@@ -209,11 +353,11 @@ export default function AddJigNGScreen({ navigation, route }) {
       
       if (result.success) {
         Alert.alert(
-          '✅ Éxito',
-          'Jig NG reportado correctamente',
+          `✅ ${t('success')}`,
+          t('jigNGReportedSuccess'),
           [
             {
-              text: 'Continuar',
+              text: t('continue'),
               onPress: () => {
                 // Regresar al Home
                 navigation.reset({
@@ -225,11 +369,11 @@ export default function AddJigNGScreen({ navigation, route }) {
           ]
         );
       } else {
-        Alert.alert('Error', result.message || 'Error al crear jig NG');
+        Alert.alert(t('error'), result.message || t('errorCreatingNG'));
       }
     } catch (error) {
       logger.error('❌ Error al crear jig NG:', error);
-      Alert.alert('Error', 'Error inesperado al crear jig NG');
+      Alert.alert(t('error'), t('unexpectedErrorCreatingNG'));
     } finally {
       setLoading(false);
     }
@@ -243,32 +387,166 @@ export default function AddJigNGScreen({ navigation, route }) {
       <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
         <Card style={styles.card}>
           <Card.Content>
-            <Title style={styles.title}>Reportar Jig NG</Title>
+            <Title style={styles.title}>{t('reportJigNG')}</Title>
             
+            {isManualEntry && (
+              <Card style={styles.manualEntryCard}>
+                <Card.Content>
+                  <Title style={styles.manualEntryTitle}>✍️ Agregar jig NG manualmente</Title>
+                  <Text style={styles.sectionTitle}>Tipo de jig *</Text>
+                  <RadioButton.Group
+                    onValueChange={value => setManualType(value)}
+                    value={manualType}
+                  >
+                    {(availableTypes.length ? availableTypes : ['manual', 'semiautomatic', 'new semiautomatic']).map(typeOption => (
+                      <View style={styles.manualTypeRow} key={typeOption}>
+                        <RadioButton
+                          value={typeOption}
+                          color={
+                            typeOption === 'manual'
+                              ? '#2196F3'
+                              : typeOption === 'semiautomatic'
+                                ? '#4CAF50'
+                                : '#FF9800'
+                          }
+                        />
+                        <Text style={styles.manualTypeLabel}>
+                          {typeOption === 'manual'
+                            ? 'Manual'
+                            : typeOption === 'semiautomatic'
+                              ? 'Semi-automático'
+                              : 'Nuevo Semi-automático'}
+                        </Text>
+                      </View>
+                    ))}
+                  </RadioButton.Group>
+                  <TextInput
+                    label="Modelo"
+                    value={manualModelQuery}
+                    onChangeText={(value) => {
+                      setManualModelQuery(value);
+                      setManualModel('');
+                    }}
+                    style={styles.input}
+                    mode="outlined"
+                    placeholder="Ej. 53010"
+                    placeholderTextColor="#B0B0B0"
+                    textColor="#FFFFFF"
+                    right={
+                      manualModelQuery ? (
+                        <TextInput.Icon
+                          icon="close"
+                          onPress={() => {
+                            setManualModelQuery('');
+                            setManualModel('');
+                            setModelMatches([]);
+                          }}
+                        />
+                      ) : null
+                    }
+                    theme={{
+                      colors: {
+                        primary: '#2196F3',
+                        background: '#1E1E1E',
+                        surface: '#2C2C2C',
+                        text: '#FFFFFF',
+                        placeholder: '#B0B0B0',
+                        onSurface: '#FFFFFF',
+                      }
+                    }}
+                  />
+                  {!!modelMatches.length && manualModelQuery.trim() && (
+                    <View style={styles.modelSuggestions}>
+                      {modelMatches.map(modelName => (
+                        <TouchableOpacity
+                          key={modelName}
+                          style={styles.modelSuggestionItem}
+                          onPress={() => handleSelectModel(modelName)}
+                        >
+                          <Text style={styles.modelSuggestionText}>{modelName}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  )}
+                  <TextInput
+                    label="Número de jig"
+                    value={manualNumber}
+                    onChangeText={setManualNumber}
+                    style={styles.input}
+                    mode="outlined"
+                    keyboardType="numeric"
+                    placeholder="Ej. 1"
+                    placeholderTextColor="#B0B0B0"
+                    textColor="#FFFFFF"
+                    right={
+                      manualNumber ? (
+                        <TextInput.Icon
+                          icon="close"
+                          onPress={() => setManualNumber('')}
+                        />
+                      ) : null
+                    }
+                    theme={{
+                      colors: {
+                        primary: '#2196F3',
+                        background: '#1E1E1E',
+                        surface: '#2C2C2C',
+                        text: '#FFFFFF',
+                        placeholder: '#B0B0B0',
+                        onSurface: '#FFFFFF',
+                      }
+                    }}
+                  />
+                  {!!numberOptions.length && (
+                    <View style={styles.numberSuggestions}>
+                      {numberOptions.slice(0, 20).map(numberValue => (
+                        <Chip
+                          key={numberValue}
+                          style={styles.numberChip}
+                          textStyle={styles.numberChipText}
+                          onPress={() => setManualNumber(String(numberValue))}
+                        >
+                          {numberValue}
+                        </Chip>
+                      ))}
+                    </View>
+                  )}
+                  {!!formData.qrCode && (
+                    <View style={styles.manualQrBox}>
+                      <Text style={styles.manualQrLabel}>QR vinculado (toca para cargar):</Text>
+                      <TouchableOpacity onPress={handleManualLoadJig}>
+                        <Text style={styles.manualQrValue}>{formData.qrCode}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </Card.Content>
+              </Card>
+            )}
+
             {/* Información del Jig */}
             <Card style={styles.jigInfoCard}>
               <Card.Content>
-                <Title style={styles.jigInfoTitle}>📋 Información del Jig</Title>
+                <Title style={styles.jigInfoTitle}>📋 {t('jigInformation')}</Title>
                 {jigInfo ? (
                   <View style={styles.jigInfoGrid}>
                     <View style={styles.jigInfoRow}>
-                      <Text style={styles.jigInfoLabel}>Número:</Text>
+                      <Text style={styles.jigInfoLabel}>{t('number')}</Text>
                       <Text style={styles.jigInfoValue}>{jigInfo.numero_jig}</Text>
                     </View>
                     <View style={styles.jigInfoRow}>
-                      <Text style={styles.jigInfoLabel}>Código QR:</Text>
+                      <Text style={styles.jigInfoLabel}>{t('qrCode')}:</Text>
                       <Text style={styles.jigInfoValue}>{jigInfo.codigo_qr}</Text>
                     </View>
                     <View style={styles.jigInfoRow}>
-                      <Text style={styles.jigInfoLabel}>Tipo:</Text>
+                      <Text style={styles.jigInfoLabel}>{t('type')}</Text>
                       <Text style={styles.jigInfoValue}>{jigInfo.tipo}</Text>
                     </View>
                     <View style={styles.jigInfoRow}>
-                      <Text style={styles.jigInfoLabel}>Modelo:</Text>
+                      <Text style={styles.jigInfoLabel}>{t('currentModel')}:</Text>
                       <Text style={styles.jigInfoValue}>{jigInfo.modelo_actual || 'N/A'}</Text>
                     </View>
                     <View style={styles.jigInfoRow}>
-                      <Text style={styles.jigInfoLabel}>Estado:</Text>
+                      <Text style={styles.jigInfoLabel}>{t('state')}</Text>
                       <Text style={[styles.jigInfoValue, { color: jigInfo.estado === 'activo' ? '#4CAF50' : '#F44336' }]}>
                         {jigInfo.estado}
                       </Text>
@@ -276,7 +554,7 @@ export default function AddJigNGScreen({ navigation, route }) {
                   </View>
                 ) : (
                   <View style={styles.noJigInfo}>
-                    <Text style={styles.noJigText}>No hay información del jig disponible</Text>
+                    <Text style={styles.noJigText}>{t('noJigInfoAvailable')}</Text>
                   </View>
                 )}
               </Card.Content>
@@ -285,14 +563,14 @@ export default function AddJigNGScreen({ navigation, route }) {
             {/* Información del Usuario y Fecha */}
             <Card style={styles.userInfoCard}>
               <Card.Content>
-                <Title style={styles.userInfoTitle}>👤 Información del Reporte</Title>
+                <Title style={styles.userInfoTitle}>👤 {t('reportInformation')}</Title>
                 <View style={styles.userInfoGrid}>
                   <View style={styles.userInfoRow}>
-                    <Text style={styles.userInfoLabel}>Usuario que Reporta:</Text>
-                    <Text style={styles.userInfoValue}>{formData.usuario_reporte || 'Cargando...'}</Text>
+                    <Text style={styles.userInfoLabel}>{t('reportingUser')}</Text>
+                    <Text style={styles.userInfoValue}>{formData.usuario_reporte || t('loading')}</Text>
                   </View>
                   <View style={styles.userInfoRow}>
-                    <Text style={styles.userInfoLabel}>Fecha y Hora:</Text>
+                    <Text style={styles.userInfoLabel}>{t('dateAndTime')}</Text>
                     <Text style={styles.userInfoValue}>{new Date().toLocaleString('es-ES')}</Text>
                   </View>
                 </View>
@@ -301,7 +579,7 @@ export default function AddJigNGScreen({ navigation, route }) {
 
             {/* Prioridad */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Prioridad *</Text>
+              <Text style={styles.sectionTitle}>{t('priority')} *</Text>
               <View style={styles.prioridadContainer}>
                 {prioridadOptions.map((option) => (
                   <TouchableOpacity
@@ -330,7 +608,7 @@ export default function AddJigNGScreen({ navigation, route }) {
 
             {/* Descripción del Problema */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Descripción del Problema *</Text>
+              <Text style={styles.sectionTitle}>{t('problemDescription')} *</Text>
               <TextInput
                 value={formData.motivo}
                 onChangeText={(value) => handleInputChange('motivo', value)}
@@ -338,7 +616,7 @@ export default function AddJigNGScreen({ navigation, route }) {
                 mode="outlined"
                 multiline
                 numberOfLines={4}
-                placeholder="Describe detalladamente el problema encontrado..."
+                placeholder={t('problemDescriptionPlaceholder')}
                 placeholderTextColor="#B0B0B0"
                 textColor="#FFFFFF"
                 theme={{
@@ -354,7 +632,7 @@ export default function AddJigNGScreen({ navigation, route }) {
               />
               
               {/* Fallas Comunes */}
-              <Text style={styles.suggestionsTitle}>Fallas Comunes (Toca para agregar):</Text>
+              <Text style={styles.suggestionsTitle}>{t('commonFaults')}</Text>
               <View style={styles.faultsContainer}>
                 {commonFaults.map((fault, index) => (
                   <Chip
@@ -371,7 +649,7 @@ export default function AddJigNGScreen({ navigation, route }) {
 
             {/* Foto del Jig NG */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Foto del Jig NG (Opcional)</Text>
+              <Text style={styles.sectionTitle}>{t('jigNGPhoto')}</Text>
               {formData.foto ? (
                 <View style={styles.photoContainer}>
                   <Image source={{ uri: formData.foto }} style={styles.photoPreview} />
@@ -382,7 +660,7 @@ export default function AddJigNGScreen({ navigation, route }) {
                       style={styles.photoButton}
                       icon="camera"
                     >
-                      Tomar otra foto
+                      {t('takeAnotherPhoto')}
                     </Button>
                     <Button
                       mode="outlined"
@@ -391,7 +669,7 @@ export default function AddJigNGScreen({ navigation, route }) {
                       icon="delete"
                       textColor="#F44336"
                     >
-                      Eliminar foto
+                      {t('removePhoto')}
                     </Button>
                   </View>
                 </View>
@@ -402,7 +680,7 @@ export default function AddJigNGScreen({ navigation, route }) {
                   style={styles.photoButton}
                   icon="camera"
                 >
-                  Tomar foto
+                  {t('takePhoto')}
                 </Button>
               )}
             </View>
@@ -416,7 +694,7 @@ export default function AddJigNGScreen({ navigation, route }) {
                 labelStyle={styles.cancelButtonLabel}
                 disabled={loading}
               >
-                Cancelar
+                {t('cancel')}
               </Button>
               
               <Button
@@ -426,14 +704,14 @@ export default function AddJigNGScreen({ navigation, route }) {
                 labelStyle={styles.submitButtonLabel}
                 disabled={loading || !jigInfo || !userProfile}
               >
-                {loading ? 'Creando...' : 'Reportar NG'}
+                {loading ? t('creating') : t('reportNG')}
               </Button>
             </View>
 
             {loading && (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="small" color="#2196F3" />
-                <Text style={styles.loadingText}>Creando reporte NG...</Text>
+                <Text style={styles.loadingText}>{t('creatingNGReport')}</Text>
               </View>
             )}
           </Card.Content>
@@ -487,6 +765,79 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#2196F3',
     elevation: 2,
+  },
+  manualEntryCard: {
+    backgroundColor: '#1E1E1E',
+    marginBottom: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  manualEntryTitle: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  manualTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  manualTypeLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  manualLookupButton: {
+    marginTop: 8,
+  },
+  modelSuggestions: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#333333',
+    marginBottom: 12,
+    maxHeight: 180,
+  },
+  modelSuggestionItem: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2C',
+  },
+  modelSuggestionText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+  },
+  numberSuggestions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginBottom: 12,
+  },
+  numberChip: {
+    marginRight: 6,
+    marginBottom: 6,
+    backgroundColor: '#2C2C2C',
+  },
+  numberChipText: {
+    color: '#FFFFFF',
+  },
+  manualQrBox: {
+    marginTop: 10,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#2C2C2C',
+    borderWidth: 1,
+    borderColor: '#333333',
+  },
+  manualQrLabel: {
+    color: '#B0B0B0',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  manualQrValue: {
+    color: '#FFFFFF',
+    fontSize: 13,
   },
   jigInfoTitle: {
     color: '#2196F3',

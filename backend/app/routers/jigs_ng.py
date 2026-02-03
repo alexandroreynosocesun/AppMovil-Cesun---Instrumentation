@@ -11,7 +11,7 @@ logger = get_logger(__name__)
 
 router = APIRouter()
 
-def serialize_jig_ng(jig_ng, include_jig=False, db=None):
+def serialize_jig_ng(jig_ng, include_jig=False, include_foto=True, db=None):
     """Serializar objeto JigNG para incluir relaciones como diccionarios"""
     result = {
         "id": jig_ng.id,
@@ -25,7 +25,7 @@ def serialize_jig_ng(jig_ng, include_jig=False, db=None):
         "fecha_reparacion": jig_ng.fecha_reparacion,
         "tecnico_reparacion_id": jig_ng.tecnico_reparacion_id,
         "observaciones_reparacion": jig_ng.observaciones_reparacion,
-        "foto": jig_ng.foto,
+        "foto": jig_ng.foto if include_foto else None,
         "sincronizado": jig_ng.sincronizado,
         "created_at": jig_ng.created_at,
         "tecnico_ng": {
@@ -88,6 +88,7 @@ async def get_jigs_ng(
     page_size: int = Query(20, ge=1, le=100, description="Tamaño de página (máximo 100)"),
     estado: Optional[str] = None,
     categoria: Optional[str] = None,
+    include_foto: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: Tecnico = Depends(get_current_user)
 ):
@@ -110,7 +111,11 @@ async def get_jigs_ng(
     )
     
     if estado:
-        query = query.filter(JigNG.estado == estado)
+        estados = [s.strip() for s in estado.split(',') if s.strip()]
+        if len(estados) == 1:
+            query = query.filter(JigNG.estado == estados[0])
+        elif len(estados) > 1:
+            query = query.filter(JigNG.estado.in_(estados))
     if categoria:
         query = query.filter(JigNG.categoria == categoria)
     
@@ -120,7 +125,10 @@ async def get_jigs_ng(
     items, total, pages = paginate_query(query, page, page_size)
     
     # Convertir a diccionario para incluir información de técnicos
-    serialized_items = [serialize_jig_ng(jig_ng, include_jig=True, db=db) for jig_ng in items]
+    serialized_items = [
+        serialize_jig_ng(jig_ng, include_jig=True, include_foto=include_foto, db=db)
+        for jig_ng in items
+    ]
     
     return PaginatedResponse(
         items=serialized_items,
@@ -138,7 +146,7 @@ async def get_jig_ng_by_jig_id(
 ):
     """Obtener jigs NG por ID de jig"""
     jigs_ng = db.query(JigNG).filter(JigNG.jig_id == jig_id).all()
-    return [serialize_jig_ng(jig_ng, include_jig=True, db=db) for jig_ng in jigs_ng]
+    return [serialize_jig_ng(jig_ng, include_jig=True, include_foto=True, db=db) for jig_ng in jigs_ng]
 
 @router.get("/{jig_ng_id}", response_model=JigNGSchema)
 async def get_jig_ng(
@@ -153,7 +161,7 @@ async def get_jig_ng(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Jig NG no encontrado"
         )
-    return serialize_jig_ng(jig_ng, include_jig=True, db=db)
+    return serialize_jig_ng(jig_ng, include_jig=True, include_foto=True, db=db)
 
 @router.post("/", response_model=JigNGSchema)
 async def create_jig_ng(
@@ -192,8 +200,54 @@ async def create_jig_ng(
     # Actualizar estado del jig a "reparacion"
     jig.estado = "reparacion"
     
-    db.commit()
-    db.refresh(db_jig_ng)
+    try:
+        db.commit()
+        db.refresh(db_jig_ng)
+    except Exception as commit_error:
+        error_str = str(commit_error)
+        # Si es un error de llave duplicada, intentar corregir la secuencia y reintentar
+        if "UniqueViolation" in error_str and "jigs_ng_pkey" in error_str:
+            logger.warning("⚠️ Error de llave duplicada detectado en jigs_ng. Corrigiendo secuencia...")
+            try:
+                from sqlalchemy import text
+                db.rollback()  # Rollback de la transacción actual
+                
+                # Obtener el máximo ID actual
+                max_id_result = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM jigs_ng"))
+                max_id = max_id_result.scalar()
+                
+                # Actualizar la secuencia al siguiente valor disponible
+                db.execute(text(f"SELECT setval('jigs_ng_id_seq', {max_id}, true)"))
+                db.commit()
+                logger.info(f"✅ Secuencia jigs_ng_id_seq corregida a {max_id + 1}. Reintentando crear jig NG...")
+                
+                # Recrear el jig NG con la secuencia corregida
+                db_jig_ng = JigNG(
+                    **jig_ng_data.dict(),
+                    tecnico_id=current_user.id
+                )
+                db.add(db_jig_ng)
+                jig.estado = "reparacion"
+                
+                # Reintentar el commit
+                db.commit()
+                db.refresh(db_jig_ng)
+                logger.info("✅ Jig NG creado exitosamente después de corregir secuencia")
+            except Exception as retry_error:
+                logger.error(f"❌ Error al reintentar después de corregir secuencia: {retry_error}")
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error creando jig NG después de corregir secuencia: {str(retry_error)}"
+                )
+        else:
+            # Si es otro tipo de error, hacer rollback y relanzar
+            db.rollback()
+            logger.error(f"❌ Error creando jig NG: {commit_error}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error creando jig NG: {str(commit_error)}"
+            )
     
     return serialize_jig_ng(db_jig_ng)
 
@@ -315,6 +369,17 @@ async def get_diagnostic_info(
         # Información básica de la tabla
         total_records = db.query(JigNG).count()
         
+        # Obtener información de la secuencia
+        sequence_query = text("""
+            SELECT last_value, is_called 
+            FROM jigs_ng_id_seq
+        """)
+        sequence_result = db.execute(sequence_query).fetchone()
+        
+        # Obtener el máximo ID actual
+        max_id_query = text("SELECT COALESCE(MAX(id), 0) FROM jigs_ng")
+        max_id_result = db.execute(max_id_query).scalar()
+        
         # Verificar si hay índices
         index_query = text("""
             SELECT indexname, tablename 
@@ -332,12 +397,22 @@ async def get_diagnostic_info(
         
         size_result = db.execute(size_query).fetchone()
         
+        # Verificar si la secuencia está desincronizada
+        last_value = sequence_result[0] if sequence_result else 0
+        is_called = sequence_result[1] if sequence_result else False
+        next_value = last_value if not is_called else last_value + 1
+        sequence_synced = (next_value > max_id_result)
+        
         return {
             "total_records": total_records,
+            "max_id": max_id_result,
+            "sequence_last_value": last_value,
+            "sequence_next_value": next_value,
+            "sequence_synced": sequence_synced,
             "indexes_count": len(indexes),
             "indexes": [{"name": idx[0], "table": idx[1]} for idx in indexes],
             "table_size": size_result[0] if size_result else "N/A",
-            "status": "healthy" if total_records < 10000 else "needs_optimization"
+            "status": "healthy" if (total_records < 10000 and sequence_synced) else "needs_optimization"
         }
         
     except Exception as e:
@@ -345,3 +420,57 @@ async def get_diagnostic_info(
             "error": str(e),
             "status": "error"
         }
+
+@router.post("/fix-sequence")
+async def fix_jigs_ng_sequence(
+    db: Session = Depends(get_db),
+    current_user: Tecnico = Depends(get_current_user)
+):
+    """Corregir la secuencia de jigs_ng si está desincronizada (útil para administradores)"""
+    try:
+        from sqlalchemy import text
+        
+        # Verificar que el usuario sea administrador o ingeniero
+        if current_user.tipo_usuario not in ["ingeniero", "admin"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Solo administradores e ingenieros pueden corregir secuencias"
+            )
+        
+        # Obtener el máximo ID actual
+        max_id_result = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM jigs_ng"))
+        max_id = max_id_result.scalar()
+        
+        # Obtener el valor actual de la secuencia
+        current_seq_query = text("SELECT last_value, is_called FROM jigs_ng_id_seq")
+        current_seq = db.execute(current_seq_query).fetchone()
+        old_value = current_seq[0] if current_seq else 0
+        
+        # Actualizar la secuencia al siguiente valor disponible
+        db.execute(text(f"SELECT setval('jigs_ng_id_seq', {max_id}, true)"))
+        db.commit()
+        
+        # Obtener el nuevo valor
+        new_seq_query = text("SELECT last_value FROM jigs_ng_id_seq")
+        new_value = db.execute(new_seq_query).scalar()
+        
+        logger.info(f"✅ Secuencia jigs_ng_id_seq corregida de {old_value} a {new_value}")
+        
+        return {
+            "success": True,
+            "message": f"Secuencia corregida exitosamente",
+            "old_sequence_value": old_value,
+            "new_sequence_value": new_value,
+            "max_id": max_id,
+            "next_id_will_be": new_value + 1
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error corrigiendo secuencia: {e}")
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error corrigiendo secuencia: {str(e)}"
+        )

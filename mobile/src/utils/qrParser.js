@@ -54,24 +54,38 @@ export const isValidQRFormat = (qrCode) => {
 };
 
 /**
- * Generar sugerencias de tipo de jig basado en el código
+ * Generar sugerencias de tipo de jig basado en el código QR
+ * - Si empieza con "M" → manual
+ * - Si empieza con "S" → semiautomatico
+ * - Si empieza con "NS" → nuevo semiautomatico
  */
 export const getJigTypeSuggestion = (qrCode) => {
-  const parsed = parseQRCode(qrCode);
-  
-  if (!parsed.isValid) {
+  if (!qrCode) {
     return 'manual';
   }
   
-  // Lógica para determinar tipo basado en el código
-  const prefix = parsed.parts[0].toUpperCase();
-  const category = parsed.parts[2].toUpperCase();
+  // Convertir a mayúsculas para comparación
+  const upperQR = qrCode.toUpperCase().trim();
   
-  // Si contiene 'A' o 'S' en la categoría, podría ser semiautomático
-  if (category.includes('A') || category.includes('S')) {
-    return 'semiautomatico';
+  // Verificar si empieza con "NS" (debe ser antes de verificar "S")
+  if (upperQR.startsWith('NS')) {
+    return 'new semiautomatic';
+  }
+  
+  // Verificar si empieza con "S"
+  if (upperQR.startsWith('S')) {
+    return 'semiautomatic';
+  }
+  
+  // Verificar si empieza con "M" (o por defecto manual)
+  if (upperQR.startsWith('M')) {
+    return 'manual';
   }
   
   // Por defecto, manual
   return 'manual';
 };
+
+
+
+
