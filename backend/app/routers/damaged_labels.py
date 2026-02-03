@@ -37,8 +37,58 @@ def create_damaged_label(
     )
     
     db.add(db_damaged_label)
-    db.commit()
-    db.refresh(db_damaged_label)
+    
+    try:
+        db.commit()
+        db.refresh(db_damaged_label)
+    except Exception as commit_error:
+        error_str = str(commit_error)
+        # Si es un error de llave duplicada, intentar corregir la secuencia y reintentar
+        if "UniqueViolation" in error_str and "damaged_labels_pkey" in error_str:
+            logger.warning("⚠️ Error de llave duplicada detectado en damaged_labels. Corrigiendo secuencia...")
+            try:
+                from sqlalchemy import text
+                db.rollback()  # Rollback de la transacción actual
+                
+                # Obtener el máximo ID actual
+                max_id_result = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM damaged_labels"))
+                max_id = max_id_result.scalar()
+                
+                # Actualizar la secuencia al siguiente valor disponible
+                db.execute(text(f"SELECT setval('damaged_labels_id_seq', {max_id}, true)"))
+                db.commit()
+                logger.info(f"✅ Secuencia damaged_labels_id_seq corregida a {max_id + 1}. Reintentando crear damaged label...")
+                
+                # Recrear el damaged label con la secuencia corregida
+                db_damaged_label = DamagedLabelModel(
+                    modelo=damaged_label_data.modelo,
+                    tipo_jig=damaged_label_data.tipo_jig,
+                    numero_jig=damaged_label_data.numero_jig,
+                    foto=damaged_label_data.foto,
+                    reportado_por_id=current_user.id,
+                    estado="pendiente"
+                )
+                db.add(db_damaged_label)
+                
+                # Reintentar el commit
+                db.commit()
+                db.refresh(db_damaged_label)
+                logger.info("✅ Damaged label creado exitosamente después de corregir secuencia")
+            except Exception as retry_error:
+                logger.error(f"❌ Error al reintentar después de corregir secuencia: {retry_error}")
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error creando reporte de etiqueta NG después de corregir secuencia: {str(retry_error)}"
+                )
+        else:
+            # Si es otro tipo de error, hacer rollback y relanzar
+            db.rollback()
+            logger.error(f"❌ Error al crear damaged label: {commit_error}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error al crear el reporte: {str(commit_error)}"
+            )
     
     # Agregar información del usuario que reportó
     damaged_label_dict = {

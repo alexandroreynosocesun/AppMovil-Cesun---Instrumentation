@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, Text, ForeignKey, Float, UniqueConstraint
 from sqlalchemy.orm import relationship
 from datetime import datetime
 
@@ -30,11 +30,17 @@ class Jig(Base):
     modelo_actual = Column(String(100), nullable=True)
     estado = Column(String(20), default="activo")  # activo, inactivo, reparacion
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
+    # Campos de última validación
+    fecha_ultima_validacion = Column(DateTime, nullable=True)
+    tecnico_ultima_validacion_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
+    turno_ultima_validacion = Column(String(20), nullable=True)  # A, B, C
+
     # Relaciones
     validaciones = relationship("Validacion", back_populates="jig")
     reparaciones = relationship("Reparacion", back_populates="jig")
     jigs_ng = relationship("JigNG", back_populates="jig")
+    tecnico_ultima_validacion = relationship("Tecnico", foreign_keys=[tecnico_ultima_validacion_id])
 
 class Validacion(Base):
     __tablename__ = "validaciones"
@@ -125,6 +131,7 @@ class SolicitudRegistro(Base):
     numero_empleado = Column(String(20), unique=True, index=True, nullable=False)
     password_hash = Column(String(255), nullable=False)
     tipo_usuario = Column(String(20), default="tecnico")  # ingeniero, tecnico, gestion
+    turno_actual = Column(String(20), default="A")  # A, B, C
     firma_digital = Column(Text, nullable=True)  # Base64 de la firma
     estado = Column(String(20), default="pendiente")  # pendiente, aprobada, rechazada
     admin_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
@@ -157,3 +164,95 @@ class AuditoriaPDF(Base):
     
     # Relaciones
     tecnico = relationship("Tecnico")
+
+class Adaptador(Base):
+    __tablename__ = "adaptadores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    codigo_qr = Column(String(50), unique=True, index=True, nullable=False)
+    numero_adaptador = Column(String(50), nullable=False)
+    modelo_adaptador = Column(String(100), nullable=False)
+    estado = Column(String(20), default="activo")  # activo, inactivo, baja
+    es_dual_conector = Column(Boolean, default=False)  # True si soporta 51+41 pines (VByOne)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relaciones
+    conectores = relationship("ConectorAdaptador", back_populates="adaptador", cascade="all, delete-orphan")
+    validaciones = relationship("ValidacionAdaptador", back_populates="adaptador", cascade="all, delete-orphan")
+
+class ConectorAdaptador(Base):
+    __tablename__ = "conectores_adaptador"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    adaptador_id = Column(Integer, ForeignKey("adaptadores.id"), nullable=False)
+    nombre_conector = Column(String(100), nullable=False)  # ZH-MINI-HD-2, etc.
+    estado = Column(String(10), nullable=False, default="OK")  # OK, NG
+    fecha_estado_ng = Column(DateTime, nullable=True)  # Cuándo se marcó como NG
+    tecnico_ng_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)  # Quién lo marcó como NG
+    usuario_reporte_ng = Column(String(100), nullable=True)  # Backup: nombre de usuario
+    comentario_ng = Column(Text, nullable=True)  # Comentario cuando se marcó como NG
+    fecha_ultima_validacion = Column(DateTime, nullable=True)
+    tecnico_ultima_validacion_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
+    linea_ultima_validacion = Column(String(50), nullable=True)
+    turno_ultima_validacion = Column(String(20), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relaciones
+    adaptador = relationship("Adaptador", back_populates="conectores")
+    tecnico_ng = relationship("Tecnico", foreign_keys=[tecnico_ng_id], overlaps="tecnico_ultima_validacion")
+    tecnico_ultima_validacion = relationship("Tecnico", foreign_keys=[tecnico_ultima_validacion_id], overlaps="tecnico_ng")
+
+class ValidacionAdaptador(Base):
+    __tablename__ = "validaciones_adaptador"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    adaptador_id = Column(Integer, ForeignKey("adaptadores.id"), nullable=False)
+    tecnico_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=False)
+    fecha = Column(DateTime, default=datetime.utcnow)
+    turno = Column(String(20), nullable=False)  # A, B, C
+    estado_general = Column(String(10), nullable=False)  # OK, NG
+    comentario = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relaciones
+    adaptador = relationship("Adaptador", back_populates="validaciones")
+    tecnico = relationship("Tecnico")
+    detalle_conectores = relationship("ValidacionConector", back_populates="validacion", cascade="all, delete-orphan")
+
+class ValidacionConector(Base):
+    __tablename__ = "validaciones_conector"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    validacion_adaptador_id = Column(Integer, ForeignKey("validaciones_adaptador.id"), nullable=False)
+    conector_id = Column(Integer, ForeignKey("conectores_adaptador.id"), nullable=False)
+    estado = Column(String(10), nullable=False)  # OK, NG
+    comentario = Column(Text, nullable=True)
+    
+    # Relaciones
+    validacion = relationship("ValidacionAdaptador", back_populates="detalle_conectores")
+    conector = relationship("ConectorAdaptador")
+
+class ModeloMainboardConector(Base):
+    __tablename__ = "modelos_mainboard_conector"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    nombre_conector = Column(String(100), nullable=False, index=True)  # ZH-MINI-HD-2, etc.
+    modelo_mainboard = Column(String(100), nullable=False)  # 10939, 11493, etc.
+    modelo_interno = Column(String(100), nullable=True)  # 50A53FUR, 65C350U, etc.
+    tool_sw = Column(String(100), nullable=True)  # mini 08, SKD, 4K VB1, etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        UniqueConstraint('nombre_conector', 'modelo_mainboard', name='uq_conector_modelo'),
+    )
+
+class ArduinoSequence(Base):
+    __tablename__ = "arduino_sequences"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    comando = Column(String(50), nullable=False)
+    destino = Column(String(150), nullable=False)
+    pais = Column(String(50), nullable=True, index=True)  # COL, MEX, GUA, US (puede ser lista)
+    modelo = Column(String(50), nullable=False, index=True)
+    modelo_interno = Column(String(100), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)

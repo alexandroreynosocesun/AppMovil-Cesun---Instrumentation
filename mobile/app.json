@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Validación de Jigs",
+    "name": "Hisense CheckApp",
     "slug": "jigs-validation",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -16,7 +16,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.empresa.jigsvalidation"
+      "bundleIdentifier": "com.empresa.jigsvalidation",
+      "infoPlist": {
+        "NSFaceIDUsageDescription": "Esta app usa Face ID para autenticación rápida y segura."
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -33,15 +36,22 @@
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro",
-      "name": "Validación de Jigs - Web",
-      "description": "Sistema de validación de jigs industriales",
+      "name": "Hisense CheckApp - Web",
+      "description": "Hisense CheckApp - Sistema de validación de jigs industriales",
       "themeColor": "#2196F3",
-      "backgroundColor": "#ffffff",
+      "backgroundColor": "#0F0F0F",
       "lang": "es",
       "scope": "/",
       "startUrl": "/",
       "display": "standalone",
-      "orientation": "any"
+      "orientation": "any",
+      "build": {
+        "babel": {
+          "include": [
+            "expo-image-picker"
+          ]
+        }
+      }
     },
     "plugins": [
       [
@@ -57,7 +67,13 @@
         }
       ],
       "expo-secure-store",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Permitir que $(PRODUCT_NAME) use Face ID para autenticación rápida y segura."
+        }
+      ]
     ],
     "sdkVersion": "54.0.0"
   }

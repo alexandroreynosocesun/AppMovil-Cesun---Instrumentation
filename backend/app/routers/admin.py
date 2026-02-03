@@ -56,19 +56,21 @@ async def get_tecnicos(
     current_user: Tecnico = Depends(get_current_user)
 ):
     """
-    Obtener lista paginada de técnicos disponibles para asignación (usuarios con rol asignaciones o admin)
+    Obtener lista paginada de técnicos disponibles para asignación
     
     - **page**: Número de página (empezando en 1)
     - **page_size**: Cantidad de elementos por página (máximo 100)
+    
+    Permite acceso a todos los roles excepto gestión (para ver nombres de técnicos en validaciones)
     """
-    # Permitir acceso a usuarios con rol "asignaciones" o admin
     api_logger.debug(f"[GET_TECNICOS] Usuario actual: {current_user.usuario}, tipo_usuario: {current_user.tipo_usuario}")
     
-    if current_user.tipo_usuario not in ['asignaciones', 'ingeniero'] and current_user.usuario not in ADMIN_USERS:
-        api_logger.warning(f"[GET_TECNICOS] Acceso denegado para usuario {current_user.usuario}")
+    # Permitir acceso a todos los roles excepto gestión
+    if current_user.tipo_usuario == 'gestion' or current_user.tipo_usuario == 'Gestion':
+        api_logger.warning(f"[GET_TECNICOS] Acceso denegado para usuario {current_user.usuario} (rol: {current_user.tipo_usuario})")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Acceso denegado. Solo usuarios con rol de asignaciones pueden acceder."
+            detail="Acceso denegado. Los usuarios de gestión no pueden acceder a esta información."
         )
     
     # Obtener solo técnicos (usuarios con tipo_usuario = 'tecnico' o 'validacion')
@@ -132,7 +134,7 @@ async def create_user(
     db_user = Tecnico(
         usuario=user_data.usuario,
         nombre=user_data.nombre,
-        pin=user_data.pin,
+        numero_empleado=user_data.numero_empleado,
         password_hash=hashed_password
     )
     
@@ -169,7 +171,7 @@ async def update_user(
     # Actualizar datos
     user.usuario = user_data.usuario
     user.nombre = user_data.nombre
-    user.pin = user_data.pin
+    user.numero_empleado = user_data.numero_empleado
     user.password_hash = get_password_hash(user_data.password)
     
     db.commit()
@@ -184,6 +186,14 @@ async def delete_user(
     admin_user: Tecnico = Depends(verify_admin)
 ):
     """Eliminar usuario (solo administradores)"""
+    from ..models.models import (
+        Validacion, Reparacion, JigNG, DamagedLabel, 
+        SolicitudRegistro, AuditoriaPDF, Adaptador, ValidacionAdaptador, ConectorAdaptador
+    )
+    from ..utils.logger import get_logger
+    
+    logger = get_logger(__name__)
+    
     user = db.query(Tecnico).filter(Tecnico.id == user_id).first()
     if not user:
         raise HTTPException(
@@ -198,10 +208,137 @@ async def delete_user(
             detail="No puedes eliminar tu propio usuario"
         )
     
-    db.delete(user)
-    db.commit()
-    
-    return {"message": "Usuario eliminado correctamente"}
+    try:
+        # Eliminar o actualizar referencias antes de eliminar el usuario
+        
+        # 1. Eliminar damaged_labels asociados (reportado_por_id es NOT NULL)
+        damaged_labels_count = db.query(DamagedLabel).filter(
+            DamagedLabel.reportado_por_id == user_id
+        ).count()
+        if damaged_labels_count > 0:
+            db.query(DamagedLabel).filter(
+                DamagedLabel.reportado_por_id == user_id
+            ).delete()
+            logger.info(f"Eliminados {damaged_labels_count} damaged_labels asociados al usuario {user_id}")
+        
+        # 2. Actualizar validaciones (establecer tecnico_id y tecnico_asignado_id a NULL si es posible)
+        # Nota: Si tecnico_id es NOT NULL, necesitamos eliminar las validaciones
+        # Por ahora, eliminamos las validaciones donde el usuario es el técnico principal
+        validaciones_count = db.query(Validacion).filter(
+            Validacion.tecnico_id == user_id
+        ).count()
+        if validaciones_count > 0:
+            db.query(Validacion).filter(
+                Validacion.tecnico_id == user_id
+            ).delete()
+            logger.info(f"Eliminadas {validaciones_count} validaciones asociadas al usuario {user_id}")
+        
+        # Actualizar validaciones asignadas (tecnico_asignado_id puede ser NULL)
+        db.query(Validacion).filter(
+            Validacion.tecnico_asignado_id == user_id
+        ).update({Validacion.tecnico_asignado_id: None})
+        
+        # 3. Eliminar reparaciones asociadas
+        reparaciones_count = db.query(Reparacion).filter(
+            Reparacion.tecnico_id == user_id
+        ).count()
+        if reparaciones_count > 0:
+            db.query(Reparacion).filter(
+                Reparacion.tecnico_id == user_id
+            ).delete()
+            logger.info(f"Eliminadas {reparaciones_count} reparaciones asociadas al usuario {user_id}")
+        
+        # 4. Actualizar JigNG (tecnico_reparacion_id puede ser NULL)
+        db.query(JigNG).filter(
+            JigNG.tecnico_reparacion_id == user_id
+        ).update({JigNG.tecnico_reparacion_id: None})
+        
+        # Eliminar JigNG donde el usuario es el técnico principal
+        jigs_ng_count = db.query(JigNG).filter(
+            JigNG.tecnico_id == user_id
+        ).count()
+        if jigs_ng_count > 0:
+            db.query(JigNG).filter(
+                JigNG.tecnico_id == user_id
+            ).delete()
+            logger.info(f"Eliminados {jigs_ng_count} jigs_ng asociados al usuario {user_id}")
+        
+        # 5. Actualizar solicitudes_registro (admin_id puede ser NULL)
+        db.query(SolicitudRegistro).filter(
+            SolicitudRegistro.admin_id == user_id
+        ).update({SolicitudRegistro.admin_id: None})
+        
+        # 6. Eliminar auditoria_pdfs asociados (tecnico_id es NOT NULL, así que debemos eliminarlos)
+        auditoria_pdfs = db.query(AuditoriaPDF).filter(
+            AuditoriaPDF.tecnico_id == user_id
+        ).all()
+        auditoria_pdfs_count = len(auditoria_pdfs)
+        if auditoria_pdfs_count > 0:
+            # Obtener rutas de archivos antes de eliminar
+            from ..services.storage_service import cleanup_when_deleted_from_db
+            for pdf in auditoria_pdfs:
+                try:
+                    cleanup_when_deleted_from_db(pdf)
+                except Exception as e:
+                    logger.warning(f"Error eliminando archivo PDF {pdf.ruta_archivo}: {e}")
+            
+            # Eliminar registros de la base de datos
+            db.query(AuditoriaPDF).filter(
+                AuditoriaPDF.tecnico_id == user_id
+            ).delete()
+            logger.info(f"Eliminados {auditoria_pdfs_count} PDFs de auditoría asociados al usuario {user_id}")
+        
+        # 7. Actualizar conectores_adaptador (los campos técnico están aquí, no en Adaptador)
+        conectores_actualizados = db.query(ConectorAdaptador).filter(
+            ConectorAdaptador.tecnico_ng_id == user_id
+        ).update({ConectorAdaptador.tecnico_ng_id: None})
+        
+        if conectores_actualizados > 0:
+            logger.info(f"Actualizados {conectores_actualizados} conectores_adaptador (tecnico_ng_id) asociados al usuario {user_id}")
+        
+        conectores_validacion_actualizados = db.query(ConectorAdaptador).filter(
+            ConectorAdaptador.tecnico_ultima_validacion_id == user_id
+        ).update({ConectorAdaptador.tecnico_ultima_validacion_id: None})
+        
+        if conectores_validacion_actualizados > 0:
+            logger.info(f"Actualizados {conectores_validacion_actualizados} conectores_adaptador (tecnico_ultima_validacion_id) asociados al usuario {user_id}")
+        
+        # 8. Eliminar validaciones_adaptador asociadas
+        validaciones_adaptador_count = db.query(ValidacionAdaptador).filter(
+            ValidacionAdaptador.tecnico_id == user_id
+        ).count()
+        if validaciones_adaptador_count > 0:
+            db.query(ValidacionAdaptador).filter(
+                ValidacionAdaptador.tecnico_id == user_id
+            ).delete()
+            logger.info(f"Eliminadas {validaciones_adaptador_count} validaciones_adaptador asociadas al usuario {user_id}")
+        
+        # Ahora eliminar el usuario
+        db.delete(user)
+        db.commit()
+        
+        logger.info(f"Usuario {user.usuario} (ID: {user_id}) eliminado correctamente")
+        
+        return {
+            "success": True,
+            "message": "Usuario eliminado correctamente",
+            "deleted_counts": {
+                "damaged_labels": damaged_labels_count,
+                "validaciones": validaciones_count,
+                "reparaciones": reparaciones_count,
+                "jigs_ng": jigs_ng_count,
+                "auditoria_pdfs": auditoria_pdfs_count,
+                "validaciones_adaptador": validaciones_adaptador_count
+            }
+        }
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error eliminando usuario {user_id}: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error eliminando usuario: {str(e)}"
+        )
 
 @router.get("/stats")
 async def get_admin_stats(
@@ -212,10 +349,16 @@ async def get_admin_stats(
     total_users = db.query(Tecnico).count()
     pending_requests = db.query(SolicitudRegistro).filter(SolicitudRegistro.estado == "pendiente").count()
     
+    # Contar usuarios admin reales de la base de datos
+    # Contar usuarios con tipo_usuario == "admin" o usuarios en la lista ADMIN_USERS
+    admin_count = db.query(Tecnico).filter(
+        (Tecnico.tipo_usuario == "admin") | (Tecnico.usuario.in_(ADMIN_USERS))
+    ).count()
+    
     return {
         "total_users": total_users,
         "pending_requests": pending_requests,
-        "admin_users": len(ADMIN_USERS),
+        "admin_users": admin_count,  # Usar el conteo real en lugar de len(ADMIN_USERS)
         "current_admin": admin_user.usuario
     }
 
@@ -336,7 +479,7 @@ async def aprobar_solicitud(
             numero_empleado=solicitud.numero_empleado,
             password_hash=solicitud.password_hash,
             firma_digital=solicitud.firma_digital,
-            turno_actual="mañana",
+            turno_actual=solicitud.turno_actual or "A",
             tipo_tecnico="Técnico de Instrumentación",
             tipo_usuario=solicitud.tipo_usuario or "tecnico"
         )

@@ -1,25 +1,18 @@
-import axios from 'axios';
-import { getAuthToken } from '../utils/authUtils';
-import { API_BASE_URL } from './AuthService';
 import logger from '../utils/logger';
+import { apiClient } from '../utils/apiClient';
 
 const damagedLabelService = {
   async createDamagedLabel(data) {
     try {
-      const token = await getAuthToken();
-      const response = await axios.post(
-        `${API_BASE_URL}/damaged-labels/`,
-        data,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const response = await apiClient.post('/damaged-labels/', data);
       return { success: true, data: response.data };
     } catch (error) {
       logger.error('Error creando reporte de etiqueta NG:', error);
+      if (error.response) {
+        logger.error('Status:', error.response.status);
+        logger.error('Data:', JSON.stringify(error.response.data, null, 2));
+        logger.error('Headers:', error.response.headers);
+      }
       if (error.response?.status === 401) {
         return { success: false, error: 'UNAUTHORIZED', message: 'Tu sesión ha expirado' };
       }
@@ -32,15 +25,7 @@ const damagedLabelService = {
 
   async getDamagedLabels() {
     try {
-      const token = await getAuthToken();
-      const response = await axios.get(
-        `${API_BASE_URL}/damaged-labels/`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        }
-      );
+      const response = await apiClient.get('/damaged-labels/');
       return { success: true, data: response.data };
     } catch (error) {
       logger.error('Error obteniendo reportes de etiquetas NG:', error);
@@ -56,17 +41,7 @@ const damagedLabelService = {
 
   async updateDamagedLabel(id, data) {
     try {
-      const token = await getAuthToken();
-      const response = await axios.put(
-        `${API_BASE_URL}/damaged-labels/${id}`,
-        data,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+      const response = await apiClient.put(`/damaged-labels/${id}`, data);
       return { success: true, data: response.data };
     } catch (error) {
       logger.error('Error actualizando reporte de etiqueta NG:', error);

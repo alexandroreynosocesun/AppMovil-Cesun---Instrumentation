@@ -17,7 +17,11 @@ export const webStyles = StyleSheet.create({
       maxWidth: isDesktop ? 1400 : '100%',
       alignSelf: 'center',
       width: '100%',
+      minHeight: '100vh',
+      height: '100%',
       paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 16,
+      display: 'flex',
+      flexDirection: 'column',
     }),
   },
 
@@ -28,6 +32,9 @@ export const webStyles = StyleSheet.create({
       maxWidth: isDesktop ? 1400 : '100%',
       alignSelf: 'center',
       width: '100%',
+      minHeight: '100%',
+      display: 'flex',
+      flexDirection: 'column',
     }),
   },
 
@@ -104,9 +111,10 @@ export const webStyles = StyleSheet.create({
   // Login/Register card responsive
   authCard: {
     ...(isWeb && {
-      maxWidth: isDesktop ? 450 : isTablet ? 400 : '100%',
+      maxWidth: isDesktop ? 500 : isTablet ? 450 : '100%',
       alignSelf: 'center',
       width: '100%',
+      marginVertical: isDesktop ? 'auto' : 20,
     }),
   },
 
@@ -114,7 +122,9 @@ export const webStyles = StyleSheet.create({
   scrollContent: {
     ...(isWeb && {
       paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 16,
-      paddingVertical: isDesktop ? 24 : 20,
+      paddingVertical: isDesktop ? 32 : 24,
+      minHeight: '100%',
+      flexGrow: 1,
     }),
   },
 

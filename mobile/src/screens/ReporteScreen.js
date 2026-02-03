@@ -22,6 +22,7 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { useValidation } from '../contexts/ValidationContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { formatDate } from '../utils/dateUtils';
 import logger from '../utils/logger';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -31,6 +32,7 @@ import { getAuthToken } from '../utils/authUtils';
 const { width } = Dimensions.get('window');
 
 export default function ReporteScreen({ navigation, route }) {
+  const { t } = useLanguage();
   const { user } = useAuth();
   const { 
     validations, 
@@ -44,7 +46,12 @@ export default function ReporteScreen({ navigation, route }) {
   const { modelValidations, currentModel } = route.params || {};
   const [selectedModel, setSelectedModel] = useState(currentModel);
   const [turno, setTurno] = useState(user?.turno_actual || 'A');
-  const [fecha, setFecha] = useState(new Date().toISOString().split('T')[0]);
+  const getLocalDateISO = () => {
+    const now = new Date();
+    const tzOffsetMs = now.getTimezoneOffset() * 60000;
+    return new Date(now.getTime() - tzOffsetMs).toISOString().split('T')[0];
+  };
+  const [fecha, setFecha] = useState(getLocalDateISO());
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [reportData, setReportData] = useState(null);
@@ -81,8 +88,8 @@ export default function ReporteScreen({ navigation, route }) {
     try {
       setIsGeneratingReport(true);
       
-      // Formatear fecha para el servidor
-      const fechaFormateada = new Date(fecha).toISOString();
+      // Enviar fecha local (YYYY-MM-DD) para evitar desfase por zona horaria
+      const fechaFormateada = fecha;
       
       // Limpiar y validar datos antes de enviar
       const validacionesLimpias = currentValidations
@@ -133,17 +140,17 @@ export default function ReporteScreen({ navigation, route }) {
 
       // Validaciones
       if (isNaN(reportDataToSend.tecnico_id)) {
-        Alert.alert('Error', 'ID de técnico inválido. Inicie sesión nuevamente.');
+        Alert.alert(t('error'), t('invalidTechnicianId'));
         return;
       }
 
       if (!reportDataToSend.validaciones || reportDataToSend.validaciones.length === 0) {
-        Alert.alert('Error', 'No hay validaciones válidas para generar el reporte');
+        Alert.alert(t('error'), t('noValidValidations'));
         return;
       }
 
       if (!reportDataToSend.modelo || reportDataToSend.modelo === 'N/A') {
-        Alert.alert('Error', 'Debe seleccionar un modelo para el reporte');
+        Alert.alert(t('error'), t('selectModelForReport'));
         return;
       }
 
@@ -151,7 +158,13 @@ export default function ReporteScreen({ navigation, route }) {
       let result = await reportService.generateValidationReport(reportDataToSend);
       
       if (!result.success) {
-        Alert.alert('Error', result.error || 'Error generando el reporte');
+        const errorMsg = result.error || 'Error generando el reporte';
+        logger.error('❌ Error al generar reporte:', errorMsg);
+        Alert.alert(
+          t('errorGeneratingReport'),
+          errorMsg + '\n\n' + t('errorGeneratingReportDesc'),
+          [{ text: t('ok') }]
+        );
         return;
       }
 
@@ -172,8 +185,14 @@ export default function ReporteScreen({ navigation, route }) {
       logger.info('✅ Reporte generado exitosamente. PDF guardado en auditoría por el backend.');
       
     } catch (error) {
-      logger.error('Error generando reporte:', error);
-      Alert.alert('Error', 'Error de conexión al generar el reporte');
+      logger.error('❌ Error inesperado generando reporte:', error);
+      logger.error('Error completo:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
+      const errorMsg = error.message || error.toString() || 'Error de conexión al generar el reporte';
+      Alert.alert(
+        t('unexpectedError'),
+        errorMsg + '\n\n' + t('unexpectedErrorDesc'),
+        [{ text: t('ok') }]
+      );
     } finally {
       setIsGeneratingReport(false);
     }
@@ -212,11 +231,11 @@ export default function ReporteScreen({ navigation, route }) {
         
         // Mostrar confirmación y navegar a Home
         Alert.alert(
-          '✅ Guardado en Auditoría',
-          `El reporte "${savedFilename}" ha sido guardado exitosamente.\n\nLas validaciones han sido limpiadas.`,
+          `✅ ${t('savedToAudit')}`,
+          t('savedToAuditMessage', { filename: savedFilename }),
           [
             {
-              text: 'OK',
+              text: t('ok'),
               onPress: () => {
                 navigation.navigate('Home');
               }
@@ -226,17 +245,17 @@ export default function ReporteScreen({ navigation, route }) {
       } else {
         logger.warn('⚠️ No hay información del PDF disponible');
         Alert.alert(
-          'Advertencia',
-          'El PDF aún no está disponible. Por favor, espera a que se genere el reporte.',
-          [{ text: 'OK' }]
+          t('warning'),
+          t('pdfNotAvailable'),
+          [{ text: t('ok') }]
         );
       }
     } catch (error) {
       logger.error('❌ Error guardando en auditoría:', error);
       Alert.alert(
-        'Error',
-        'No se pudo confirmar el guardado del reporte en auditoría. El reporte puede haberse guardado correctamente. Verifica en la pantalla de Auditoría.',
-        [{ text: 'OK' }]
+        t('error'),
+        t('errorSavingAudit'),
+        [{ text: t('ok') }]
       );
     } finally {
       setSaving(false);
@@ -251,24 +270,24 @@ export default function ReporteScreen({ navigation, route }) {
 
   // Limpiar validaciones
   const handleClearValidations = () => {
-    Alert.alert(
-      'Limpiar Validaciones',
-      '¿Estás seguro de que quieres limpiar todas las validaciones?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Limpiar',
-          style: 'destructive',
-          onPress: () => {
-            clearValidations();
-            setSelectedModel(null);
-            setReportData(null);
-            setPdfInfo(null);
-            setSaved(false);
-          }
-        }
-      ]
-    );
+        Alert.alert(
+          t('clearValidations'),
+          t('clearValidationsConfirm'),
+          [
+            { text: t('cancel'), style: 'cancel' },
+            {
+              text: t('clear'),
+              style: 'destructive',
+              onPress: () => {
+                clearValidations();
+                setSelectedModel(null);
+                setReportData(null);
+                setPdfInfo(null);
+                setSaved(false);
+              }
+            }
+          ]
+        );
   };
 
   // Si no hay reporte generado, mostrar vista de generación
@@ -285,9 +304,9 @@ export default function ReporteScreen({ navigation, route }) {
           >
           <View style={styles.headerContent}>
               <View style={styles.headerTextContainer}>
-              <Title style={styles.headerTitle}>📊 Reporte de Validación</Title>
+              <Title style={styles.headerTitle}>📊 {t('validationReport')}</Title>
               <Paragraph style={styles.headerSubtitle}>
-                {formatDate(fecha)} • Turno {turno}
+                {formatDate(fecha)} • {t('shift')} {turno}
               </Paragraph>
             </View>
             </View>
@@ -296,22 +315,22 @@ export default function ReporteScreen({ navigation, route }) {
         {/* Información del técnico */}
           <Card style={styles.infoCard}>
           <Card.Content>
-              <Title style={styles.cardTitle}>Información del Reporte</Title>
+              <Title style={styles.cardTitle}>{t('reportInformation')}</Title>
               <View style={styles.infoGrid}>
                 <View style={styles.infoItem}>
-                  <Paragraph style={styles.infoLabel}>Técnico:</Paragraph>
+                  <Paragraph style={styles.infoLabel}>{t('technician')}</Paragraph>
                   <Paragraph style={styles.infoValue}>{user?.nombre || 'N/A'}</Paragraph>
               </View>
                 <View style={styles.infoItem}>
-                  <Paragraph style={styles.infoLabel}>Modelo:</Paragraph>
+                  <Paragraph style={styles.infoLabel}>{t('currentModel')}:</Paragraph>
                   <Paragraph style={styles.infoValue}>{selectedModel || 'N/A'}</Paragraph>
               </View>
                 <View style={styles.infoItem}>
-                  <Paragraph style={styles.infoLabel}>Total Validaciones:</Paragraph>
+                  <Paragraph style={styles.infoLabel}>{t('totalValidations')}</Paragraph>
                   <Paragraph style={styles.infoValue}>{currentValidations.length}</Paragraph>
               </View>
                 <View style={styles.infoItem}>
-                  <Paragraph style={styles.infoLabel}>Turno:</Paragraph>
+                  <Paragraph style={styles.infoLabel}>{t('shiftLabel')}</Paragraph>
                     <Chip
                     style={[styles.turnoChip, { backgroundColor: getTurnoColor(turno) }]}
                     textStyle={styles.chipText}
@@ -327,29 +346,29 @@ export default function ReporteScreen({ navigation, route }) {
           {currentValidations.length > 0 && (
             <Card style={styles.summaryCard}>
           <Card.Content>
-                <Title style={styles.cardTitle}>Resumen de Validaciones</Title>
+                <Title style={styles.cardTitle}>{t('validationData')}</Title>
                 <View style={styles.summaryGrid}>
                   <View style={styles.summaryItem}>
                     <Text style={styles.summaryNumber}>{currentValidations.length}</Text>
-                    <Text style={styles.summaryLabel}>Total Jigs</Text>
+                    <Text style={styles.summaryLabel}>{t('totalJigs')}</Text>
             </View>
                   <View style={styles.summaryItem}>
                     <Text style={[styles.summaryNumber, { color: '#4CAF50' }]}>
                       {currentValidations.filter(v => v.estado === 'OK').length}
                     </Text>
-                    <Text style={styles.summaryLabel}>OK</Text>
+                    <Text style={styles.summaryLabel}>{t('okStatus')}</Text>
                   </View>
                   <View style={styles.summaryItem}>
                     <Text style={[styles.summaryNumber, { color: '#F44336' }]}>
                       {currentValidations.filter(v => v.estado === 'NG').length}
                     </Text>
-                    <Text style={styles.summaryLabel}>NG</Text>
+                    <Text style={styles.summaryLabel}>{t('ngStatus')}</Text>
                   </View>
                   <View style={styles.summaryItem}>
                     <Text style={styles.summaryNumber}>
                       {currentValidations.reduce((sum, v) => sum + parseInt(v.cantidad || 0), 0)}
                     </Text>
-                    <Text style={styles.summaryLabel}>Cantidad Total</Text>
+                    <Text style={styles.summaryLabel}>{t('totalQuantity')}</Text>
                   </View>
                 </View>
               </Card.Content>
@@ -360,7 +379,7 @@ export default function ReporteScreen({ navigation, route }) {
             <Card style={styles.emptyCard}>
               <Card.Content>
                 <Paragraph style={styles.emptyText}>
-                  No hay validaciones registradas. Escanea algunos jigs para generar el reporte.
+                  {t('noValidationsRegistered')}
                 </Paragraph>
               </Card.Content>
             </Card>
@@ -431,9 +450,9 @@ export default function ReporteScreen({ navigation, route }) {
               }}
             />
             <View style={styles.headerTextContainer}>
-              <Title style={styles.headerTitle}>📄 Previsualización del Reporte</Title>
+              <Title style={styles.headerTitle}>📄 {t('reportPreview')}</Title>
               <Paragraph style={styles.headerSubtitle}>
-                Revisa los detalles antes de guardar
+                {t('reviewDetails')}
               </Paragraph>
               </View>
                   </View>
@@ -442,24 +461,24 @@ export default function ReporteScreen({ navigation, route }) {
         {/* Información del reporte */}
         <Card style={styles.infoCard}>
           <Card.Content>
-            <Title style={styles.cardTitle}>Información del Reporte</Title>
+            <Title style={styles.cardTitle}>{t('reportInformation')}</Title>
             <View style={styles.infoGrid}>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Técnico:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('technician')}</Paragraph>
                 <Paragraph style={styles.infoValue}>{reportData.tecnico || user?.nombre}</Paragraph>
                   </View>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Modelo:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('modelLabel')}</Paragraph>
                 <Paragraph style={styles.infoValue}>{reportData.modelo || 'N/A'}</Paragraph>
                   </View>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Fecha:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('date')}</Paragraph>
                 <Paragraph style={styles.infoValue}>
                   {reportData.fecha ? formatDate(reportData.fecha) : new Date().toLocaleDateString('es-ES')}
                 </Paragraph>
                   </View>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Turno:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('shiftLabel')}</Paragraph>
                 <Chip
                   style={[styles.turnoChip, { backgroundColor: getTurnoColor(reportData.turno) }]}
                   textStyle={styles.chipText}
@@ -474,29 +493,29 @@ export default function ReporteScreen({ navigation, route }) {
         {/* Resumen estadístico */}
         <Card style={styles.summaryCard}>
           <Card.Content>
-            <Title style={styles.cardTitle}>Resumen de Validaciones</Title>
+            <Title style={styles.cardTitle}>{t('validationData')}</Title>
             <View style={styles.summaryGrid}>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryNumber}>{validaciones.length}</Text>
-                <Text style={styles.summaryLabel}>Total Jigs</Text>
+                <Text style={styles.summaryLabel}>{t('totalJigs')}</Text>
                   </View>
               <View style={styles.summaryItem}>
                 <Text style={[styles.summaryNumber, { color: '#4CAF50' }]}>
                   {validacionesOK}
                 </Text>
-                <Text style={styles.summaryLabel}>OK</Text>
+                <Text style={styles.summaryLabel}>{t('okStatus')}</Text>
                   </View>
               <View style={styles.summaryItem}>
                 <Text style={[styles.summaryNumber, { color: '#F44336' }]}>
                   {validacionesNG}
                 </Text>
-                <Text style={styles.summaryLabel}>NG</Text>
+                <Text style={styles.summaryLabel}>{t('ngStatus')}</Text>
                   </View>
               <View style={styles.summaryItem}>
                 <Text style={styles.summaryNumber}>
                   {validaciones.reduce((sum, v) => sum + parseInt(v.cantidad || 0), 0)}
                 </Text>
-                <Text style={styles.summaryLabel}>Cantidad Total</Text>
+                <Text style={styles.summaryLabel}>{t('totalQuantity')}</Text>
                   </View>
                 </View>
           </Card.Content>
@@ -505,14 +524,14 @@ export default function ReporteScreen({ navigation, route }) {
         {/* Lista completa de validaciones */}
         <Card style={styles.previewCard}>
           <Card.Content>
-            <Title style={styles.cardTitle}>Validaciones Incluidas</Title>
+            <Title style={styles.cardTitle}>{t('includedValidations')}</Title>
             <Paragraph style={styles.previewSubtitle}>
-              Total: {validaciones.length} validaciones
+              {t('totalValidationsCount', { count: validaciones.length })}
                           </Paragraph>
             <Divider style={styles.divider} />
             {validaciones.length === 0 ? (
               <Paragraph style={styles.emptyText}>
-                No hay validaciones para mostrar
+                {t('noValidationsToShow')}
                           </Paragraph>
             ) : (
               <ScrollView 
@@ -525,7 +544,7 @@ export default function ReporteScreen({ navigation, route }) {
                     <View style={styles.previewLeft}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
                         <Paragraph style={styles.previewJig}>
-                          Jig: {validation.numero_jig || 'N/A'}
+                          {t('jigLabel')} {validation.numero_jig || 'N/A'}
                         </Paragraph>
                         <Chip
                           style={[
@@ -538,32 +557,32 @@ export default function ReporteScreen({ navigation, route }) {
                         </Chip>
                       </View>
                       <Paragraph style={styles.previewModel}>
-                        Modelo: {validation.modelo || reportData.modelo}
+                        {t('modelLabel')} {validation.modelo || reportData.modelo}
                       </Paragraph>
                       {validation.tipo && (
                         <Paragraph style={styles.previewLinea}>
-                          Tipo: {validation.tipo}
+                          {t('typeLabel')} {validation.tipo}
                         </Paragraph>
                       )}
                       {validation.linea && (
                         <Paragraph style={styles.previewLinea}>
-                          Línea: {validation.linea}
+                          {t('lineLabel')} {validation.linea}
                         </Paragraph>
                       )}
                       {validation.comentario && (
                         <Paragraph style={styles.previewComentario}>
-                          Comentario: {validation.comentario}
+                          {t('commentLabel')} {validation.comentario}
                         </Paragraph>
                       )}
                       {validation.created_at && (
                         <Paragraph style={[styles.previewComentario, { fontSize: 10, marginTop: 4 }]}>
-                          Fecha: {new Date(validation.created_at).toLocaleString('es-ES')}
+                          {t('dateLabel')} {new Date(validation.created_at).toLocaleString('es-ES')}
                         </Paragraph>
                       )}
                     </View>
                     <View style={styles.previewRight}>
                       <Paragraph style={styles.previewCantidad}>
-                        Cantidad: {validation.cantidad || 1}
+                        {t('quantityLabel')} {validation.cantidad || 1}
                       </Paragraph>
                     </View>
                   </View>
@@ -576,33 +595,33 @@ export default function ReporteScreen({ navigation, route }) {
         {/* Información adicional del reporte */}
         <Card style={styles.infoCard}>
           <Card.Content>
-            <Title style={styles.cardTitle}>Detalles del Reporte</Title>
+            <Title style={styles.cardTitle}>{t('reportDetails')}</Title>
             <View style={styles.infoGrid}>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Archivo PDF:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('pdfFileLabel')}</Paragraph>
                 <Paragraph style={styles.infoValue} numberOfLines={1}>
-                  {pdfInfo?.pdf_filename || 'Generando...'}
+                  {pdfInfo?.pdf_filename || t('generating')}
                 </Paragraph>
               </View>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Fecha de Generación:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('generationDate')}</Paragraph>
                 <Paragraph style={styles.infoValue}>
                   {reportData.fecha ? formatDate(reportData.fecha) : new Date().toLocaleDateString('es-ES')}
                 </Paragraph>
               </View>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Total Validaciones:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('totalValidations')}</Paragraph>
                 <Paragraph style={styles.infoValue}>
                   {pdfInfo?.validations_count || validaciones.length}
                 </Paragraph>
               </View>
               <View style={styles.infoItem}>
-                <Paragraph style={styles.infoLabel}>Estado:</Paragraph>
+                <Paragraph style={styles.infoLabel}>{t('status')}</Paragraph>
                 <Chip
                   style={[styles.turnoChip, { backgroundColor: saved ? '#4CAF50' : '#FF9800' }]}
                   textStyle={styles.chipText}
                 >
-                  {saved ? 'Guardado' : 'Pendiente'}
+                  {saved ? t('saved') : t('pending')}
                 </Chip>
               </View>
             </View>
@@ -612,11 +631,13 @@ export default function ReporteScreen({ navigation, route }) {
         {/* Estado de guardado */}
         {saved && (
           <Surface style={styles.savedIndicator} elevation={2}>
-            <View style={styles.savedContent}>
-              <IconButton icon="check-circle" iconColor="#4CAF50" size={24} />
-              <Paragraph style={styles.savedText}>
-                ✅ Reporte guardado en auditoría
-              </Paragraph>
+            <View style={styles.savedContentWrapper}>
+              <View style={styles.savedContent}>
+                <IconButton icon="check-circle" iconColor="#4CAF50" size={24} />
+                <Paragraph style={styles.savedText}>
+                  ✅ {t('reportSavedToAudit')}
+                </Paragraph>
+              </View>
             </View>
           </Surface>
         )}
@@ -630,7 +651,7 @@ export default function ReporteScreen({ navigation, route }) {
             icon="qrcode-scan"
             onPress={handleContinueScanning}
             mode="contained"
-            label="Continuar"
+            label={t('continueScanning')}
             small
           />
           {!saved ? (
@@ -640,7 +661,7 @@ export default function ReporteScreen({ navigation, route }) {
               onPress={handleSaveToAudit}
               disabled={saving}
               mode="contained"
-              label="Guardar"
+              label={t('saveToAudit')}
             />
           ) : (
             <FAB
@@ -648,7 +669,7 @@ export default function ReporteScreen({ navigation, route }) {
               icon="file-document-multiple"
               onPress={() => navigation.navigate('Auditoria')}
               mode="contained"
-              label="Auditoría"
+              label={t('audit')}
             />
           )}
           <FAB
@@ -864,6 +885,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     backgroundColor: '#E8F5E9',
+  },
+  savedContentWrapper: {
+    overflow: 'hidden',
   },
   savedContent: {
     flexDirection: 'row',

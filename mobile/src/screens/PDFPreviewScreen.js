@@ -27,6 +27,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import { Linking } from 'react-native';
 import { getAuthToken } from '../utils/authUtils';
+import { API_BASE_URL } from '../utils/apiClient';
 
 const { width } = Dimensions.get('window');
 
@@ -93,7 +94,6 @@ export default function PDFPreviewScreen({ navigation, route }) {
       setDownloadingPDF(true);
       logger.info('📥 Iniciando descarga de PDF:', pdfInfo?.pdf_filename);
       
-      const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
       const downloadUrl = `${API_BASE_URL}/validations/download-pdf/${pdfInfo?.pdf_filename}`;
       
       const token = await getAuthToken();
@@ -158,23 +158,129 @@ export default function PDFPreviewScreen({ navigation, route }) {
     }
   };
 
-  // Visualizar PDF (abrir directamente)
+  // Visualizar PDF (abrir con aplicación externa)
   const handleViewPDF = async () => {
+    if (downloadingPDF) {
+      logger.warn('⚠️ Ya hay una descarga en progreso');
+      return;
+    }
+    
+    // Verificar si estamos en web
+    if (Platform.OS === 'web') {
+      Alert.alert(
+        'Información',
+        'En la versión web, por favor use el botón "Descargar PDF" para descargar el archivo.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    
     try {
-      const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
-      const viewUrl = `${API_BASE_URL}/validations/download-pdf/${pdfInfo?.pdf_filename}`;
+      setDownloadingPDF(true);
+      logger.info('📥 Iniciando descarga de PDF para abrir:', pdfInfo?.pdf_filename);
       
-      // Intentar abrir directamente
-      const canOpen = await Linking.canOpenURL(viewUrl);
-      if (canOpen) {
-        await Linking.openURL(viewUrl);
+      if (!pdfInfo?.pdf_filename) {
+        throw new Error('No se encontró el nombre del archivo PDF');
+      }
+      
+      const downloadUrl = `${API_BASE_URL}/validations/download-pdf/${pdfInfo.pdf_filename}`;
+      
+      logger.info('🔗 URL de descarga:', downloadUrl);
+      
+      const token = await getAuthToken();
+      if (!token) {
+        throw new Error('No se encontró el token de autenticación');
+      }
+      
+      const localFilename = `reporte_${Date.now()}.pdf`;
+      const localUri = `${FileSystem.documentDirectory}${localFilename}`;
+      
+      logger.info('💾 Guardando PDF en:', localUri);
+      
+      const downloadOptions = {
+        headers: {
+          'ngrok-skip-browser-warning': 'true',
+          'Authorization': `Bearer ${token}`
+        }
+      };
+      
+      logger.info('⬇️ Iniciando descarga...');
+      const downloadResult = await Promise.race([
+        FileSystem.downloadAsync(downloadUrl, localUri, downloadOptions),
+        new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Timeout de descarga')), 30000)
+        )
+      ]);
+      
+      logger.info('📥 Descarga completada. Status:', downloadResult.status);
+      logger.info('📁 URI del archivo:', downloadResult.uri);
+      
+      if (downloadResult.status === 200) {
+        // Verificar que el archivo existe
+        const fileInfo = await FileSystem.getInfoAsync(downloadResult.uri);
+        logger.info('📄 Info del archivo:', JSON.stringify(fileInfo));
+        
+        if (!fileInfo.exists) {
+          throw new Error('El archivo descargado no existe');
+        }
+        
+        const isAvailable = await Sharing.isAvailableAsync();
+        logger.info('📱 Sharing disponible:', isAvailable);
+        
+        if (isAvailable) {
+          try {
+            logger.info('🔄 Share iniciando...');
+            // Usar Sharing para mostrar el selector de aplicaciones
+            const result = await Sharing.shareAsync(downloadResult.uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: 'Abrir PDF con'
+            });
+            logger.info('✅ PDF compartido exitosamente. Resultado:', JSON.stringify(result));
+          } catch (shareError) {
+            logger.error('❌ Error compartiendo PDF:', shareError);
+            logger.error('❌ Detalles del error:', JSON.stringify(shareError, null, 2));
+            Alert.alert(
+              'Error',
+              `No se pudo abrir el selector de aplicaciones.\n\nError: ${shareError.message || 'Error desconocido'}\n\nEl PDF se descargó correctamente.`,
+              [{ text: 'OK' }]
+            );
+          }
+        } else {
+          logger.warn('⚠️ Sharing no disponible, intentando Linking...');
+          // Fallback: intentar abrir directamente
+          const canOpen = await Linking.canOpenURL(downloadResult.uri);
+          logger.info('🔗 Linking puede abrir:', canOpen);
+          if (canOpen) {
+            await Linking.openURL(downloadResult.uri);
+            logger.info('✅ PDF abierto con Linking');
+          } else {
+            Alert.alert(
+              'PDF Descargado',
+              `El PDF se ha descargado pero no se pudo abrir automáticamente.\n\nUbicación: ${downloadResult.uri}`,
+              [{ text: 'OK' }]
+            );
+          }
+        }
       } else {
-        // Si no se puede abrir directamente, descargar primero
-        await handleDownloadPDF();
+        throw new Error(`Error descargando: Status ${downloadResult.status}`);
       }
     } catch (error) {
-      logger.error('Error visualizando PDF:', error);
-      Alert.alert('Error', 'No se pudo abrir el PDF. Intente descargarlo primero.');
+      logger.error('❌ Error descargando PDF para visualizar:', error);
+      logger.error('❌ Stack trace:', error.stack);
+      let errorMessage = 'No se pudo descargar el PDF';
+      if (error.message.includes('Timeout')) {
+        errorMessage = 'La descarga tardó demasiado. Verifique su conexión e intente nuevamente.';
+      } else if (error.message.includes('Network')) {
+        errorMessage = 'Error de conexión. Verifique su internet e intente nuevamente.';
+      } else if (error.message.includes('404')) {
+        errorMessage = 'El archivo PDF no se encontró en el servidor.';
+      } else {
+        errorMessage = `Error: ${error.message || 'Error desconocido'}`;
+      }
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setDownloadingPDF(false);
+      logger.info('🏁 Descarga finalizada');
     }
   };
 
@@ -352,11 +458,13 @@ export default function PDFPreviewScreen({ navigation, route }) {
         {/* Estado de guardado */}
         {saved && (
           <Surface style={styles.savedIndicator} elevation={2}>
-            <View style={styles.savedContent}>
-              <IconButton icon="check-circle" iconColor="#4CAF50" size={24} />
-              <Paragraph style={styles.savedText}>
-                ✅ Reporte guardado en auditoría
-              </Paragraph>
+            <View style={styles.savedContentWrapper}>
+              <View style={styles.savedContent}>
+                <IconButton icon="check-circle" iconColor="#4CAF50" size={24} />
+                <Paragraph style={styles.savedText}>
+                  ✅ Reporte guardado en auditoría
+                </Paragraph>
+              </View>
             </View>
           </Surface>
         )}
@@ -592,6 +700,9 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 12,
     backgroundColor: '#E8F5E9',
+  },
+  savedContentWrapper: {
+    overflow: 'hidden',
   },
   savedContent: {
     flexDirection: 'row',

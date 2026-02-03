@@ -1,28 +1,29 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
-import { isWeb } from './platformUtils';
+import { storage } from './storage';
 import logger from './logger';
 
 /**
  * Obtener token de autenticación de forma segura
- * En web usa AsyncStorage, en móvil prioriza SecureStore
+ * Usa el módulo de storage unificado que maneja web/móvil automáticamente
  */
 export const getAuthToken = async () => {
   try {
-    if (isWeb) {
-      // En web usar AsyncStorage directamente
-      return await AsyncStorage.getItem('auth_token') || await AsyncStorage.getItem('token');
-    } else {
-      // En móvil intentar SecureStore primero, luego AsyncStorage
-      let token = await SecureStore.getItemAsync('auth_token');
-      
-      // Fallback a AsyncStorage si no está en SecureStore
-      if (!token) {
-        token = await AsyncStorage.getItem('token') || await AsyncStorage.getItem('auth_token');
-      }
-      
-      return token;
+    // Intentar obtener desde storage principal
+    let token = await storage.getItem('auth_token');
+    
+    // Fallback a AsyncStorage para compatibilidad
+    if (!token) {
+      token = await AsyncStorage.getItem('token') || await AsyncStorage.getItem('auth_token');
     }
+    
+    if (token) {
+      logger.debug('✅ Token obtenido correctamente');
+    } else {
+      // Solo loguear como debug, no como warning, porque es normal si el usuario no está logueado
+      logger.debug('ℹ️ No se encontró token en storage (usuario no autenticado)');
+    }
+    
+    return token;
   } catch (error) {
     logger.error('Error obteniendo token de autenticación:', error);
     return null;
@@ -31,20 +32,17 @@ export const getAuthToken = async () => {
 
 /**
  * Guardar token de autenticación de forma segura
- * En web usa AsyncStorage, en móvil usa SecureStore
+ * Usa el módulo de storage unificado
  */
 export const saveAuthToken = async (token) => {
   try {
-    if (isWeb) {
-      // En web usar AsyncStorage
-      await AsyncStorage.setItem('auth_token', token);
-      await AsyncStorage.setItem('token', token); // Compatibilidad
-    } else {
-      // En móvil usar SecureStore
-      await SecureStore.setItemAsync('auth_token', token);
-      // También guardar en AsyncStorage por compatibilidad
-      await AsyncStorage.setItem('token', token);
-    }
+    // Guardar en storage principal (SecureStore en móvil, AsyncStorage en web)
+    await storage.setItem('auth_token', token);
+    
+    // También guardar en AsyncStorage para compatibilidad
+    await AsyncStorage.setItem('token', token);
+    await AsyncStorage.setItem('auth_token', token);
+    
     return true;
   } catch (error) {
     logger.error('Error guardando token de autenticación:', error);
@@ -54,27 +52,20 @@ export const saveAuthToken = async (token) => {
 
 /**
  * Limpiar datos de autenticación de forma segura
+ * Usa el módulo de storage unificado
  */
 export const clearAuthData = async () => {
   try {
-    if (isWeb) {
-      // En web solo limpiar AsyncStorage
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('user_data');
-      await AsyncStorage.removeItem('user');
-    } else {
-      // En móvil limpiar SecureStore y AsyncStorage
-      await SecureStore.deleteItemAsync('auth_token');
-      await SecureStore.deleteItemAsync('user_data');
-      await SecureStore.deleteItemAsync('user_signature');
-      
-      // Limpiar AsyncStorage por compatibilidad
-      await AsyncStorage.removeItem('token');
-      await AsyncStorage.removeItem('auth_token');
-      await AsyncStorage.removeItem('user');
-      await AsyncStorage.removeItem('user_data');
-    }
+    // Limpiar desde storage principal
+    await storage.removeItem('auth_token');
+    await storage.removeItem('user_data');
+    await storage.removeItem('user_signature');
+    
+    // También limpiar AsyncStorage por compatibilidad
+    await AsyncStorage.removeItem('token');
+    await AsyncStorage.removeItem('auth_token');
+    await AsyncStorage.removeItem('user');
+    await AsyncStorage.removeItem('user_data');
     
     logger.info('✅ Datos de autenticación eliminados de forma segura');
   } catch (error) {

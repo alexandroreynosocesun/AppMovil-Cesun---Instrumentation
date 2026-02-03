@@ -1,37 +1,10 @@
-import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
-
-const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
+import { apiClient } from '../utils/apiClient';
 
 class AdminService {
   constructor() {
-    this.api = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: 15000, // 15 segundos de timeout
-      headers: {
-        'ngrok-skip-browser-warning': 'true',
-        'Content-Type': 'application/json',
-      },
-    });
-
-    // Interceptor para agregar el token de autenticación
-    this.api.interceptors.request.use(
-      async (config) => {
-        try {
-          const token = await AsyncStorage.getItem('token');
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`;
-          }
-        } catch (error) {
-          logger.error('Error obteniendo token:', error);
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
+    // Usar instancia compartida de axios con interceptor de refresh token
+    this.api = apiClient;
   }
 
   // ===== GESTIÓN DE USUARIOS =====

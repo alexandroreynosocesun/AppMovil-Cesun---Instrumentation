@@ -1,7 +1,13 @@
-import * as SQLite from 'expo-sqlite';
+import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
+
+// Importar SQLite solo en móvil
+let SQLite = null;
+if (Platform.OS !== 'web') {
+  SQLite = require('expo-sqlite');
+}
 
 class OfflineService {
   constructor() {
@@ -11,11 +17,23 @@ class OfflineService {
     this.syncQueue = [];
     this.maxRetries = 3;
     this.retryDelay = 5000; // 5 segundos
-    this.initDatabase();
-    this.setupNetworkListener();
+    this.isWeb = Platform.OS === 'web';
+    
+    // Solo inicializar en móvil
+    if (!this.isWeb) {
+      this.initDatabase();
+      this.setupNetworkListener();
+    } else {
+      logger.info('🌐 OfflineService deshabilitado en web');
+    }
   }
 
   async initDatabase() {
+    if (this.isWeb || !SQLite) {
+      logger.info('⚠️ SQLite no disponible en web');
+      return;
+    }
+    
     try {
       this.db = await SQLite.openDatabaseAsync('jigs_validation.db');
       
@@ -36,6 +54,8 @@ class OfflineService {
   }
 
   async createTables() {
+    if (this.isWeb || !this.db) return;
+    
     const createTablesSQL = `
       -- Tabla de validaciones offline
       CREATE TABLE IF NOT EXISTS validations_offline (
@@ -111,6 +131,8 @@ class OfflineService {
   }
 
   async createIndexes() {
+    if (this.isWeb || !this.db) return;
+    
     /**
      * Crear índices para mejorar rendimiento
      * Se ejecuta después de crear tablas y migraciones
@@ -145,6 +167,7 @@ class OfflineService {
   }
 
   async migrateDatabase() {
+    if (this.isWeb || !this.db) return;
     /**
      * Migrar esquema de base de datos existente
      * Agrega columnas faltantes si la tabla ya existe con esquema antiguo
@@ -201,6 +224,7 @@ class OfflineService {
   }
 
   setupNetworkListener() {
+    if (this.isWeb) return;
     NetInfo.addEventListener(state => {
       const wasOffline = !this.isOnline;
       this.isOnline = state.isConnected && state.isInternetReachable;
@@ -222,6 +246,11 @@ class OfflineService {
   }
 
   async saveValidationOffline(validationData) {
+    if (this.isWeb || !this.db) {
+      logger.info('⚠️ saveValidationOffline no disponible en web');
+      return { success: false, reason: 'web_not_supported' };
+    }
+    
     try {
       const dataJson = JSON.stringify(validationData);
       const sql = `
@@ -255,6 +284,10 @@ class OfflineService {
   }
 
   async saveJigOffline(jigData) {
+    if (this.isWeb || !this.db) {
+      return { success: false, reason: 'web_not_supported' };
+    }
+    
     try {
       const sql = `
         INSERT OR REPLACE INTO jigs_offline 
@@ -281,6 +314,10 @@ class OfflineService {
   }
 
   async getOfflineValidations() {
+    if (this.isWeb || !this.db) {
+      return [];
+    }
+    
     try {
       const sql = 'SELECT * FROM validations_offline WHERE sincronizado = 0 ORDER BY created_at DESC';
       const result = await this.db.getAllAsync(sql);
@@ -292,6 +329,10 @@ class OfflineService {
   }
 
   async getOfflineJigs() {
+    if (this.isWeb || !this.db) {
+      return [];
+    }
+    
     try {
       const sql = 'SELECT * FROM jigs_offline ORDER BY created_at DESC';
       const result = await this.db.getAllAsync(sql);
@@ -303,6 +344,10 @@ class OfflineService {
   }
 
   async getPendingSyncCount() {
+    if (this.isWeb || !this.db) {
+      return 0;
+    }
+    
     try {
       const validations = await this.db.getFirstAsync(
         'SELECT COUNT(*) as count FROM validations_offline WHERE sincronizado = 0'
@@ -328,6 +373,8 @@ class OfflineService {
   }
 
   async markValidationAsSynced(validationId, serverId = null) {
+    if (this.isWeb || !this.db) return;
+    
     try {
       const sql = 'UPDATE validations_offline SET sincronizado = 1, intentos_sincronizacion = 0 WHERE id = ?';
       await this.db.runAsync(sql, [validationId]);
@@ -339,6 +386,8 @@ class OfflineService {
   }
 
   async markValidationSyncFailed(validationId, error) {
+    if (this.isWeb || !this.db) return;
+    
     try {
       const sql = `
         UPDATE validations_offline 
@@ -358,6 +407,10 @@ class OfflineService {
   }
 
   async addToSyncQueue(operationType, entityType, entityId, data) {
+    if (this.isWeb || !this.db) {
+      return { success: false, reason: 'web_not_supported' };
+    }
+    
     try {
       const sql = `
         INSERT INTO sync_queue (operation_type, entity_type, entity_id, data_json, priority)
@@ -377,6 +430,11 @@ class OfflineService {
   }
 
   async loadSyncQueue() {
+    if (this.isWeb || !this.db) {
+      this.syncQueue = [];
+      return;
+    }
+    
     try {
       const sql = 'SELECT * FROM sync_queue WHERE status = ? ORDER BY priority DESC, created_at ASC';
       this.syncQueue = await this.db.getAllAsync(sql, ['pending']);
@@ -387,6 +445,10 @@ class OfflineService {
   }
 
   async syncPendingData() {
+    if (this.isWeb || !this.db) {
+      return { success: false, reason: 'web_not_supported' };
+    }
+    
     if (!this.isOnline) {
       logger.info('⚠️ Sin conexión, no se puede sincronizar');
       return { success: false, reason: 'offline' };
@@ -479,6 +541,8 @@ class OfflineService {
   }
 
   async clearOldSyncedData(days = 30) {
+    if (this.isWeb || !this.db) return;
+    
     try {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - days);

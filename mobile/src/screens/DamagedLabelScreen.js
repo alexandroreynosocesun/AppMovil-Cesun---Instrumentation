@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -22,12 +22,16 @@ import {
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import damagedLabelService from '../services/DamagedLabelService';
+import { jigService } from '../services/JigService';
 import { useAuth } from '../contexts/AuthContext';
 import logger from '../utils/logger';
 
 export default function DamagedLabelScreen({ navigation }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const [loadingJigs, setLoadingJigs] = useState(false);
+  const [allJigs, setAllJigs] = useState([]);
+  const [jigSuggestions, setJigSuggestions] = useState([]);
   const [formData, setFormData] = useState({
     modelo: '',
     tipo_jig: '',
@@ -35,11 +39,69 @@ export default function DamagedLabelScreen({ navigation }) {
     foto: null,
   });
 
+  useEffect(() => {
+    const loadJigs = async () => {
+      try {
+        setLoadingJigs(true);
+        const result = await jigService.getJigsForAutocomplete();
+        if (result.success && Array.isArray(result.data)) {
+          setAllJigs(result.data);
+          logger.info('✅ [DamagedLabelScreen] Jigs cargados para autocompletado:', result.data.length);
+        } else {
+          logger.warn('⚠️ [DamagedLabelScreen] No se pudieron cargar jigs para autocompletado', result);
+        }
+      } catch (error) {
+        logger.error('❌ [DamagedLabelScreen] Error cargando jigs para autocompletado:', error);
+      } finally {
+        setLoadingJigs(false);
+      }
+    };
+
+    loadJigs();
+  }, []);
+
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
+  };
+
+  const handleModeloChange = (text) => {
+    handleInputChange('modelo', text);
+
+    const query = text.trim().toLowerCase();
+
+    if (!query || allJigs.length === 0) {
+      setJigSuggestions([]);
+      return;
+    }
+
+    // Buscar solo por modelo_actual y obtener modelos únicos
+    const modelosUnicos = new Map();
+    allJigs.forEach((jig) => {
+      const modelo = jig.modelo_actual || '';
+      if (modelo && modelo.toLowerCase().includes(query)) {
+        if (!modelosUnicos.has(modelo)) {
+          modelosUnicos.set(modelo, jig);
+        }
+      }
+    });
+
+    // Convertir a array y limitar a 10 sugerencias
+    const suggestions = Array.from(modelosUnicos.values()).slice(0, 10);
+    setJigSuggestions(suggestions);
+  };
+
+  const handleSelectJigSuggestion = (jig) => {
+    setFormData(prev => ({
+      ...prev,
+      modelo: jig.modelo_actual || prev.modelo,
+      tipo_jig: ['manual', 'semiautomatico', 'new_semiautomatico'].includes(jig.tipo)
+        ? jig.tipo
+        : prev.tipo_jig,
+    }));
+    setJigSuggestions([]);
   };
 
   const handleTakePhoto = async () => {
@@ -54,7 +116,7 @@ export default function DamagedLabelScreen({ navigation }) {
         return;
       }
 
-      // Tomar foto
+      // Tomar foto (config original)
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: 'images',
         allowsEditing: true,
@@ -104,12 +166,24 @@ export default function DamagedLabelScreen({ navigation }) {
       return;
     }
 
+    // Respetar límites de la base de datos:
+    // modelo: String(100), numero_jig: String(20)
+    const safeModelo = formData.modelo.trim().slice(0, 100);
+    const safeNumeroJig = formData.numero_jig.trim().slice(0, 20);
+
     setLoading(true);
     try {
-      const result = await damagedLabelService.createDamagedLabel({
-        modelo: formData.modelo.trim(),
+      logger.info('📤 Enviando reporte de etiqueta NG:', {
+        modelo: safeModelo,
         tipo_jig: formData.tipo_jig,
-        numero_jig: formData.numero_jig.trim() || null,
+        numero_jig: safeNumeroJig || null,
+        fotoSize: formData.foto ? formData.foto.length : 0,
+      });
+
+      const result = await damagedLabelService.createDamagedLabel({
+        modelo: safeModelo,
+        tipo_jig: formData.tipo_jig,
+        numero_jig: safeNumeroJig || null,
         foto: formData.foto,
       });
 
@@ -134,14 +208,40 @@ export default function DamagedLabelScreen({ navigation }) {
           ]
         );
       } else {
-        Alert.alert('Error', result.error || 'No se pudo enviar el reporte');
+        const errorMessage = result.error || result.message || 'No se pudo enviar el reporte';
+        logger.error('❌ Error del servidor:', errorMessage);
+        Alert.alert(
+          'Error al enviar reporte',
+          errorMessage,
+          [{ text: 'OK' }]
+        );
       }
     } catch (error) {
-      logger.error('Error enviando reporte:', error);
-      Alert.alert('Error', 'Ocurrió un error al enviar el reporte');
+      logger.error('❌ Error enviando reporte:', error);
+      logger.error('❌ Error completo:', JSON.stringify(error, null, 2));
+      const errorMessage = error.message || 'Ocurrió un error al enviar el reporte. Verifica tu conexión e intenta nuevamente.';
+      Alert.alert(
+        'Error',
+        errorMessage,
+        [{ text: 'OK' }]
+      );
     } finally {
       setLoading(false);
     }
+  };
+
+  const darkTheme = {
+    colors: {
+      primary: '#4CAF50',
+      background: '#121212',
+      surface: '#1E1E1E',
+      text: '#FFFFFF',
+      placeholder: '#B0B0B0',
+      error: '#F44336',
+      onSurface: '#FFFFFF',
+      onSurfaceVariant: '#E0E0E0',
+      outline: '#3C3C3C',
+    },
   };
 
   return (
@@ -169,14 +269,45 @@ export default function DamagedLabelScreen({ navigation }) {
             <TextInput
               label="Modelo del Jig *"
               value={formData.modelo}
-              onChangeText={(text) => handleInputChange('modelo', text)}
+              onChangeText={handleModeloChange}
               mode="outlined"
               style={styles.input}
               textColor="#FFFFFF"
+              placeholderTextColor="#B0B0B0"
               outlineColor="#3C3C3C"
               activeOutlineColor="#4CAF50"
-              keyboardType="numeric"
+              keyboardType="default"
+              labelStyle={styles.inputLabel}
+              theme={darkTheme}
             />
+
+            {/* Sugerencias de jigs */}
+            {loadingJigs && (
+              <View style={styles.suggestionsLoading}>
+                <ActivityIndicator size="small" color="#4CAF50" />
+                <Text style={styles.suggestionsLoadingText}>Cargando jigs...</Text>
+              </View>
+            )}
+
+            {!loadingJigs && jigSuggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                {jigSuggestions.map((jig, index) => (
+                  <TouchableOpacity
+                    key={jig.id}
+                    style={[
+                      styles.suggestionItem,
+                      index === jigSuggestions.length - 1 && styles.suggestionItemLast
+                    ]}
+                    onPress={() => handleSelectJigSuggestion(jig)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.suggestionText}>
+                      {jig.modelo_actual || 'Sin modelo'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
 
             {/* Tipo de Jig */}
             <View style={styles.radioGroup}>
@@ -210,9 +341,14 @@ export default function DamagedLabelScreen({ navigation }) {
               mode="outlined"
               style={styles.input}
               textColor="#FFFFFF"
+              placeholderTextColor="#B0B0B0"
               outlineColor="#3C3C3C"
               activeOutlineColor="#4CAF50"
               placeholder="Escribe número de jig original"
+              labelStyle={styles.inputLabel}
+              helperText="Este campo es opcional. Déjalo vacío si no conoces el número."
+              helperTextStyle={styles.helperText}
+              theme={darkTheme}
             />
 
             <Divider style={styles.divider} />
@@ -250,7 +386,7 @@ export default function DamagedLabelScreen({ navigation }) {
                 <View style={styles.photoPlaceholderContent}>
                   <Title style={styles.photoPlaceholderIcon}>📷</Title>
                   <Paragraph style={styles.photoPlaceholderText}>
-                    Toca para tomar una foto del jig
+                    Toca y toma una foto del número del jig original para facilitar la reparación. ¡Gracias!
                   </Paragraph>
                 </View>
               </TouchableOpacity>
@@ -314,6 +450,12 @@ const styles = StyleSheet.create({
   input: {
     marginBottom: 16,
     backgroundColor: '#2C2C2C',
+  },
+  inputLabel: {
+    color: '#E0E0E0',
+  },
+  helperText: {
+    color: '#B0B0B0',
   },
   label: {
     color: '#FFFFFF',
@@ -382,6 +524,39 @@ const styles = StyleSheet.create({
   submitButton: {
     marginTop: 8,
     paddingVertical: 8,
+  },
+  suggestionsContainer: {
+    marginTop: -8,
+    marginBottom: 16,
+    borderRadius: 8,
+    backgroundColor: '#2C2C2C',
+    borderWidth: 1,
+    borderColor: '#3C3C3C',
+    maxHeight: 200,
+  },
+  suggestionItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#3C3C3C',
+  },
+  suggestionItemLast: {
+    borderBottomWidth: 0,
+  },
+  suggestionText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+  },
+  suggestionsLoading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    marginTop: -8,
+    marginBottom: 16,
+  },
+  suggestionsLoadingText: {
+    color: '#B0B0B0',
+    marginLeft: 8,
+    fontSize: 14,
   },
 });
 

@@ -7,7 +7,8 @@ import {
   Dimensions,
   TouchableOpacity,
   Text,
-  Switch
+  Switch,
+  Modal
 } from 'react-native';
 import {
   Card,
@@ -17,29 +18,66 @@ import {
   TextInput,
   ActivityIndicator,
   Divider,
-  Chip
+  Chip,
+  Searchbar
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { validationService } from '../services/ValidationService';
 import adminService from '../services/AdminService';
+import { jigService } from '../services/JigService';
 import { useAuth } from '../contexts/AuthContext';
 import logger from '../utils/logger';
+import { showAlert } from '../utils/alertUtils';
 
 const { width, height } = Dimensions.get('window');
 
 export default function AssignValidationScreen({ navigation, route }) {
   const { user } = useAuth();
   const [tecnicos, setTecnicos] = useState([]);
-  const [asignacionesCreadas, setAsignacionesCreadas] = useState([]);
   const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [showTools, setShowTools] = useState(false);
   const [showConvertidores, setShowConvertidores] = useState(false);
+  const [showTecnicoModal, setShowTecnicoModal] = useState(false);
+  const [showModeloModal, setShowModeloModal] = useState(false);
+  const [showLineaModal, setShowLineaModal] = useState(false);
+  const [showTipoModal, setShowTipoModal] = useState(false);
+  const [modelos, setModelos] = useState([]);
+  const [modelosConTipos, setModelosConTipos] = useState({}); // Diccionario: {modelo: [tipos]}
+  const [loadingModelos, setLoadingModelos] = useState(false);
+  const [searchModelo, setSearchModelo] = useState('');
+  
+  // Líneas disponibles (1 al 6)
+  const lineasDisponibles = ['1', '2', '3', '4', '5', '6'];
+  
+  // Mapeo de tipos a nombres de visualización
+  const tipoDisplayNames = {
+    'manual': 'Manual',
+    'semiautomatico': 'Semiautomático',
+    'nuevo_semiautomatico': 'Nuevo Semiautomático',
+    'new_semiautomatico': 'Nuevo Semiautomático'
+  };
+  
+  // Crear lista de combinaciones modelo+tipo para el selector
+  const modelosConTiposList = Object.keys(modelosConTipos).flatMap(modelo => {
+    const tipos = modelosConTipos[modelo] || [];
+    return tipos.map(tipo => ({
+      modelo,
+      tipo,
+      displayText: `${modelo} (${tipoDisplayNames[tipo] || tipo})`
+    }));
+  });
+
+  // Filtrar modelos basado en la búsqueda (buscar en el texto completo incluyendo tipo)
+  const modelosFiltrados = modelosConTiposList.filter(item => 
+    item.displayText.toLowerCase().includes(searchModelo.toLowerCase())
+  );
   
   // Formulario de creación
   const [formData, setFormData] = useState({
     tecnico_id: '',
     modelo: '',
+    tipo_jig: '',
     linea: '',
     turno: user?.turno_actual || 'A',
     tools: {
@@ -60,10 +98,46 @@ export default function AssignValidationScreen({ navigation, route }) {
       adapt68_1_2: { enabled: false, qty: '0' }
     }
   });
+  
+  // Obtener tipos disponibles para el modelo seleccionado (después de declarar formData)
+  const tiposDisponibles = formData.modelo ? (modelosConTipos[formData.modelo] || []) : [];
 
   useEffect(() => {
     loadData();
+    loadModelos();
   }, []);
+
+  const loadModelos = async () => {
+    try {
+      setLoadingModelos(true);
+      logger.info('🔄 Cargando modelos con tipos disponibles...');
+      const result = await jigService.getModelosConTipos();
+      if (result.success) {
+        const modelosTipos = result.data || {};
+        // Extraer lista de modelos para el selector
+        const modelosList = Object.keys(modelosTipos);
+        setModelos(modelosList);
+        setModelosConTipos(modelosTipos);
+        logger.info(`✅ Modelos con tipos cargados: ${modelosList.length}`);
+        logger.info('📋 Tipos por modelo:', modelosTipos);
+      } else {
+        logger.error('❌ Error cargando modelos con tipos:', result.error);
+        // Fallback al método antiguo si falla
+        const fallbackResult = await jigService.getModelos();
+        if (fallbackResult.success) {
+          setModelos(fallbackResult.data || []);
+          logger.warn('⚠️ Usando método antiguo de carga de modelos (sin tipos)');
+        } else {
+          Alert.alert('Error', `No se pudieron cargar los modelos: ${result.error}`);
+        }
+      }
+    } catch (error) {
+      logger.error('❌ Excepción cargando modelos:', error);
+      Alert.alert('Error', 'Error al cargar los modelos disponibles');
+    } finally {
+      setLoadingModelos(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -291,6 +365,12 @@ export default function AssignValidationScreen({ navigation, route }) {
       Alert.alert('Error', 'Ingresa el modelo');
       return false;
     }
+    // Validar tipo - siempre es requerido ahora porque se selecciona junto con el modelo
+    const tipos = modelosConTipos[formData.modelo] || [];
+    if (tipos.length > 0 && !formData.tipo_jig) {
+      Alert.alert('Error', 'Selecciona el tipo de jig');
+      return false;
+    }
     if (!formData.linea.trim()) {
       Alert.alert('Error', 'Ingresa la línea');
       return false;
@@ -348,13 +428,13 @@ export default function AssignValidationScreen({ navigation, route }) {
         adaptadoresList.push(`Adaptador 68 pines 1_2 Qty ${formData.adaptadores.adapt68_1_2.qty}`);
       }
 
-      // Comentario incluye Modelo y Línea para poder verlo en el estatus
+      // Comentario incluye Modelo, Tipo (si existe) y Línea para poder verlo en el estatus
       const partesComentario = [
-        `Modelo: ${formData.modelo.trim()}`,
+        `Modelo: ${formData.modelo.trim()}${formData.tipo_jig ? ` (${tipoDisplayNames[formData.tipo_jig] || formData.tipo_jig})` : ''}`,
         `Línea: ${formData.linea}`
       ];
       if (toolsList.length > 0) {
-        partesComentario.push(`Tools: ${toolsList.join(', ')}`);
+        partesComentario.push(`Emulador de Panel: ${toolsList.join(', ')}`);
       }
       if (convertidoresList.length > 0) {
         partesComentario.push(`Convertidores: ${convertidoresList.join(', ')}`);
@@ -365,39 +445,31 @@ export default function AssignValidationScreen({ navigation, route }) {
 
       const comentario = partesComentario.join(' | ');
 
+      // Obtener fecha UTC actual desde el cliente
+      const fechaActualUTC = new Date().toISOString();
+      
       const validationData = {
-        // Usamos jig_id = 0 porque ya no se captura Jig; el backend lo trata como opcional
-        jig_id: 0,
+        // jig_id es null porque no se escanea un jig específico en asignaciones
+        jig_id: null,
         turno: formData.turno,
         estado: 'OK',
         comentario: comentario,
         cantidad: 1,
         tecnico_asignado_id: parseInt(formData.tecnico_id),
-        modelo_actual: formData.modelo.trim()
+        modelo_actual: formData.modelo.trim(),
+        fecha: fechaActualUTC  // Enviar fecha UTC desde el cliente
       };
 
       const result = await validationService.createValidation(validationData);
       
       if (result.success) {
-        // Agregar la asignación a la lista de asignaciones creadas
-        const nuevaAsignacion = {
-          id: result.data.id,
-          tecnico: selectedTecnico?.nombre,
-          numero_empleado: selectedTecnico?.numero_empleado,
-          modelo: formData.modelo.trim(),
-          linea: formData.linea,
-          turno: formData.turno,
-          fecha: new Date().toLocaleString('es-ES'),
-          completada: false,
-          validationData: result.data
-        };
-        
-        setAsignacionesCreadas(prev => [nuevaAsignacion, ...prev]);
+        // Las validaciones creadas aparecerán en "Estatus de Validaciones", no aquí
         
         // Resetear formulario (pero mantener técnico seleccionado si se quiere crear otra)
         setFormData({
           tecnico_id: '', // Opcional: mantener el técnico si quieres crear otra para el mismo
           modelo: '',
+          tipo_jig: '',
           linea: '',
           turno: user?.turno_actual || 'A',
           tools: {
@@ -421,7 +493,7 @@ export default function AssignValidationScreen({ navigation, route }) {
         setShowTools(false);
         setShowConvertidores(false);
         
-        Alert.alert(
+        showAlert(
           'Éxito',
           `Validación asignada correctamente al técnico ${selectedTecnico?.nombre}`
         );
@@ -470,71 +542,6 @@ export default function AssignValidationScreen({ navigation, route }) {
             </Paragraph>
           </Card.Content>
         </Card>
-
-        {/* Sección: Asignaciones Creadas */}
-        {asignacionesCreadas.length > 0 && (
-          <Card style={styles.formCard}>
-            <Card.Content>
-              <Title style={styles.sectionTitle}>Asignaciones Creadas Hoy</Title>
-              <Paragraph style={styles.subtitle}>
-                {asignacionesCreadas.length} asignación(es) creada(s)
-              </Paragraph>
-              <Divider style={styles.divider} />
-              
-              {asignacionesCreadas.map((asignacion) => (
-                <View key={asignacion.id} style={styles.asignacionItem}>
-                  <View style={styles.asignacionInfo}>
-                    <View style={styles.asignacionHeader}>
-                      <View style={styles.asignacionLeft}>
-                        <Text style={styles.asignacionTecnico}>
-                          {asignacion.tecnico} - #{asignacion.numero_empleado}
-                        </Text>
-                        <Text style={styles.asignacionModelo}>
-                          Modelo: {asignacion.modelo} | Línea: {asignacion.linea} | Turno: {asignacion.turno}
-                        </Text>
-                        <Text style={styles.asignacionFecha}>
-                          {asignacion.fecha}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.completadaButton,
-                          asignacion.completada && styles.completadaButtonActive
-                        ]}
-                        onPress={async () => {
-                          if (!asignacion.completada) {
-                            const result = await validationService.marcarCompletada(asignacion.id);
-                            if (result.success) {
-                              setAsignacionesCreadas(prev =>
-                                prev.map(a =>
-                                  a.id === asignacion.id ? { ...a, completada: true } : a
-                                )
-                              );
-                            } else {
-                              Alert.alert('Error', result.error || 'Error marcando como completada');
-                            }
-                          }
-                        }}
-                        disabled={asignacion.completada}
-                      >
-                        {asignacion.completada ? (
-                          <Text style={styles.checkmarkGreen}>✓</Text>
-                        ) : (
-                          <Text style={styles.checkmarkEmpty}>○</Text>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                    {asignacion.completada && (
-                      <View style={styles.completadaBadge}>
-                        <Text style={styles.completadaText}>Completada</Text>
-                      </View>
-                    )}
-                  </View>
-                </View>
-              ))}
-            </Card.Content>
-          </Card>
-        )}
 
         {/* Sección: Crear Nueva Validación */}
         <Card style={styles.formCard}>
@@ -588,81 +595,119 @@ export default function AssignValidationScreen({ navigation, route }) {
                   </Text>
                 </View>
               ) : (
-                <View style={styles.dropdown}>
-                  {tecnicos.map((tecnico) => (
-                    <TouchableOpacity
-                      key={tecnico.id}
-                      style={[
-                        styles.dropdownOption,
-                        formData.tecnico_id === tecnico.id.toString() && styles.dropdownOptionSelected
-                      ]}
-                      onPress={() => handleInputChange('tecnico_id', tecnico.id.toString())}
-                    >
-                      <Text style={[
-                        styles.dropdownOptionText,
-                        formData.tecnico_id === tecnico.id.toString() && styles.dropdownOptionTextSelected
-                      ]}>
-                        {tecnico.nombre} - #{tecnico.numero_empleado}
-                      </Text>
-                      {formData.tecnico_id === tecnico.id.toString() && (
-                        <Text style={styles.checkmark}>✓</Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
-              {formData.tecnico_id && (
-                <Text style={styles.selectedTecnicoText}>
-                  Técnico seleccionado: {getSelectedTecnico()?.nombre} - #{getSelectedTecnico()?.numero_empleado}
-                </Text>
+                <TouchableOpacity 
+                  onPress={() => setShowTecnicoModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <View pointerEvents="none">
+                    <TextInput
+                      label="Seleccionar Técnico"
+                      value={formData.tecnico_id ? `${getSelectedTecnico()?.nombre} - #${getSelectedTecnico()?.numero_empleado}` : ''}
+                      mode="outlined"
+                      style={styles.input}
+                      editable={false}
+                      theme={{
+                        colors: {
+                          primary: '#2196F3',
+                          background: 'transparent',
+                          surface: '#1A1A1A',
+                          text: '#FFFFFF',
+                          placeholder: '#B0B0B0',
+                          onSurface: '#FFFFFF',
+                        }
+                      }}
+                      outlineColor="#3C3C3C"
+                      activeOutlineColor="#2196F3"
+                      textColor="#FFFFFF"
+                      right={<TextInput.Icon icon="chevron-down" color="#888888" />}
+                      placeholder="Toca para seleccionar un técnico"
+                    />
+                  </View>
+                </TouchableOpacity>
               )}
             </View>
 
-            {/* Modelo */}
-            <TextInput
-              label="Modelo *"
-              value={formData.modelo}
-              onChangeText={(text) => handleInputChange('modelo', text)}
-              mode="outlined"
-              keyboardType="numeric"
-              style={styles.input}
-              theme={{
-                colors: {
-                  primary: '#2196F3',
-                  background: 'transparent',
-                  surface: '#1A1A1A',
-                  text: '#FFFFFF',
-                  placeholder: '#FFFFFF',
-                  onSurface: '#FFFFFF',
-                }
-              }}
-              contentStyle={{ color: '#FFFFFF' }}
-            />
+            {/* Modelo con Tipo */}
+            <View style={styles.dropdownContainer}>
+              <Text style={styles.label}>Modelo *</Text>
+              {Object.keys(modelosConTipos).length === 0 && !loadingModelos ? (
+                <View style={styles.noTecnicosContainer}>
+                  <Text style={styles.noTecnicosText}>
+                    No hay modelos disponibles. Verifica que existan jigs registrados con modelos.
+                  </Text>
+                </View>
+              ) : (
+                <TouchableOpacity 
+                  onPress={() => setShowModeloModal(true)}
+                  activeOpacity={0.7}
+                >
+                  <View pointerEvents="none">
+                    <TextInput
+                      label="Seleccionar Modelo"
+                      value={formData.modelo && formData.tipo_jig 
+                        ? `${formData.modelo} (${tipoDisplayNames[formData.tipo_jig] || formData.tipo_jig})`
+                        : formData.modelo || ''}
+                      mode="outlined"
+                      style={styles.input}
+                      editable={false}
+                      theme={{
+                        colors: {
+                          primary: '#2196F3',
+                          background: 'transparent',
+                          surface: '#1A1A1A',
+                          text: '#FFFFFF',
+                          placeholder: '#B0B0B0',
+                          onSurface: '#FFFFFF',
+                        }
+                      }}
+                      outlineColor="#3C3C3C"
+                      activeOutlineColor="#2196F3"
+                      textColor="#FFFFFF"
+                      right={<TextInput.Icon icon="chevron-down" color="#888888" />}
+                      placeholder="Toca para seleccionar un modelo"
+                    />
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
 
             {/* Línea */}
-            <TextInput
-              label="Línea *"
-              value={formData.linea}
-              onChangeText={(text) => handleInputChange('linea', text)}
-              mode="outlined"
-              keyboardType="numeric"
-              style={styles.input}
-              theme={{
-                colors: {
-                  primary: '#2196F3',
-                  background: 'transparent',
-                  surface: '#1A1A1A',
-                  text: '#FFFFFF',
-                  placeholder: '#FFFFFF',
-                  onSurface: '#FFFFFF',
-                }
-              }}
-              contentStyle={{ color: '#FFFFFF' }}
-            />
+            <View style={styles.dropdownContainer}>
+              <Text style={styles.label}>Línea *</Text>
+              <TouchableOpacity 
+                onPress={() => setShowLineaModal(true)}
+                activeOpacity={0.7}
+              >
+                <View pointerEvents="none">
+                  <TextInput
+                    label="Seleccionar Línea"
+                    value={formData.linea}
+                    mode="outlined"
+                    style={styles.input}
+                    editable={false}
+                    theme={{
+                      colors: {
+                        primary: '#2196F3',
+                        background: 'transparent',
+                        surface: '#1A1A1A',
+                        text: '#FFFFFF',
+                        placeholder: '#B0B0B0',
+                        onSurface: '#FFFFFF',
+                      }
+                    }}
+                    outlineColor="#3C3C3C"
+                    activeOutlineColor="#2196F3"
+                    textColor="#FFFFFF"
+                    right={<TextInput.Icon icon="chevron-down" color="#888888" />}
+                    placeholder="Toca para seleccionar una línea (1-6)"
+                  />
+                </View>
+              </TouchableOpacity>
+            </View>
 
             {/* Toggle para Tools */}
             <View style={styles.toolsToggleContainer}>
-              <Text style={styles.label}>Agregar Tools (Opcional)</Text>
+              <Text style={styles.label}>Agregar Emulador de Panel</Text>
               <Switch
                 value={showTools}
                 onValueChange={setShowTools}
@@ -886,7 +931,7 @@ export default function AssignValidationScreen({ navigation, route }) {
 
             {/* Toggle para Convertidores y Adaptadores */}
             <View style={styles.toolsToggleContainer}>
-              <Text style={styles.label}>Agregar Convertidores y Adaptadores (Opcional)</Text>
+              <Text style={styles.label}>Agregar Convertidores y Adaptadores</Text>
               <Switch
                 value={showConvertidores}
                 onValueChange={setShowConvertidores}
@@ -1288,6 +1333,279 @@ export default function AssignValidationScreen({ navigation, route }) {
           </Card.Content>
         </Card>
       </ScrollView>
+
+      {/* Modal para seleccionar técnico */}
+      <Modal
+        visible={showTecnicoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowTecnicoModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <ScrollView 
+              style={styles.modalScrollContainer}
+              contentContainerStyle={styles.modalListContent}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+            >
+              {loading ? (
+                <View style={styles.emptyState}>
+                  <ActivityIndicator color="#2196F3" size="small" />
+                  <Text style={styles.emptyStateText}>Cargando técnicos...</Text>
+                </View>
+              ) : tecnicos.length > 0 ? (
+                tecnicos.map((tecnico, index) => {
+                  const isSelected = formData.tecnico_id === tecnico.id.toString();
+                  return (
+                    <TouchableOpacity
+                      key={`tecnico-${tecnico.id}-${index}`}
+                      style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                      onPress={() => {
+                        // Toggle: si ya está seleccionado, deseleccionar; si no, seleccionar
+                        if (isSelected) {
+                          handleInputChange('tecnico_id', '');
+                        } else {
+                          handleInputChange('tecnico_id', tecnico.id.toString());
+                        }
+                        setShowTecnicoModal(false);
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.modalItemContent}>
+                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextSelected]}>
+                          {tecnico.nombre}
+                        </Text>
+                        <Text style={[styles.modalItemSubtext, isSelected && styles.modalItemSubtextSelected]}>
+                          #{tecnico.numero_empleado || 'N/A'}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>No hay técnicos disponibles</Text>
+                </View>
+              )}
+            </ScrollView>
+            
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowTecnicoModal(false);
+              }}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para seleccionar modelo */}
+      <Modal
+        visible={showModeloModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowModeloModal(false);
+          setSearchModelo('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            {/* Buscador de modelos */}
+            <View style={styles.modalSearchContainer}>
+              <Searchbar
+                placeholder="Buscar modelo..."
+                onChangeText={setSearchModelo}
+                value={searchModelo}
+                style={styles.modalSearchbar}
+                inputStyle={styles.modalSearchbarInput}
+                iconColor="#888888"
+                theme={{
+                  colors: {
+                    primary: '#2196F3',
+                    background: '#1A1A1A',
+                    surface: '#2C2C2C',
+                    text: '#FFFFFF',
+                    placeholder: '#B0B0B0',
+                    onSurface: '#FFFFFF',
+                  }
+                }}
+              />
+            </View>
+            
+            <ScrollView 
+              style={styles.modalScrollContainer}
+              contentContainerStyle={styles.modalListContent}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+            >
+              {loadingModelos ? (
+                <View style={styles.emptyState}>
+                  <ActivityIndicator color="#2196F3" size="small" />
+                  <Text style={styles.emptyStateText}>Cargando modelos...</Text>
+                </View>
+              ) : !searchModelo.trim() ? (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>
+                    Escribe en el buscador para buscar modelos
+                  </Text>
+                </View>
+              ) : modelosFiltrados.length > 0 ? (
+                modelosFiltrados.map((item, index) => {
+                  const isSelected = formData.modelo === item.modelo && formData.tipo_jig === item.tipo;
+                  return (
+                    <TouchableOpacity
+                      key={`modelo-tipo-${item.modelo}-${item.tipo}-${index}`}
+                      style={[styles.modalItem, isSelected && styles.modalItemSelected]}
+                      onPress={() => {
+                        // Al seleccionar una combinación modelo+tipo, asignar ambos directamente
+                        if (!isSelected) {
+                          handleInputChange('modelo', item.modelo);
+                          handleInputChange('tipo_jig', item.tipo);
+                          setShowModeloModal(false);
+                          setSearchModelo('');
+                        } else {
+                          // Deseleccionar
+                          handleInputChange('modelo', '');
+                          handleInputChange('tipo_jig', '');
+                          setShowModeloModal(false);
+                          setSearchModelo('');
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.modalItemContent}>
+                        <Text style={[styles.modalItemTextSmall, isSelected && styles.modalItemTextSelected]}>
+                          {item.displayText}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              ) : (
+                <View style={styles.emptyState}>
+                  <Text style={styles.emptyStateText}>
+                    No se encontraron modelos
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
+            
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowModeloModal(false);
+                setSearchModelo('');
+              }}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para seleccionar tipo de jig */}
+      <Modal
+        visible={showTipoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowTipoModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentSmall}>
+            <View style={styles.modalGridContainer}>
+              {tiposDisponibles.map((tipo, index) => {
+                const isSelected = formData.tipo_jig === tipo;
+                return (
+                  <TouchableOpacity
+                    key={`tipo-${tipo}-${index}`}
+                    style={[styles.modalGridItem, isSelected && styles.modalGridItemSelected]}
+                    onPress={() => {
+                      // Toggle: si ya está seleccionado, deseleccionar; si no, seleccionar
+                      if (isSelected) {
+                        handleInputChange('tipo_jig', '');
+                      } else {
+                        handleInputChange('tipo_jig', tipo);
+                      }
+                      setShowTipoModal(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.modalGridItemText, isSelected && styles.modalGridItemTextSelected]}>
+                      {tipoDisplayNames[tipo] || tipo}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowTipoModal(false);
+              }}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Modal para seleccionar línea */}
+      <Modal
+        visible={showLineaModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          setShowLineaModal(false);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentSmall}>
+            <View style={styles.modalGridContainer}>
+              {lineasDisponibles.map((linea, index) => {
+                const isSelected = formData.linea === linea;
+                return (
+                  <TouchableOpacity
+                    key={`linea-${linea}-${index}`}
+                    style={[styles.modalGridItem, isSelected && styles.modalGridItemSelected]}
+                    onPress={() => {
+                      // Toggle: si ya está seleccionado, deseleccionar; si no, seleccionar
+                      if (isSelected) {
+                        handleInputChange('linea', '');
+                      } else {
+                        handleInputChange('linea', linea);
+                      }
+                      setShowLineaModal(false);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.modalGridItemText, isSelected && styles.modalGridItemTextSelected]}>
+                      {linea}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            
+            <TouchableOpacity
+              style={styles.modalCloseButton}
+              onPress={() => {
+                setShowLineaModal(false);
+              }}
+            >
+              <Text style={styles.modalCloseButtonText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1650,5 +1968,182 @@ const styles = StyleSheet.create({
     color: '#B0B0B0',
     fontSize: 14,
     marginBottom: 8,
+  },
+  // Modal styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 24,
+    width: '100%',
+    maxWidth: 520,
+    height: '80%',
+    maxHeight: 650,
+    borderWidth: 1.5,
+    borderColor: '#2A2A2A',
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    overflow: 'hidden',
+  },
+  modalScrollContainer: {
+    flex: 1,
+  },
+  modalListContent: {
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 16,
+  },
+  modalItem: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: '#0F0F0F',
+    borderWidth: 1.5,
+    borderColor: '#2A2A2A',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+  },
+  modalItemSelected: {
+    backgroundColor: '#1E3A5F',
+    borderColor: '#2196F3',
+    borderWidth: 2.5,
+    elevation: 6,
+    shadowColor: '#2196F3',
+    shadowOpacity: 0.4,
+  },
+  modalItemContent: {
+    flexDirection: 'column',
+  },
+  modalItemText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#E8E8E8',
+    marginBottom: 4,
+    letterSpacing: 0.2,
+  },
+  modalItemTextSmall: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E8E8E8',
+    letterSpacing: 0.2,
+  },
+  modalItemTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  modalItemSubtext: {
+    fontSize: 13,
+    color: '#888888',
+    letterSpacing: 0.1,
+  },
+  modalItemSubtextSelected: {
+    color: '#B0D4FF',
+  },
+  modalCloseButton: {
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderTopWidth: 1.5,
+    borderTopColor: '#2A2A2A',
+    backgroundColor: '#0F0F0F',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  emptyState: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: '#888888',
+    marginTop: 12,
+    textAlign: 'center',
+  },
+  modalContentSmall: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 24,
+    width: '90%',
+    maxWidth: 400,
+    borderWidth: 1.5,
+    borderColor: '#2A2A2A',
+    elevation: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    overflow: 'hidden',
+  },
+  modalGridContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 16,
+    justifyContent: 'space-between',
+  },
+  modalGridItem: {
+    width: '48%',
+    aspectRatio: 1,
+    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: '#0F0F0F',
+    borderWidth: 1.5,
+    borderColor: '#2A2A2A',
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalGridItemSelected: {
+    backgroundColor: '#1E3A5F',
+    borderColor: '#2196F3',
+    borderWidth: 2.5,
+    elevation: 6,
+    shadowColor: '#2196F3',
+    shadowOpacity: 0.4,
+  },
+  modalGridItemText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#E8E8E8',
+    letterSpacing: 0.2,
+  },
+  modalGridItemTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  modalSearchContainer: {
+    padding: 16,
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
+  },
+  modalSearchbar: {
+    backgroundColor: '#2C2C2C',
+    borderRadius: 12,
+    elevation: 2,
+  },
+  modalSearchbarInput: {
+    color: '#FFFFFF',
+    fontSize: 14,
   },
 });

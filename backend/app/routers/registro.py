@@ -159,7 +159,7 @@ async def update_solicitud_registro(
             numero_empleado=solicitud.numero_empleado,
             password_hash=solicitud.password_hash,
             firma_digital=solicitud.firma_digital,
-            turno_actual="mañana",  # Turno por defecto
+            turno_actual=solicitud.turno_actual or "A",
             tipo_tecnico="Técnico de Instrumentación",  # Tipo por defecto
             activo=True
         )

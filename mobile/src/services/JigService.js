@@ -1,33 +1,10 @@
-import axios from 'axios';
-import { getAuthToken } from '../utils/authUtils';
 import logger from '../utils/logger';
-
-const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
+import { apiClient } from '../utils/apiClient';
 
 class JigService {
   constructor() {
-    this.api = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: 30000, // Aumentado a 30 segundos
-      headers: {
-        'ngrok-skip-browser-warning': 'true',
-        'Content-Type': 'application/json',
-      },
-    });
-
-    // Interceptor para agregar token
-    this.api.interceptors.request.use(
-      async (config) => {
-        const token = await getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
+    // Usar instancia compartida de axios con interceptor de refresh token
+    this.api = apiClient;
   }
 
   async getJigByQR(codigoQR) {
@@ -84,12 +61,12 @@ class JigService {
     }
   }
 
-  async getAllJigs() {
+  async getAllJigs(params = {}) {
     try {
-      const response = await this.api.get('/jigs/');
+      const response = await this.api.get('/jigs/', { params });
       return {
         success: true,
-        data: response.data
+        data: response.data,
       };
     } catch (error) {
       logger.error('Error obteniendo jigs:', error);
@@ -99,27 +76,120 @@ class JigService {
         return {
           success: false,
           error: 'UNAUTHORIZED',
-          message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.'
+          message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
         };
       } else if (error.response?.status === 500) {
         return {
           success: false,
           error: 'SERVER_ERROR',
-          message: 'Error del servidor. Por favor, intenta nuevamente en unos momentos.'
+          message: 'Error del servidor. Por favor, intenta nuevamente en unos momentos.',
         };
       } else if (error.code === 'NETWORK_ERROR' || !error.response) {
         return {
           success: false,
           error: 'NETWORK_ERROR',
-          message: 'Sin conexión a internet. Verifica tu conexión e intenta nuevamente.'
+          message: 'Sin conexión a internet. Verifica tu conexión e intenta nuevamente.',
         };
       } else {
         return {
           success: false,
           error: 'UNKNOWN_ERROR',
-          message: error.response?.data?.detail || 'Error inesperado. Por favor, intenta nuevamente.'
+          message: error.response?.data?.detail || 'Error inesperado. Por favor, intenta nuevamente.',
         };
       }
+    }
+  }
+
+  async searchJigs(query, page = 1, pageSize = 1500) {
+    try {
+      const response = await this.api.get('/jigs/', {
+        params: {
+          search: query,
+          page,
+          page_size: pageSize,
+        },
+      });
+      return {
+        success: true,
+        data: response.data,
+      };
+    } catch (error) {
+      logger.error('Error buscando jigs:', error);
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
+        };
+      } else if (error.response?.status === 500) {
+        return {
+          success: false,
+          error: 'SERVER_ERROR',
+          message: 'Error del servidor. Por favor, intenta nuevamente en unos momentos.',
+        };
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        return {
+          success: false,
+          error: 'NETWORK_ERROR',
+          message: 'Sin conexión a internet. Verifica tu conexión e intenta nuevamente.',
+        };
+      }
+      return {
+        success: false,
+        error: 'UNKNOWN_ERROR',
+        message: error.response?.data?.detail || 'Error inesperado. Por favor, intenta nuevamente.',
+      };
+    }
+  }
+
+  /**
+   * Obtener jigs para el autocompletado en formularios (por ejemplo, reporte de etiqueta NG)
+   * Devuelve directamente el array de jigs (items) sin la metadata de paginación.
+   */
+  async getJigsForAutocomplete() {
+    try {
+      const response = await this.api.get('/jigs/', {
+        params: {
+          page: 1,
+          // El backend valida que page_size sea <= 100, así que usamos el máximo permitido
+          page_size: 100,
+        },
+      });
+
+      const data = response.data;
+      let items = [];
+
+      if (Array.isArray(data?.items)) {
+        items = data.items;
+      } else if (Array.isArray(data)) {
+        items = data;
+      }
+
+      return {
+        success: true,
+        data: items,
+      };
+    } catch (error) {
+      logger.error('Error obteniendo jigs para autocompletado:', error);
+
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
+        };
+      } else if (error.code === 'NETWORK_ERROR' || !error.response) {
+        return {
+          success: false,
+          error: 'NETWORK_ERROR',
+          message: 'Sin conexión a internet. Verifica tu conexión e intenta nuevamente.',
+        };
+      }
+
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error de conexión',
+      };
     }
   }
 
@@ -148,6 +218,57 @@ class JigService {
       };
     } catch (error) {
       logger.error('Error creando jig:', error);
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error de conexión'
+      };
+    }
+  }
+
+  // Eliminar todos los jigs
+  async deleteAllJigs() {
+    try {
+      logger.info('🗑️ Eliminando todos los jigs...');
+      
+      const response = await this.api.delete('/jigs/all');
+      
+      logger.info('✅ Todos los jigs eliminados exitosamente');
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('❌ Error al eliminar todos los jigs:', error);
+      
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'UNAUTHORIZED'
+        };
+      }
+      
+      if (error.response?.status === 403) {
+        return {
+          success: false,
+          error: 'FORBIDDEN',
+          message: 'Solo administradores e ingenieros pueden eliminar todos los jigs'
+        };
+      }
+      
+      if (error.response?.status === 500) {
+        return {
+          success: false,
+          error: 'SERVER_ERROR'
+        };
+      }
+      
+      if (error.code === 'NETWORK_ERROR' || !error.response) {
+        return {
+          success: false,
+          error: 'NETWORK_ERROR'
+        };
+      }
+      
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'
@@ -198,6 +319,97 @@ class JigService {
         };
       }
       
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error de conexión'
+      };
+    }
+  }
+
+  // Eliminar TODOS los jigs (solo para admin - TEMPORAL)
+  async deleteAllJigs() {
+    try {
+      logger.info('⚠️ Eliminando TODOS los jigs...');
+      
+      const response = await this.api.delete('/jigs/all');
+      
+      logger.info('✅ Todos los jigs eliminados exitosamente');
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('❌ Error al eliminar todos los jigs:', error);
+      
+      if (error.response?.status === 401) {
+        return {
+          success: false,
+          error: 'UNAUTHORIZED',
+          message: 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.'
+        };
+      }
+      
+      if (error.response?.status === 403) {
+        return {
+          success: false,
+          error: 'FORBIDDEN',
+          message: 'Solo administradores pueden eliminar todos los jigs.'
+        };
+      }
+      
+      if (error.response?.status === 500) {
+        return {
+          success: false,
+          error: 'SERVER_ERROR',
+          message: 'Error del servidor. Por favor, intenta nuevamente.'
+        };
+      }
+      
+      if (error.code === 'NETWORK_ERROR' || !error.response) {
+        return {
+          success: false,
+          error: 'NETWORK_ERROR',
+          message: 'Sin conexión a internet. Verifica tu conexión e intenta nuevamente.'
+        };
+      }
+      
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error de conexión',
+        message: error.response?.data?.detail || 'Error inesperado al eliminar jigs'
+      };
+    }
+  }
+
+  async getModelos() {
+    try {
+      logger.info('📋 Obteniendo modelos disponibles...');
+      const response = await this.api.get('/jigs/modelos');
+      logger.info('✅ Modelos obtenidos exitosamente:', response.data.length);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('❌ Error obteniendo modelos:', error);
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error de conexión'
+      };
+    }
+  }
+
+  async getModelosConTipos() {
+    try {
+      logger.info('📋 Obteniendo modelos con tipos disponibles...');
+      const response = await this.api.get('/jigs/modelos-con-tipos');
+      logger.info('✅ Modelos con tipos obtenidos exitosamente');
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('❌ Error obteniendo modelos con tipos:', error);
       return {
         success: false,
         error: error.response?.data?.detail || 'Error de conexión'

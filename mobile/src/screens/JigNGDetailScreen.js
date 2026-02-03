@@ -22,9 +22,12 @@ import {
 } from 'react-native-paper';
 import { jigNGService } from '../services/JigNGService';
 import { authService } from '../services/AuthService';
+import { useLanguage } from '../contexts/LanguageContext';
 import logger from '../utils/logger';
+import { formatDate, formatTime12Hour } from '../utils/dateUtils';
 
 export default function JigNGDetailScreen({ route, navigation }) {
+  const { t } = useLanguage();
   const { jigId } = route.params;
   const [jig, setJig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -50,12 +53,12 @@ export default function JigNGDetailScreen({ route, navigation }) {
       if (result.success) {
         setJig(result.data);
       } else {
-        Alert.alert('Error', result.message || 'Error al cargar detalles del jig NG');
+        Alert.alert(t('error'), result.message || t('errorLoadingDetails'));
         navigation.goBack();
       }
     } catch (error) {
       logger.error('❌ Error al cargar jig NG:', error);
-      Alert.alert('Error', 'Error inesperado al cargar detalles');
+      Alert.alert(t('error'), t('unexpectedErrorLoading'));
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -93,22 +96,22 @@ export default function JigNGDetailScreen({ route, navigation }) {
         // Si se marca como reparado o falso defecto, regresar (la lista se recargará automáticamente)
         if (newStatus === 'reparado' || newStatus === 'falso_defecto') {
           const mensaje = newStatus === 'reparado' 
-            ? 'Jig NG marcado como reparado. La tarjeta ha sido eliminada y el jig está disponible para validación.'
-            : 'Jig NG marcado como falso defecto. La tarjeta ha sido eliminada y el jig está disponible para validación.';
+            ? t('jigNGMarkedAsRepaired')
+            : t('jigNGMarkedAsFalseDefect');
           Alert.alert(
-            'Éxito', 
+            t('success'), 
             mensaje,
-            [{ text: 'OK', onPress: () => navigation.goBack() }]
+            [{ text: t('save'), onPress: () => navigation.goBack() }]
           );
         } else {
-          Alert.alert('Éxito', 'Estado actualizado correctamente');
+          Alert.alert(t('success'), t('statusUpdated'));
         }
       } else {
-        Alert.alert('Error', result.message || 'Error al actualizar estado');
+        Alert.alert(t('error'), result.message || t('errorUpdatingStatus'));
       }
     } catch (error) {
       logger.error('❌ Error al actualizar estado:', error);
-      Alert.alert('Error', 'Error inesperado al actualizar estado');
+      Alert.alert(t('error'), t('unexpectedErrorUpdating'));
     } finally {
       setUpdating(false);
     }
@@ -134,13 +137,13 @@ export default function JigNGDetailScreen({ route, navigation }) {
         // Marcar que el comentario fue guardado
         setCommentSaved(true);
         
-        Alert.alert('Éxito', 'Comentario guardado correctamente');
+        Alert.alert(t('success'), t('commentSaved'));
       } else {
-        Alert.alert('Error', result.message || 'Error al guardar comentario');
+        Alert.alert(t('error'), result.message || t('errorSavingComment'));
       }
     } catch (error) {
       logger.error('❌ Error al guardar comentario:', error);
-      Alert.alert('Error', 'Error inesperado al guardar comentario');
+      Alert.alert(t('error'), t('unexpectedErrorSavingComment'));
     } finally {
       setUpdating(false);
     }
@@ -165,28 +168,28 @@ export default function JigNGDetailScreen({ route, navigation }) {
 
   const handleDelete = () => {
     Alert.alert(
-      'Eliminar Jig NG',
-      '¿Estás seguro de que quieres eliminar este jig NG?',
+      t('deleteJigNG'),
+      t('deleteJigNGConfirm'),
       [
-        { text: 'Cancelar', style: 'cancel' },
+        { text: t('cancel'), style: 'cancel' },
         {
-          text: 'Eliminar',
+          text: t('delete'),
           style: 'destructive',
           onPress: async () => {
             try {
               const result = await jigNGService.deleteJigNG(jigId);
               if (result.success) {
                 Alert.alert(
-                  'Éxito',
-                  'Jig NG eliminado correctamente',
-                  [{ text: 'OK', onPress: () => navigation.goBack() }]
+                  t('success'),
+                  t('jigNGDeleted'),
+                  [{ text: t('save'), onPress: () => navigation.goBack() }]
                 );
               } else {
-                Alert.alert('Error', result.message || 'Error al eliminar jig NG');
+                Alert.alert(t('error'), result.message || t('errorDeletingJigNG'));
               }
             } catch (error) {
               logger.error('❌ Error al eliminar jig NG:', error);
-              Alert.alert('Error', 'Error inesperado al eliminar jig NG');
+              Alert.alert(t('error'), t('unexpectedErrorDeleting'));
             }
           }
         }
@@ -212,27 +215,17 @@ export default function JigNGDetailScreen({ route, navigation }) {
   };
 
   const capitalizeStatus = (estado) => {
-    if (!estado) return 'Sin Estado';
-    if (estado === 'falso_defecto') return 'Falso Defecto';
+    if (!estado) return t('noStatus');
+    if (estado === 'falso_defecto') return t('falseDefect');
     return estado.charAt(0).toUpperCase() + estado.slice(1).toLowerCase();
   };
 
-  const formatDate = (dateString) => {
-    if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
 
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
-        <Text style={styles.loadingText}>Cargando detalles...</Text>
+        <Text style={styles.loadingText}>{t('loadingDetails')}</Text>
       </View>
     );
   }
@@ -240,9 +233,9 @@ export default function JigNGDetailScreen({ route, navigation }) {
   if (!jig) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>No se pudo cargar el jig NG</Text>
+        <Text style={styles.errorText}>{t('couldNotLoadJigNG')}</Text>
         <Button mode="contained" onPress={() => navigation.goBack()}>
-          Volver
+          {t('back')}
         </Button>
       </View>
     );
@@ -251,12 +244,13 @@ export default function JigNGDetailScreen({ route, navigation }) {
   return (
     <KeyboardAvoidingView 
       style={styles.container} 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 200 : 50}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
       <ScrollView 
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="interactive"
         contentContainerStyle={styles.scrollContent}
       >
 
@@ -264,30 +258,30 @@ export default function JigNGDetailScreen({ route, navigation }) {
       {/* Información del Jig */}
       <Card style={styles.infoCard}>
         <Card.Content>
-          <Title style={styles.cardTitle}>📋 Información del Jig</Title>
+          <Title style={styles.cardTitle}>📋 {t('jigInformation')}</Title>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Número:</Text>
+            <Text style={styles.infoLabel}>{t('number')}</Text>
             <Text style={styles.infoValue}>{jig.jig?.numero_jig || 'N/A'}</Text>
           </View>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Código QR:</Text>
+            <Text style={styles.infoLabel}>{t('qrCode')}:</Text>
             <Text style={styles.infoValue}>{jig.jig?.codigo_qr || 'N/A'}</Text>
           </View>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Modelo:</Text>
+            <Text style={styles.infoLabel}>{t('currentModel')}:</Text>
             <Text style={styles.infoValue}>{jig.jig?.modelo_actual || 'N/A'}</Text>
           </View>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Tipo:</Text>
+            <Text style={styles.infoLabel}>{t('type')}</Text>
             <Text style={styles.infoValue}>{jig.jig?.tipo || 'N/A'}</Text>
           </View>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Estado del Jig:</Text>
+            <Text style={styles.infoLabel}>{t('jigState')}</Text>
             <Text style={[styles.infoValue, { color: jig.jig?.estado === 'activo' ? '#4CAF50' : '#F44336' }]}>
               {jig.jig?.estado || 'N/A'}
             </Text>
@@ -298,43 +292,47 @@ export default function JigNGDetailScreen({ route, navigation }) {
       {/* Información del Reporte */}
       <Card style={styles.infoCard}>
         <Card.Content>
-          <Title style={styles.cardTitle}>👤 Información del Reporte</Title>
+          <Title style={styles.cardTitle}>👤 {t('reportInformation')}</Title>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Reportado por:</Text>
+            <Text style={styles.infoLabel}>{t('reportedBy')}</Text>
             <Text style={styles.infoValue}>{jig.tecnico_ng?.nombre || jig.usuario_reporte || 'N/A'}</Text>
           </View>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Número de Empleado:</Text>
+            <Text style={styles.infoLabel}>{t('employeeNumber')}</Text>
             <Text style={styles.infoValue}>{jig.tecnico_ng?.numero_empleado || 'N/A'}</Text>
           </View>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Fecha de Reporte:</Text>
-            <Text style={styles.infoValue}>{formatDate(jig.fecha_ng)}</Text>
+            <Text style={styles.infoLabel}>{t('reportDate')}</Text>
+            <Text style={styles.infoValue}>
+              {formatDate(jig.fecha_ng)} {formatTime12Hour(jig.fecha_ng)}
+            </Text>
           </View>
           
           <View style={styles.infoRow}>
-            <Text style={styles.infoLabel}>Técnico que repara:</Text>
-            <Text style={styles.infoValue}>{currentUser?.nombre || currentUser?.username || jig.tecnico_reparacion?.nombre || jig.usuario_reparando || 'Sin asignar'}</Text>
+            <Text style={styles.infoLabel}>{t('repairingTechnician')}</Text>
+            <Text style={styles.infoValue}>{currentUser?.nombre || currentUser?.username || jig.tecnico_reparacion?.nombre || jig.usuario_reparando || t('notAssigned')}</Text>
           </View>
           
           {jig.fecha_reparacion && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Fecha de Reparación:</Text>
-              <Text style={styles.infoValue}>{formatDate(jig.fecha_reparacion)}</Text>
-              </View>
-            )}
+              <Text style={styles.infoLabel}>{t('repairDate')}</Text>
+              <Text style={styles.infoValue}>
+                {formatDate(jig.fecha_reparacion)} {formatTime12Hour(jig.fecha_reparacion)}
+              </Text>
+            </View>
+          )}
           </Card.Content>
         </Card>
 
       {/* Descripción del Problema */}
       <Card style={styles.infoCard}>
           <Card.Content>
-          <Title style={styles.cardTitle}>🔧 Descripción del Problema</Title>
+          <Title style={styles.cardTitle}>🔧 {t('problemDescriptionTitle')}</Title>
           <Paragraph style={styles.problemDescription}>
-            {jig.motivo || 'Sin descripción disponible'}
+            {jig.motivo || t('noDescriptionAvailable')}
             </Paragraph>
           
           {/* Mostrar foto si existe */}
@@ -353,19 +351,19 @@ export default function JigNGDetailScreen({ route, navigation }) {
       {/* Comentarios de Reparación */}
       <Card style={styles.infoCard}>
         <Card.Content>
-          <Title style={styles.cardTitle}>💬 Comentarios de Reparación</Title>
+          <Title style={styles.cardTitle}>💬 {t('repairComments')}</Title>
           
           <TextInput
-            label="¿Qué se reparó?"
+            label={t('whatWasRepaired')}
             value={repairComment}
             onChangeText={setRepairComment}
             style={[styles.commentInput, { color: '#FFFFFF' }]}
             mode="outlined"
             multiline
             numberOfLines={3}
-            placeholder="Describe qué se reparó en este jig..."
+            placeholder={t('whatWasRepairedPlaceholder')}
             textColor="#FFFFFF"
-            placeholderTextColor="#B0B0B0"
+            placeholderTextColor="#CCCCCC"
             returnKeyType="done"
             blurOnSubmit={true}
             scrollEnabled={false}
@@ -375,7 +373,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
                 background: '#1E1E1E',
                 surface: '#2C2C2C',
                 text: '#FFFFFF',
-                placeholder: '#B0B0B0',
+                placeholder: '#CCCCCC',
               }
             }}
           />
@@ -385,15 +383,15 @@ export default function JigNGDetailScreen({ route, navigation }) {
               mode="contained"
               onPress={handleAddRepairComment}
               style={styles.saveCommentButton}
-              disabled={updating || !repairComment.trim()}
+              disabled={updating}
             >
-              {updating ? 'Guardando...' : 'Guardar Comentario'}
+              {updating ? t('saving') : t('saveComment')}
           </Button>
           </View>
           
           {jig.comentario_reparacion && (
             <View style={styles.existingComment}>
-              <Text style={styles.existingCommentLabel}>Comentario actual:</Text>
+              <Text style={styles.existingCommentLabel}>{t('currentComment')}</Text>
               <Paragraph style={styles.existingCommentText}>
                 {jig.comentario_reparacion}
               </Paragraph>
@@ -402,8 +400,8 @@ export default function JigNGDetailScreen({ route, navigation }) {
         </Card.Content>
       </Card>
 
-      {/* Botones de Acción - Solo mostrar si el comentario fue guardado y no está reparado */}
-      {commentSaved && jig?.estado !== 'reparado' && (
+      {/* Botones de Acción - Mostrar si no está reparado */}
+      {jig?.estado !== 'reparado' && (
         <>
           <View style={styles.bottomButtons}>
             <Button
@@ -418,7 +416,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
                 selectedAction === 'falso_defecto' && styles.selectedButtonLabel
               ]}
             >
-              🚫 Falso Defecto
+              🚫 {t('falseDefect')}
             </Button>
             
             <Button
@@ -433,7 +431,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
                 selectedAction === 'reparado' && styles.selectedButtonLabel
               ]}
             >
-              ✅ Reparado
+              ✅ {t('repaired')}
             </Button>
           </View>
 
@@ -448,7 +446,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
               labelStyle={styles.saveButtonLabel}
               disabled={!selectedAction || updating}
             >
-              {updating ? 'Guardando...' : 'Guardar Cambios'}
+              {updating ? t('saving') : t('saveChanges')}
             </Button>
             
             <Button
@@ -457,8 +455,9 @@ export default function JigNGDetailScreen({ route, navigation }) {
               style={styles.cancelButton}
               labelStyle={styles.cancelButtonLabel}
               disabled={updating}
+              buttonColor="transparent"
             >
-              Cancelar
+              {t('cancel')}
             </Button>
           </View>
         </>
@@ -467,7 +466,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
       {updating && (
         <View style={styles.updatingContainer}>
           <ActivityIndicator size="small" color="#2196F3" />
-          <Text style={styles.updatingText}>Actualizando estado...</Text>
+          <Text style={styles.updatingText}>{t('updatingStatus')}</Text>
         </View>
       )}
 
@@ -486,27 +485,27 @@ export default function JigNGDetailScreen({ route, navigation }) {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Title style={styles.modalTitle}>
-              {selectedAction === 'reparado' ? 'Comentario de Reparación (Obligatorio)' : 'Agregar Comentario de Reparación'}
+              {selectedAction === 'reparado' ? t('repairCommentRequired') : t('addRepairComment')}
             </Title>
             
             <TextInput
-              label="Técnico que Repara"
+              label={t('repairingTechnicianLabel')}
               value={repairingUser}
               onChangeText={setRepairingUser}
               style={styles.modalInput}
               mode="outlined"
-              placeholder="Nombre del técnico"
+              placeholder={t('technicianNamePlaceholder')}
             />
             
             <TextInput
-              label="Comentario de Reparación"
+              label={t('repairCommentLabel')}
               value={repairComment}
               onChangeText={setRepairComment}
               style={styles.modalInput}
               mode="outlined"
               multiline
               numberOfLines={4}
-              placeholder="Describe qué se reparó..."
+              placeholder={t('repairCommentPlaceholder')}
             />
             
             <View style={styles.modalButtons}>
@@ -516,7 +515,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
                 style={styles.saveButton}
                 disabled={updating}
               >
-                {updating ? 'Guardando...' : 'Guardar'}
+                {updating ? t('saving') : t('save')}
               </Button>
               
               {selectedAction !== 'reparado' && (
@@ -528,8 +527,9 @@ export default function JigNGDetailScreen({ route, navigation }) {
                     setRepairingUser('');
                   }}
                   style={styles.cancelButton}
+                  labelStyle={styles.cancelButtonLabel}
                 >
-                  Cancelar
+                  {t('cancel')}
                 </Button>
               )}
             </View>
@@ -549,7 +549,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 150,
+    paddingBottom: 50,
   },
   loadingContainer: {
     flex: 1,
@@ -775,10 +775,10 @@ const styles = StyleSheet.create({
   },
   modalCancelButton: {
     flex: 1,
-    borderColor: '#666666',
+    borderColor: '#F44336',
   },
   modalCancelButtonLabel: {
-    color: '#E0E0E0',
+    color: '#F44336',
     fontSize: 16,
   },
   modalSaveButton: {
@@ -850,7 +850,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   cancelButton: {
-    borderColor: '#666666',
+    borderColor: '#F44336',
     marginRight: 8,
   },
   bottomButtons: {
@@ -887,7 +887,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   cancelButtonLabel: {
-    color: '#666666',
+    color: '#F44336',
   },
   commentHeader: {
     flexDirection: 'row',

@@ -24,27 +24,77 @@ import {
   Surface,
   IconButton
 } from 'react-native-paper';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '../contexts/AuthContext';
 import { useValidation } from '../contexts/ValidationContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { jigNGService } from '../services/JigNGService';
 import logger from '../utils/logger';
+import { showAlert } from '../utils/alertUtils';
 
 export default function ValidationScreen({ route, navigation }) {
   const { jig } = route.params || {};
   const { user } = useAuth();
+  const { t } = useLanguage();
   const { addValidation, getValidationsByModel, setLineaForModel, getLineaForModel, validations } = useValidation();
+  
+  // Función helper para traducir el tipo del jig
+  const translateJigType = (tipo) => {
+    if (!tipo) return t('notAvailable');
+    const tipoLower = tipo.toLowerCase();
+    if (tipoLower === 'manual') return t('manual');
+    if (tipoLower === 'semiautomatic' || tipoLower === 'semiautomatico') return t('semiautomatic');
+    if (tipoLower === 'new semiautomatic' || tipoLower === 'new_semiautomatic' || tipoLower === 'nuevo_semiautomatico' || tipoLower === 'nuevo semiautomatico') return t('newSemiautomatic');
+    return tipo; // Si no coincide, devolver el valor original
+  };
+
+  // Función para normalizar el turno: convertir "mañana", "noche", "fines" a "A", "B", "C"
+  const normalizeTurno = (turno) => {
+    if (!turno) return 'A';
+    const turnoLower = String(turno).toLowerCase().trim();
+    switch (turnoLower) {
+      case 'mañana':
+      case 'manana':
+      case 'a':
+        return 'A';
+      case 'noche':
+      case 'b':
+        return 'B';
+      case 'fines':
+      case 'c':
+        return 'C';
+      default:
+        // Si ya es A, B o C, retornarlo en mayúsculas
+        if (turnoLower === 'a' || turnoLower === 'b' || turnoLower === 'c') {
+          return turnoLower.toUpperCase();
+        }
+        return String(turno).toUpperCase();
+    }
+  };
+
+  // Obtener el turno normalizado del usuario
+  const userTurno = normalizeTurno(user?.turno_actual);
   
   const [loading, setLoading] = useState(false);
   const [checkingNG, setCheckingNG] = useState(true);
   const [jigNG, setJigNG] = useState(null);
   const [showLineaModal, setShowLineaModal] = useState(false);
   const [formData, setFormData] = useState({
-    turno: user?.turno_actual || 'A', // Usar el turno del usuario automáticamente
+    turno: userTurno, // Usar el turno normalizado del usuario automáticamente
     estado: 'OK',
     comentario: '',
     cantidad: '1',
     linea: ''
   });
+
+  // Actualizar turno cuando cambie el usuario
+  useEffect(() => {
+    const normalizedTurno = normalizeTurno(user?.turno_actual);
+    setFormData(prev => ({
+      ...prev,
+      turno: normalizedTurno
+    }));
+  }, [user?.turno_actual]);
 
   useEffect(() => {
     checkJigNGStatus();
@@ -77,11 +127,11 @@ export default function ValidationScreen({ route, navigation }) {
         setJigNG(result.jigNG);
         if (result.hasActiveNG) {
           Alert.alert(
-            'Jig con NG Activo',
-            'Este jig tiene un reporte NG activo y debe ser reparado antes de continuar con la validación.',
+            t('jigWithNGActive'),
+            t('jigWithNGActiveDesc'),
             [
               {
-                text: 'Cancelar',
+                text: t('cancel'),
                 style: 'cancel',
                 onPress: () => {
                   setCheckingNG(false);
@@ -89,7 +139,7 @@ export default function ValidationScreen({ route, navigation }) {
                 }
               },
               {
-                text: 'Ir a Reparar',
+                text: t('goToRepair'),
                 onPress: () => {
                   setCheckingNG(false);
                   navigation.navigate('RepairJig', { 
@@ -125,22 +175,22 @@ export default function ValidationScreen({ route, navigation }) {
   const handleSubmitValidation = () => {
     // Validar campos requeridos
     if (!formData.turno || !formData.estado || !formData.comentario) {
-      Alert.alert('Error', 'Por favor completa todos los campos requeridos');
+      Alert.alert(t('error'), t('completeRequiredFields'));
       return;
     }
 
     // Validar que se haya seleccionado una línea
     if (!formData.linea || formData.linea.trim() === '') {
       Alert.alert(
-        'Línea Requerida',
-        'Debes seleccionar una línea antes de validar el jig.\n\nPor favor, selecciona la línea de producción.',
+        t('lineRequired'),
+        t('lineRequiredDesc'),
         [
           {
-            text: 'Seleccionar Línea',
+            text: t('selectLineTitle'),
             onPress: () => setShowLineaModal(true)
           },
           {
-            text: 'Cancelar',
+            text: t('cancel'),
             style: 'cancel'
           }
         ]
@@ -151,7 +201,7 @@ export default function ValidationScreen({ route, navigation }) {
     // Validar cantidad
     const cantidad = parseInt(formData.cantidad);
     if (isNaN(cantidad) || cantidad <= 0) {
-      Alert.alert('Error', 'La cantidad debe ser un número mayor a 0');
+      Alert.alert(t('error'), t('quantityMustBePositive'));
       return;
     }
 
@@ -163,11 +213,11 @@ export default function ValidationScreen({ route, navigation }) {
       
       if (jigYaAgregado) {
         Alert.alert(
-          'Jig Ya Agregado',
-          `El jig ${jig?.numero_jig} ya ha sido agregado a las validaciones de este modelo.\n\nNo se puede agregar el mismo jig dos veces.`,
+          t('jigAlreadyAdded'),
+          t('jigAlreadyAddedDesc', { number: jig?.numero_jig }),
           [
             {
-              text: 'OK',
+              text: t('ok'),
               onPress: () => navigation.navigate('QRScanner')
             }
           ]
@@ -194,16 +244,20 @@ export default function ValidationScreen({ route, navigation }) {
     // Obtener validaciones del modelo actual (después de agregar)
     const modelValidations = getValidationsByModel(jig?.modelo_actual);
     
-    Alert.alert(
-      'Validación Agregada',
-      `Jig ${jig?.numero_jig} agregado al reporte.\n\nModelo: ${jig?.modelo_actual}\nValidaciones: ${modelValidations.length + 1}/14`,
+    showAlert(
+      t('validationAdded'),
+      t('validationAddedDesc', { 
+        number: jig?.numero_jig, 
+        model: jig?.modelo_actual,
+        count: modelValidations.length + 1
+      }),
       [
         {
-          text: 'Continuar Escaneando',
+          text: t('continueScanning'),
           onPress: () => navigation.navigate('QRScanner')
         },
         {
-          text: 'Ver Reporte',
+          text: t('viewReport'),
           onPress: () => navigation.navigate('Reporte', { 
             modelValidations: [...modelValidations, validationData],
             currentModel: jig?.modelo_actual
@@ -226,9 +280,9 @@ export default function ValidationScreen({ route, navigation }) {
   if (!jig || checkingNG) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" />
-        <Paragraph>
-          {!jig ? 'Cargando información del jig...' : 'Verificando estado NG...'}
+        <ActivityIndicator size="large" color="#2196F3" />
+        <Paragraph style={styles.loadingText}>
+          {!jig ? t('loadingJigInfo') : t('checkingNGStatus')}
         </Paragraph>
       </View>
     );
@@ -239,14 +293,20 @@ export default function ValidationScreen({ route, navigation }) {
       style={styles.container} 
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <LinearGradient
+        colors={['#1A1A1A', '#2C2C2C', '#1A1A1A']}
+        style={styles.gradientBackground}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+      />
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Header con información del jig */}
         <Surface style={styles.headerCard} elevation={4}>
           <View style={styles.headerContent}>
             <View style={styles.headerLeft}>
-              <Title style={styles.headerTitle}>🔍 Validar Jig</Title>
+              <Title style={styles.headerTitle}>🔍 {t('validateJig')}</Title>
               <Paragraph style={styles.headerSubtitle}>
-                {jig.numero_jig} • {jig.tipo} • {jig.modelo_actual}
+                {jig.numero_jig || t('notAvailable')} • {translateJigType(jig.tipo)} • {jig.modelo_actual || t('notAvailable')}
             </Paragraph>
             </View>
             <View style={styles.headerRight}>
@@ -254,7 +314,7 @@ export default function ValidationScreen({ route, navigation }) {
                 style={[styles.statusChip, { backgroundColor: jig.estado === 'activo' ? '#4CAF50' : '#FF9800' }]}
                 textStyle={styles.chipText}
               >
-                {jig.estado?.toUpperCase() || 'N/A'}
+                {jig.estado ? (jig.estado === 'activo' ? t('active') : t('inactive')) : t('notAvailable')}
               </Chip>
             </View>
           </View>
@@ -263,19 +323,19 @@ export default function ValidationScreen({ route, navigation }) {
         {/* Información del técnico */}
         <Card style={styles.infoCard}>
           <Card.Content>
-            <Title style={styles.sectionTitle}>👤 Técnico Validando</Title>
+            <Title style={styles.sectionTitle}>👤 {t('validatingTechnician')}</Title>
             <View style={styles.technicianInfo}>
               <View style={styles.technicianItem}>
-                <Paragraph style={styles.technicianLabel}>Nombre:</Paragraph>
-                <Paragraph style={styles.technicianValue}>{user?.nombre || 'N/A'}</Paragraph>
+                <Paragraph style={styles.technicianLabel}>{t('name')}</Paragraph>
+                <Paragraph style={styles.technicianValue}>{user?.nombre || t('notAvailable')}</Paragraph>
               </View>
               <View style={styles.technicianItem}>
-                <Paragraph style={styles.technicianLabel}>Turno Asignado:</Paragraph>
+                <Paragraph style={styles.technicianLabel}>{t('assignedShift')}</Paragraph>
                 <Chip 
-                  style={[styles.turnoChip, { backgroundColor: getTurnoColor(formData.turno) }]}
+                  style={[styles.turnoChip, { backgroundColor: getTurnoColor(userTurno) }]}
                   textStyle={styles.chipText}
                 >
-                  TURNO {formData.turno}
+                  {t('shiftWithNumber', { number: userTurno })}
                 </Chip>
               </View>
               </View>
@@ -285,34 +345,31 @@ export default function ValidationScreen({ route, navigation }) {
         {/* Formulario de validación */}
         <Card style={styles.formCard}>
           <Card.Content>
-            <Title style={styles.sectionTitle}>📋 Datos de Validación</Title>
+            <Title style={styles.sectionTitle}>📋 {t('validationData')}</Title>
             
-            {/* Turno - Mejorado */}
+            {/* Turno - Automático del usuario */}
             <View style={styles.inputSection}>
-              <Paragraph style={styles.inputLabel}>Turno de Validación *</Paragraph>
-              <View style={styles.turnoButtons}>
-                {['A', 'B', 'C'].map((turno) => (
-                  <Button
-                    key={turno}
-                    mode={formData.turno === turno ? "contained" : "outlined"}
-                    onPress={() => handleInputChange('turno', turno)}
-                    style={[
-                      styles.turnoButton,
-                      formData.turno === turno && { backgroundColor: getTurnoColor(turno) }
-                    ]}
-                    textColor={formData.turno === turno ? '#FFFFFF' : getTurnoColor(turno)}
+              <Paragraph style={styles.inputLabel}>{t('validationShift')} *</Paragraph>
+              <Surface style={styles.turnoDisplayBox} elevation={2}>
+                <View style={styles.turnoDisplayContent}>
+                  <Chip 
+                    style={[styles.turnoDisplayChip, { backgroundColor: getTurnoColor(userTurno) }]}
+                    textStyle={styles.chipText}
                   >
-                    Turno {turno}
-                  </Button>
-                ))}
-              </View>
+                    {t('shiftWithNumber', { number: userTurno })}
+                  </Chip>
+                  <Paragraph style={styles.turnoDisplayText}>
+                    {t('autoSetFromUser')}
+                  </Paragraph>
+                </View>
+              </Surface>
             </View>
             
             <Divider style={styles.divider} />
 
             {/* Estado - Mejorado */}
             <View style={styles.inputSection}>
-              <Paragraph style={styles.inputLabel}>Estado del Jig *</Paragraph>
+              <Paragraph style={styles.inputLabel}>{t('jigStatus')} *</Paragraph>
               <View style={styles.estadoButtons}>
                 <Button
                   mode={formData.estado === 'OK' ? "contained" : "outlined"}
@@ -324,7 +381,7 @@ export default function ValidationScreen({ route, navigation }) {
                   textColor={formData.estado === 'OK' ? '#FFFFFF' : '#4CAF50'}
                   icon="check-circle"
                 >
-                  OK
+                  {t('okStatus')}
                 </Button>
                 <Button
                   mode={formData.estado === 'NG' ? "contained" : "outlined"}
@@ -336,7 +393,7 @@ export default function ValidationScreen({ route, navigation }) {
                   textColor={formData.estado === 'NG' ? '#FFFFFF' : '#F44336'}
                   icon="alert-circle"
                 >
-                  NG
+                  {t('ngStatus')}
                 </Button>
               </View>
             </View>
@@ -345,7 +402,7 @@ export default function ValidationScreen({ route, navigation }) {
 
             {/* Comentario - Opciones predefinidas */}
             <View style={styles.inputSection}>
-              <Paragraph style={styles.inputLabel}>Comentarios de Validación *</Paragraph>
+              <Paragraph style={styles.inputLabel}>{t('validationComments')} *</Paragraph>
               
               {/* Primera fila - Limpieza y Validado */}
               <View style={styles.comentarioRow}>
@@ -359,7 +416,7 @@ export default function ValidationScreen({ route, navigation }) {
                   textColor={formData.comentario === 'Limpieza' ? '#FFFFFF' : '#FF9800'}
                   icon="broom"
                 >
-                  Limpieza
+                  {t('cleaning')}
                 </Button>
                 <Button
                   mode={formData.comentario === 'Validado' ? "contained" : "outlined"}
@@ -371,7 +428,7 @@ export default function ValidationScreen({ route, navigation }) {
                   textColor={formData.comentario === 'Validado' ? '#FFFFFF' : '#4CAF50'}
                   icon="check-circle"
                 >
-                  Validado
+                  {t('validated')}
                 </Button>
               </View>
               
@@ -387,39 +444,43 @@ export default function ValidationScreen({ route, navigation }) {
                   textColor={formData.comentario === 'Limpieza y Validado' ? '#FFFFFF' : '#2196F3'}
                   icon="check-all"
                 >
-                  Limpieza y Validado
+                  {t('cleaningAndValidated')}
                 </Button>
               </View>
             </View>
 
-            {/* Cantidad - Mejorado */}
+            {/* Cantidad - Siempre 1, no editable */}
             <View style={styles.inputSection}>
-            <TextInput
-                label="Cantidad Validada"
-              value={formData.cantidad}
-              onChangeText={(text) => handleInputChange('cantidad', text)}
-                style={styles.textInput}
-              mode="outlined"
-              keyboardType="numeric"
-                left={<TextInput.Icon icon="counter" />}
-            />
+              <Paragraph style={styles.inputLabel}>{t('validatedQuantity')}</Paragraph>
+              <Surface style={styles.cantidadBox} elevation={2}>
+                <View style={styles.cantidadContentWrapper}>
+                  <View style={styles.cantidadContent}>
+                    <IconButton
+                      icon="counter"
+                      size={24}
+                      iconColor="#FFFFFF"
+                    />
+                    <Paragraph style={styles.cantidadValue}>1</Paragraph>
+                  </View>
+                </View>
+              </Surface>
             </View>
 
             {/* Línea - Modal con lista */}
             <View style={styles.inputSection}>
-              <Paragraph style={styles.inputLabel}>Línea *</Paragraph>
+              <Paragraph style={styles.inputLabel}>{t('line')} *</Paragraph>
               <TouchableOpacity
                 onPress={() => setShowLineaModal(true)}
                 style={styles.lineaSelector}
               >
                 <View style={styles.lineaSelectorContent}>
                   <Paragraph style={[styles.lineaSelectorText, !formData.linea && styles.lineaSelectorPlaceholder]}>
-                    {formData.linea || 'Selecciona la línea'}
+                    {formData.linea || t('selectLine')}
                   </Paragraph>
                   <IconButton
                     icon="chevron-down"
                     size={20}
-                    iconColor="#666"
+                    iconColor="#B0B0B0"
                   />
                 </View>
               </TouchableOpacity>
@@ -437,7 +498,7 @@ export default function ValidationScreen({ route, navigation }) {
                   <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
                     <View style={styles.modalContent}>
                       <View style={styles.modalHeader}>
-                        <Title style={styles.modalTitle}>Seleccionar Línea</Title>
+                        <Title style={styles.modalTitle}>{t('selectLineTitle')}</Title>
                         <IconButton
                           icon="close"
                           size={24}
@@ -467,7 +528,7 @@ export default function ValidationScreen({ route, navigation }) {
                               styles.modalItemText,
                               formData.linea === `Línea ${linea}` && styles.modalItemTextSelected
                             ]}>
-                              Línea {linea}
+                              {t('lineWithNumber', { number: linea })}
                             </Paragraph>
                             {formData.linea === `Línea ${linea}` && (
                               <IconButton
@@ -489,6 +550,7 @@ export default function ValidationScreen({ route, navigation }) {
             
         {/* Botones de acción - Mejorados */}
         <Surface style={styles.actionCard} elevation={2}>
+          <View>
             <Button
               mode="contained"
               onPress={handleSubmitValidation}
@@ -497,26 +559,36 @@ export default function ValidationScreen({ route, navigation }) {
             icon={loading ? "loading" : "check-circle"}
             contentStyle={styles.submitButtonContent}
             >
-            {loading ? 'Validando...' : 'Validar Jig'}
+            {loading ? t('validating') : t('validateJigButton')}
             </Button>
             {(!formData.linea || formData.linea.trim() === '') && (
               <Paragraph style={styles.warningText}>
-                ⚠️ Debes seleccionar una línea para continuar
+                {t('selectLineWarning')}
               </Paragraph>
             )}
             
             <Button
-              mode="outlined"
-              onPress={() => navigation.navigate('AddJigNG', { 
-                jigId: jig.id, 
-                jigData: jig 
-              })}
-            style={styles.ngButton}
-            icon="alert-circle"
-              textColor="#F44336"
+              mode={formData.estado === 'NG' ? "contained" : "outlined"}
+              onPress={() => {
+                if (formData.estado === 'NG') {
+                  navigation.navigate('QuickRepairJig', { 
+                    jig: jig,
+                    jigData: jig 
+                  });
+                }
+              }}
+              style={[
+                styles.ngButton,
+                formData.estado === 'NG' 
+                  ? styles.ngButtonEnabled 
+                  : styles.ngButtonDisabled
+              ]}
+              icon="alert-circle"
+              textColor={formData.estado === 'NG' ? "#FFFFFF" : "#666666"}
             >
-            Reportar como NG
+            {t('reportAsNG')}
             </Button>
+          </View>
         </Surface>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -526,7 +598,14 @@ export default function ValidationScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#121212',
+  },
+  gradientBackground: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
   },
   scrollContent: {
     padding: 20,
@@ -537,20 +616,23 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: '#121212',
   },
   // Header styles
   headerCard: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#1E3A5F',
     borderRadius: 16,
     marginBottom: 20,
     elevation: 8,
-    shadowColor: '#2196F3',
+    shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.5,
     shadowRadius: 8,
+    borderWidth: 1,
+    borderColor: '#2A4A6F',
   },
   headerContent: {
     flexDirection: 'row',
@@ -586,22 +668,22 @@ const styles = StyleSheet.create({
   infoCard: {
     marginBottom: 20,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1E1E1E',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#2A2A2A',
     shadowColor: '#000000',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 6,
   },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#FFFFFF',
     marginBottom: 20,
     letterSpacing: 0.5,
   },
@@ -609,21 +691,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 16, // Mejorado: Espaciado consistente entre elementos
+    flexWrap: 'wrap', // Mejorado: Permite envolver en pantallas pequeñas
   },
   technicianItem: {
     flex: 1,
+    minWidth: 120, // Mejorado: Ancho mínimo para evitar elementos muy pequeños
+    flexBasis: '45%', // Mejorado: Tamaño base para distribución consistente
   },
   technicianLabel: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#B0B0B0',
     marginBottom: 6,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
   technicianValue: {
     fontSize: 16,
-    color: '#1E293B',
+    color: '#FFFFFF',
     fontWeight: '600',
   },
   turnoChip: {
@@ -633,15 +719,15 @@ const styles = StyleSheet.create({
   formCard: {
     marginBottom: 20,
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1E1E1E',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#2A2A2A',
     shadowColor: '#000000',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 6,
   },
@@ -651,22 +737,35 @@ const styles = StyleSheet.create({
   inputLabel: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#FFFFFF',
     marginBottom: 16,
     letterSpacing: 0.3,
   },
-  turnoButtons: {
+  turnoDisplayBox: {
+    borderRadius: 12,
+    backgroundColor: '#2A2A2A',
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+  },
+  turnoDisplayContent: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
   },
-  turnoButton: {
+  turnoDisplayChip: {
+    borderRadius: 20,
+  },
+  turnoDisplayText: {
+    fontSize: 12,
+    color: '#B0B0B0',
+    fontStyle: 'italic',
+    marginLeft: 12,
     flex: 1,
-    marginHorizontal: 4,
-    borderRadius: 8,
   },
   divider: {
     marginVertical: 16,
-    backgroundColor: '#2D2D2D',
+    backgroundColor: '#3A3A3A',
     height: 2,
     borderRadius: 1,
   },
@@ -699,11 +798,35 @@ const styles = StyleSheet.create({
   textInput: {
     marginBottom: 8,
   },
+  cantidadBox: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#3A3A3A',
+    minHeight: 56,
+    justifyContent: 'center',
+  },
+  cantidadContentWrapper: {
+    overflow: 'hidden',
+  },
+  cantidadContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+  cantidadValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginLeft: 8,
+  },
   // Action card styles
   actionCard: {
     borderRadius: 12,
     padding: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1E1E1E',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   submitButton: {
     backgroundColor: '#4CAF50',
@@ -714,15 +837,23 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   ngButton: {
-    borderColor: '#F44336',
     borderRadius: 8,
+  },
+  ngButtonEnabled: {
+    backgroundColor: '#F44336',
+    borderColor: '#F44336',
+  },
+  ngButtonDisabled: {
+    backgroundColor: 'transparent',
+    borderColor: '#666666',
+    opacity: 0.5,
   },
   // Línea selector styles
   lineaSelector: {
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#3A3A3A',
     borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2A2A2A',
     minHeight: 56,
     justifyContent: 'center',
   },
@@ -734,24 +865,26 @@ const styles = StyleSheet.create({
   },
   lineaSelectorText: {
     fontSize: 16,
-    color: '#1E293B',
+    color: '#FFFFFF',
     flex: 1,
   },
   lineaSelectorPlaceholder: {
-    color: '#94A3B8',
+    color: '#808080',
   },
   // Modal styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'flex-end',
   },
   modalContent: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1E1E1E',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: '70%',
     paddingBottom: 20,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -763,7 +896,7 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#1E293B',
+    color: '#FFFFFF',
   },
   modalList: {
     maxHeight: 400,
@@ -775,14 +908,14 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: '#2A2A2A',
   },
   modalItemSelected: {
-    backgroundColor: '#E8F5E9',
+    backgroundColor: '#2A4A2A',
   },
   modalItemText: {
     fontSize: 16,
-    color: '#1E293B',
+    color: '#FFFFFF',
   },
   modalItemTextSelected: {
     color: '#4CAF50',
@@ -794,5 +927,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     fontWeight: '600',
+  },
+  loadingText: {
+    color: '#FFFFFF',
+    marginTop: 16,
+    fontSize: 16,
   },
 });

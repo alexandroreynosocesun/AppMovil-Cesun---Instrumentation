@@ -1,38 +1,16 @@
-import axios from 'axios';
-import { getAuthToken } from '../utils/authUtils';
 import logger from '../utils/logger';
-
-const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
+import { apiClient } from '../utils/apiClient';
 
 class ReportService {
   constructor() {
-    this.api = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: 30000, // Aumentar timeout para generación de PDF
-      headers: {
-        'ngrok-skip-browser-warning': 'true',
-        'Content-Type': 'application/json',
-      },
-    });
-
-    this.api.interceptors.request.use(
-      async (config) => {
-        const token = await getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
+    // Usar instancia compartida de axios con interceptor de refresh token
+    this.api = apiClient;
   }
 
   async generateValidationReport(reportData) {
     try {
       logger.info('📤 Enviando petición al servidor con TODAS las validaciones:');
-      logger.info(`   URL: ${API_BASE_URL}/validations/generate-batch-report`);
+      logger.info(`   URL: /validations/generate-batch-report`);
       logger.info(`   Total validaciones: ${reportData.validaciones.length}`);
       logger.info(`   Validaciones:`, reportData.validaciones.map(v => ({
         jig_id: v.jig_id,
@@ -52,20 +30,28 @@ class ReportService {
       
       let errorMessage = 'Error de conexión';
       
-      if (error.response?.status === 500) {
-        errorMessage = 'Error interno del servidor (500). El backend tiene un problema.';
+      // Intentar extraer el mensaje de error del backend
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Error interno del servidor (500). Verifique los logs del backend para más detalles.';
       } else if (error.response?.status === 400) {
         errorMessage = 'Datos inválidos (400). Verifique la información enviada.';
       } else if (error.response?.status === 401) {
         errorMessage = 'No autorizado (401). Verifique su sesión.';
       } else if (error.response?.status === 404) {
         errorMessage = 'Endpoint no encontrado (404).';
-      } else if (error.response?.data?.detail) {
-        errorMessage = error.response.data.detail;
-      } else if (error.response?.data?.message) {
-        errorMessage = error.response.data.message;
       } else if (error.code === 'ECONNABORTED') {
         errorMessage = 'Timeout: El servidor tardó demasiado en responder.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      // Log detallado del error para debugging
+      if (error.response?.data) {
+        logger.error('Detalles del error del backend:', JSON.stringify(error.response.data, null, 2));
       }
       
       return { success: false, error: errorMessage };

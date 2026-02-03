@@ -5,7 +5,8 @@ import {
   ScrollView,
   Alert,
   Dimensions,
-  Text
+  Text,
+  TouchableOpacity
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -17,9 +18,11 @@ import {
   HelperText,
   ActivityIndicator,
   RadioButton,
-  Divider
+  Divider,
+  Chip
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { authService } from '../services/AuthService';
 import { usePlatform } from '../hooks/usePlatform';
 import { webStyles } from '../utils/webStyles';
@@ -30,6 +33,7 @@ const { width, height } = Dimensions.get('window');
 export default function ProfileScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user, updateProfile, logout } = useAuth();
+  const { language, changeLanguage, t } = useLanguage();
   const [loading, setLoading] = useState(false);
   const [editing, setEditing] = useState(false);
   
@@ -148,6 +152,60 @@ export default function ProfileScreen({ navigation }) {
     );
   };
 
+  // Función para obtener color del turno
+  const getTurnoColor = (turno) => {
+    if (!turno) return '#757575';
+    const turnoUpper = turno.toUpperCase().trim();
+    switch (turnoUpper) {
+      case 'A':
+      case 'MAÑANA':
+      case 'MANANA':
+        return '#2196F3';
+      case 'B':
+      case 'NOCHE':
+        return '#4CAF50';
+      case 'C':
+      case 'FINES':
+        return '#FF9800';
+      default:
+        return '#757575';
+    }
+  };
+
+  // Función para obtener nombre del turno
+  const getTurnoName = (turno) => {
+    if (!turno) return 'N/A';
+    const turnoUpper = turno.toUpperCase().trim();
+    switch (turnoUpper) {
+      case 'A':
+      case 'MAÑANA':
+      case 'MANANA':
+        return 'Turno A';
+      case 'B':
+      case 'NOCHE':
+        return 'Turno B';
+      case 'C':
+      case 'FINES':
+        return 'Turno C';
+      default:
+        return turno;
+    }
+  };
+
+  const darkTheme = {
+    colors: {
+      primary: '#2196F3',
+      background: '#121212',
+      surface: '#1E1E1E',
+      text: '#FFFFFF',
+      placeholder: '#B0B0B0',
+      error: '#F44336',
+      onSurface: '#FFFFFF',
+      onSurfaceVariant: '#E0E0E0',
+      outline: '#3C3C3C',
+    },
+  };
+
   return (
     <ScrollView 
       style={[styles.container, isWeb && webStyles.container]}
@@ -163,14 +221,9 @@ export default function ProfileScreen({ navigation }) {
       {/* Información del Usuario */}
       <Card style={[styles.card, isWeb && webStyles.card]}>
         <Card.Content>
-          <Title style={styles.title}>👤 Perfil de Usuario</Title>
+          <Title style={styles.title}>👤 {t('profile')}</Title>
           
           <View style={styles.userInfo}>
-            <View style={styles.userHeader}>
-              <Text style={styles.userName}>{user?.nombre || 'Sin nombre'}</Text>
-              <Text style={styles.userRole}>{user?.tipo_tecnico || 'Técnico'}</Text>
-            </View>
-            
             <View style={styles.userDetails}>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>👤 Usuario:</Text>
@@ -178,19 +231,34 @@ export default function ProfileScreen({ navigation }) {
               </View>
               
               <View style={styles.detailRow}>
-                <Text style={styles.detailLabel}>🔢 Empleado:</Text>
+                <Text style={styles.detailLabel}>📝 Nombre Completo:</Text>
+                <Text style={styles.detailValue}>{user?.nombre || 'N/A'}</Text>
+              </View>
+              
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>🔢 Número de Empleado:</Text>
                 <Text style={styles.detailValue}>{user?.numero_empleado || 'N/A'}</Text>
               </View>
               
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>⏰ Turno:</Text>
-                <Text style={styles.detailValue}>
-                  {user?.turno_actual === 'A' ? 'A - Día (Lun-Jue)' : 
-                   user?.turno_actual === 'B' ? 'B - Noche (Lun-Jue)' : 
-                   user?.turno_actual === 'C' ? 'C - Fines de semana (Vie-Dom)' : 'N/A'}
-                </Text>
+                <Chip
+                  style={[styles.turnoChip, { backgroundColor: getTurnoColor(user?.turno_actual) }]}
+                  textStyle={styles.turnoChipText}
+                >
+                  {getTurnoName(user?.turno_actual)}
+                </Chip>
               </View>
               
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>🌐 {t('language')}:</Text>
+                <Chip
+                  style={[styles.turnoChip, { backgroundColor: language === 'es' ? '#2196F3' : '#4CAF50' }]}
+                  textStyle={styles.turnoChipText}
+                >
+                  {language === 'es' ? '🇪🇸 Español' : '🇬🇧 English'}
+                </Chip>
+              </View>
             </View>
           </View>
 
@@ -200,18 +268,11 @@ export default function ProfileScreen({ navigation }) {
               onPress={() => setEditing(!editing)}
               style={styles.button}
               icon={editing ? "close" : "pencil"}
+              buttonColor="#2196F3"
+              textColor="#FFFFFF"
+              borderColor="#666666"
             >
-              {editing ? 'Cancelar Edición' : 'Editar Perfil'}
-            </Button>
-            
-            <Button
-              mode="outlined"
-              onPress={handleLogout}
-              style={[styles.button, styles.logoutButton]}
-              textColor="#d32f2f"
-              icon="logout"
-            >
-              Cerrar Sesión
+              {editing ? t('cancelEdit') : t('editProfile')}
             </Button>
           </View>
         </Card.Content>
@@ -219,103 +280,182 @@ export default function ProfileScreen({ navigation }) {
 
       {editing && (
         <>
-          {/* Información Personal */}
-          <Card style={styles.card}>
-            <Card.Content>
-              <Title>Información Personal</Title>
-              
-              <TextInput
-                label="Nombre Completo *"
-                value={formData.nombre}
-                onChangeText={(text) => handleInputChange('nombre', text)}
-                style={styles.input}
-                mode="outlined"
-                disabled={loading}
-              />
-              
-              <TextInput
-                label="Número de Empleado *"
-                value={formData.numero_empleado}
-                onChangeText={(text) => handleInputChange('numero_empleado', text)}
-                style={styles.input}
-                mode="outlined"
-                keyboardType="numeric"
-                disabled={loading}
-              />
-            </Card.Content>
-          </Card>
-
           {/* Cambio de Turno */}
           <Card style={styles.card}>
             <Card.Content>
-              <Title>Turno de Trabajo</Title>
+              <Title style={styles.cardTitle}>⏰ Turno de Trabajo</Title>
               <Paragraph style={styles.helpText}>
                 Selecciona tu turno actual de trabajo según el horario asignado
               </Paragraph>
               
               <View style={styles.radioGroup}>
-                <View style={styles.radioItem}>
+                <TouchableOpacity
+                  style={[
+                    styles.turnoOption,
+                    formData.turno_actual === 'A' && styles.turnoOptionSelected
+                  ]}
+                  onPress={() => handleInputChange('turno_actual', 'A')}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
                   <RadioButton
                     value="A"
                     status={formData.turno_actual === 'A' ? 'checked' : 'unchecked'}
                     onPress={() => handleInputChange('turno_actual', 'A')}
                     disabled={loading}
+                    color="#2196F3"
+                    uncheckedColor="#666666"
                   />
-                  <Text style={styles.radioLabel}>Turno A - Día (6:30 AM - 6:30 PM) Lun-Jue</Text>
-                </View>
+                  <View style={styles.turnoTextContainer}>
+                    <Text style={[
+                      styles.turnoLabel,
+                      formData.turno_actual === 'A' && styles.turnoLabelSelected
+                    ]}>
+                      Turno A - Día
+                    </Text>
+                    <Text style={[
+                      styles.turnoSubLabel,
+                      formData.turno_actual === 'A' && styles.turnoSubLabelSelected
+                    ]}>
+                      6:30 AM - 6:30 PM | Lun-Jue
+                    </Text>
+                  </View>
+                </TouchableOpacity>
                 
-                <View style={styles.radioItem}>
+                <TouchableOpacity
+                  style={[
+                    styles.turnoOption,
+                    formData.turno_actual === 'B' && styles.turnoOptionSelected
+                  ]}
+                  onPress={() => handleInputChange('turno_actual', 'B')}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
                   <RadioButton
                     value="B"
                     status={formData.turno_actual === 'B' ? 'checked' : 'unchecked'}
                     onPress={() => handleInputChange('turno_actual', 'B')}
                     disabled={loading}
+                    color="#2196F3"
+                    uncheckedColor="#666666"
                   />
-                  <Text style={styles.radioLabel}>Turno B - Noche (6:30 PM - 6:30 AM) Lun-Jue</Text>
-                </View>
+                  <View style={styles.turnoTextContainer}>
+                    <Text style={[
+                      styles.turnoLabel,
+                      formData.turno_actual === 'B' && styles.turnoLabelSelected
+                    ]}>
+                      Turno B - Noche
+                    </Text>
+                    <Text style={[
+                      styles.turnoSubLabel,
+                      formData.turno_actual === 'B' && styles.turnoSubLabelSelected
+                    ]}>
+                      6:30 PM - 6:30 AM | Lun-Jue
+                    </Text>
+                  </View>
+                </TouchableOpacity>
                 
-                <View style={styles.radioItem}>
+                <TouchableOpacity
+                  style={[
+                    styles.turnoOption,
+                    formData.turno_actual === 'C' && styles.turnoOptionSelected
+                  ]}
+                  onPress={() => handleInputChange('turno_actual', 'C')}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
                   <RadioButton
                     value="C"
                     status={formData.turno_actual === 'C' ? 'checked' : 'unchecked'}
                     onPress={() => handleInputChange('turno_actual', 'C')}
                     disabled={loading}
+                    color="#2196F3"
+                    uncheckedColor="#666666"
                   />
-                  <Text style={styles.radioLabel}>Turno C - Fines de semana (6:30 AM - 6:30 PM) Vie-Dom</Text>
-            </View>
-          </View>
+                  <View style={styles.turnoTextContainer}>
+                    <Text style={[
+                      styles.turnoLabel,
+                      formData.turno_actual === 'C' && styles.turnoLabelSelected
+                    ]}>
+                      Turno C - Fines de Semana
+                    </Text>
+                    <Text style={[
+                      styles.turnoSubLabel,
+                      formData.turno_actual === 'C' && styles.turnoSubLabelSelected
+                    ]}>
+                      6:30 AM - 6:30 PM | Vie-Dom
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
         </Card.Content>
       </Card>
 
-          {/* Cambio de Contraseña */}
+          {/* Cambio de Idioma */}
           <Card style={styles.card}>
             <Card.Content>
-              <Title>Cambiar Contraseña</Title>
+              <Title style={styles.cardTitle}>🌐 {t('language')}</Title>
               <Paragraph style={styles.helpText}>
-                Deja en blanco si no quieres cambiar la contraseña
+                {language === 'es' 
+                  ? 'Selecciona tu idioma preferido para la aplicación'
+                  : 'Select your preferred language for the application'}
               </Paragraph>
               
-              <TextInput
-                label="Nueva Contraseña"
-                value={formData.password}
-                onChangeText={(text) => handleInputChange('password', text)}
-                style={styles.input}
-                mode="outlined"
-                secureTextEntry
-                disabled={loading}
-                placeholder="Mínimo 6 caracteres"
-              />
-              
-              <TextInput
-                label="Confirmar Nueva Contraseña"
-                value={formData.confirmPassword}
-                onChangeText={(text) => handleInputChange('confirmPassword', text)}
-                style={styles.input}
-                mode="outlined"
-                secureTextEntry
-                disabled={loading}
-                placeholder="Repite la nueva contraseña"
-              />
+              <View style={styles.radioGroup}>
+                <TouchableOpacity
+                  style={[
+                    styles.turnoOption,
+                    language === 'es' && styles.turnoOptionSelected
+                  ]}
+                  onPress={() => changeLanguage('es')}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
+                  <RadioButton
+                    value="es"
+                    status={language === 'es' ? 'checked' : 'unchecked'}
+                    onPress={() => changeLanguage('es')}
+                    disabled={loading}
+                    color="#2196F3"
+                    uncheckedColor="#666666"
+                  />
+                  <View style={styles.turnoTextContainer}>
+                    <Text style={[
+                      styles.turnoLabel,
+                      language === 'es' && styles.turnoLabelSelected
+                    ]}>
+                      🇪🇸 {t('spanish')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  style={[
+                    styles.turnoOption,
+                    language === 'en' && styles.turnoOptionSelected
+                  ]}
+                  onPress={() => changeLanguage('en')}
+                  disabled={loading}
+                  activeOpacity={0.7}
+                >
+                  <RadioButton
+                    value="en"
+                    status={language === 'en' ? 'checked' : 'unchecked'}
+                    onPress={() => changeLanguage('en')}
+                    disabled={loading}
+                    color="#2196F3"
+                    uncheckedColor="#666666"
+                  />
+                  <View style={styles.turnoTextContainer}>
+                    <Text style={[
+                      styles.turnoLabel,
+                      language === 'en' && styles.turnoLabelSelected
+                    ]}>
+                      🇬🇧 {t('english')}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
         </Card.Content>
       </Card>
 
@@ -329,8 +469,10 @@ export default function ProfileScreen({ navigation }) {
                   style={styles.actionSaveButton}
                   disabled={loading}
                   loading={loading}
+                  buttonColor="#2196F3"
+                  textColor="#FFFFFF"
                 >
-                  Guardar Cambios
+                  {t('saveChanges')}
                 </Button>
                 
                 <Button
@@ -338,8 +480,10 @@ export default function ProfileScreen({ navigation }) {
                   onPress={handleCancel}
                   style={styles.actionCancelButton}
                   disabled={loading}
+                  textColor="#B0B0B0"
+                  borderColor="#666666"
                 >
-                  Cancelar
+                  {t('cancel')}
                 </Button>
               </View>
         </Card.Content>
@@ -353,22 +497,22 @@ export default function ProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#121212',
     padding: 20,
   },
   card: {
     marginBottom: 20,
     elevation: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#1E1E1E',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#333333',
     borderRadius: 16,
     shadowColor: '#000000',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
   },
   title: {
@@ -376,31 +520,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 20,
     textAlign: 'center',
-    color: '#1E293B',
+    color: '#FFFFFF',
     letterSpacing: 0.5,
+  },
+  cardTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 12,
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
   userInfo: {
     marginBottom: 20,
-  },
-  userHeader: {
-    alignItems: 'center',
-    marginBottom: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 2,
-    borderBottomColor: '#E2E8F0',
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    marginBottom: 6,
-    color: '#1E293B',
-    letterSpacing: 0.3,
-  },
-  userRole: {
-    fontSize: 16,
-    color: '#64748B',
-    fontStyle: 'italic',
-    fontWeight: '500',
   },
   userDetails: {
     marginTop: 8,
@@ -411,44 +542,43 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 16,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#2C2C2C',
     marginBottom: 8,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#404040',
   },
   detailLabel: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#1E293B',
+    color: '#E0E0E0',
     flex: 1,
     letterSpacing: 0.2,
   },
   detailValue: {
     fontSize: 15,
-    color: '#64748B',
+    color: '#B0B0B0',
     fontWeight: '500',
     textAlign: 'right',
   },
   buttonContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    alignItems: 'center',
     marginTop: 20,
   },
   button: {
-    flex: 1,
-    marginHorizontal: 8,
+    minWidth: 200,
     borderRadius: 12,
-  },
-  logoutButton: {
-    borderColor: '#d32f2f',
   },
   input: {
     marginBottom: 20,
     borderRadius: 12,
+    backgroundColor: '#2C2C2C',
+  },
+  inputLabel: {
+    color: '#E0E0E0',
   },
   helpText: {
-    color: '#64748B',
+    color: '#B0B0B0',
     fontStyle: 'italic',
     marginBottom: 20,
     fontSize: 14,
@@ -457,14 +587,40 @@ const styles = StyleSheet.create({
   radioGroup: {
     marginTop: 8,
   },
-  radioItem: {
+  turnoOption: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    padding: 16,
+    marginBottom: 12,
+    backgroundColor: '#2C2C2C',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#404040',
   },
-  radioLabel: {
+  turnoOptionSelected: {
+    backgroundColor: '#1A3A52',
+    borderColor: '#2196F3',
+  },
+  turnoTextContainer: {
+    flex: 1,
     marginLeft: 8,
-    fontSize: 16,
+  },
+  turnoLabel: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    marginBottom: 4,
+  },
+  turnoLabelSelected: {
+    color: '#2196F3',
+  },
+  turnoSubLabel: {
+    fontSize: 14,
+    color: '#B0B0B0',
+    lineHeight: 20,
+  },
+  turnoSubLabelSelected: {
+    color: '#90CAF9',
   },
   actionButtons: {
     flexDirection: 'row',
@@ -477,5 +633,14 @@ const styles = StyleSheet.create({
   actionCancelButton: {
     flex: 1,
     marginLeft: 8,
+  },
+  turnoChip: {
+    borderRadius: 16,
+    height: 32,
+  },
+  turnoChipText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

@@ -4,7 +4,7 @@ from datetime import timedelta
 from ..database import get_db
 from ..models.models import Tecnico, SolicitudRegistro
 from ..schemas import TecnicoCreate, TecnicoLogin, Token, Tecnico as TecnicoSchema, TecnicoUpdate, SolicitudRegistroCreate, SolicitudRegistroResponse
-from ..auth import authenticate_user, create_access_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+from ..auth import authenticate_user, create_access_token, create_refresh_token, verify_refresh_token, get_password_hash, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
 from ..utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -45,11 +45,99 @@ async def login(login_data: TecnicoLogin, db: Session = Depends(get_db)):
         data={"sub": user.usuario}, expires_delta=access_token_expires
     )
     
+    # Crear refresh token
+    refresh_token = create_refresh_token(data={"sub": user.usuario})
+    
     return {
         "access_token": access_token,
+        "refresh_token": refresh_token,
         "token_type": "bearer",
         "tecnico": TecnicoSchema.model_validate(user)
     }
+
+@router.post("/refresh", response_model=dict, summary="Renovar access token", description="""
+    Renovar el access token usando un refresh token válido.
+    
+    **Ejemplo de uso:**
+    ```json
+    {
+        "refresh_token": "tu_refresh_token_aqui"
+    }
+    ```
+    
+    **Respuesta:**
+    - `access_token`: Nuevo token de acceso
+    - `token_type`: Tipo de token (siempre "bearer")
+    """)
+async def refresh_access_token(refresh_data: dict, db: Session = Depends(get_db)):
+    """Obtener nuevo access token usando refresh token"""
+    refresh_token = refresh_data.get("refresh_token")
+    if not refresh_token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Refresh token requerido"
+        )
+    
+    usuario = verify_refresh_token(refresh_token)
+    if not usuario:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido o expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Verificar que el usuario aún existe
+    user = db.query(Tecnico).filter(Tecnico.usuario == usuario).first()
+    if not user or not user.activo:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Usuario no encontrado o inactivo",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Crear nuevo access token
+    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+    new_access_token = create_access_token(
+        data={"sub": usuario}, expires_delta=access_token_expires
+    )
+    
+    logger.info(f"✅ Access token renovado para usuario '{usuario}'")
+    
+    return {
+        "access_token": new_access_token,
+        "token_type": "bearer"
+    }
+
+@router.get("/users-for-login")
+async def get_users_for_login(db: Session = Depends(get_db)):
+    """
+    Obtener lista de usuarios para el selector de login (público, sin autenticación)
+    Retorna solo usuario y nombre para selección
+    """
+    try:
+        # Obtener todos los usuarios activos, ordenados por nombre
+        users = db.query(Tecnico).filter(Tecnico.activo == True).order_by(Tecnico.nombre).all()
+        
+        # Retornar solo información básica (usuario y nombre)
+        users_list = [
+            {
+                "usuario": user.usuario,
+                "nombre": user.nombre,
+                "numero_empleado": user.numero_empleado
+            }
+            for user in users
+        ]
+        
+        return {
+            "users": users_list,
+            "total": len(users_list)
+        }
+    except Exception as e:
+        logger.error(f"Error obteniendo usuarios para login: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Error al obtener lista de usuarios"
+        )
 
 @router.post("/register", response_model=SolicitudRegistroResponse)
 async def register(solicitud_data: SolicitudRegistroCreate, db: Session = Depends(get_db)):
@@ -82,26 +170,34 @@ async def register(solicitud_data: SolicitudRegistroCreate, db: Session = Depend
             detail="El número de empleado ya existe"
         )
     
-    # Verificar solicitud pendiente con mismo número de empleado
+    # Verificar solicitud con mismo número de empleado (cualquier estado)
+    # El índice único aplica a todas las solicitudes, no solo las pendientes
     existing_solicitud_employee = db.query(SolicitudRegistro).filter(
-        SolicitudRegistro.numero_empleado == solicitud_data.numero_empleado,
-        SolicitudRegistro.estado == "pendiente"
+        SolicitudRegistro.numero_empleado == solicitud_data.numero_empleado
     ).first()
     
     if existing_solicitud_employee:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Ya existe una solicitud pendiente para este número de empleado"
+            detail=f"Ya existe una solicitud ({existing_solicitud_employee.estado}) para este número de empleado"
         )
     
     # Crear solicitud de registro
-    # Mapear valores del frontend al backend (ahora guardamos directamente los valores del frontend)
+    # Mapear valores del frontend al backend
+    # El frontend ya envía 'ingeniero' cuando se selecciona 'asignaciones'
     tipo_usuario_map = {
-        'asignaciones': 'asignaciones',
-        'validaciones': 'tecnico',
-        'gestion': 'gestion'
+        'ingeniero': 'ingeniero',  # El frontend envía 'ingeniero' cuando se selecciona 'asignaciones'
+        'tecnico': 'tecnico',  # El frontend envía 'tecnico' cuando se selecciona 'validaciones'
+        'gestion': 'gestion',
+        # Compatibilidad: si llega 'asignaciones' directamente, mapearlo a 'ingeniero'
+        'asignaciones': 'ingeniero'
     }
     tipo_usuario_backend = tipo_usuario_map.get(solicitud_data.tipo_usuario, 'tecnico')
+    
+    try:
+        logger.info(f"🔧 Mapeo tipo_usuario: '{solicitud_data.tipo_usuario}' -> '{tipo_usuario_backend}'")
+    except Exception:
+        pass
     
     hashed_password = get_password_hash(solicitud_data.password)
     db_solicitud = SolicitudRegistro(
@@ -110,14 +206,73 @@ async def register(solicitud_data: SolicitudRegistroCreate, db: Session = Depend
         numero_empleado=solicitud_data.numero_empleado,
         password_hash=hashed_password,
         tipo_usuario=tipo_usuario_backend,
+        turno_actual=solicitud_data.turno_actual or "A",
         firma_digital=solicitud_data.firma_digital
     )
     
     db.add(db_solicitud)
-    db.commit()
-    db.refresh(db_solicitud)
     
-    return SolicitudRegistroResponse.from_orm(db_solicitud)
+    try:
+        db.commit()
+        db.refresh(db_solicitud)
+    except Exception as commit_error:
+        error_str = str(commit_error)
+        # Si es un error de llave duplicada, intentar corregir la secuencia y reintentar
+        if "UniqueViolation" in error_str and "solicitudes_registro_pkey" in error_str:
+            from sqlalchemy import text
+            logger.warning("⚠️ Error de llave duplicada detectado en solicitudes_registro. Corrigiendo secuencia...")
+            try:
+                db.rollback()  # Rollback de la transacción actual
+                
+                # Obtener el máximo ID actual
+                max_id_result = db.execute(text("SELECT COALESCE(MAX(id), 0) FROM solicitudes_registro"))
+                max_id = max_id_result.scalar()
+                
+                # Actualizar la secuencia al siguiente valor disponible
+                db.execute(text(f"SELECT setval('solicitudes_registro_id_seq', {max_id}, true)"))
+                db.commit()
+                logger.info(f"✅ Secuencia solicitudes_registro_id_seq corregida a {max_id + 1}. Reintentando crear solicitud...")
+                
+                # Recrear la solicitud con la secuencia corregida
+                db_solicitud = SolicitudRegistro(
+                    usuario=solicitud_data.usuario,
+                    nombre=solicitud_data.nombre,
+                    numero_empleado=solicitud_data.numero_empleado,
+                    password_hash=hashed_password,
+                    tipo_usuario=tipo_usuario_backend,
+                    turno_actual=solicitud_data.turno_actual or "A",
+                    firma_digital=solicitud_data.firma_digital
+                )
+                db.add(db_solicitud)
+                
+                # Reintentar el commit
+                db.commit()
+                db.refresh(db_solicitud)
+                logger.info("✅ Solicitud creada exitosamente después de corregir secuencia")
+            except Exception as retry_error:
+                logger.error(f"❌ Error al reintentar después de corregir secuencia: {retry_error}")
+                db.rollback()
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Error creando solicitud después de corregir secuencia: {str(retry_error)}"
+                )
+        else:
+            # Si es otro tipo de error, hacer rollback y relanzar
+            db.rollback()
+            logger.error(f"❌ Error creando solicitud de registro: {commit_error}", exc_info=True)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error creando solicitud de registro: {str(commit_error)}"
+            )
+    
+    try:
+        return SolicitudRegistroResponse.from_orm(db_solicitud)
+    except Exception as response_error:
+        logger.error(f"❌ Error creando respuesta: {response_error}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error procesando respuesta: {str(response_error)}"
+        )
 
 @router.get("/me", response_model=TecnicoSchema)
 async def read_users_me(current_user: Tecnico = Depends(get_current_user)):

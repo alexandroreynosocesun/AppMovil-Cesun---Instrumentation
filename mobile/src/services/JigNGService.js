@@ -1,33 +1,10 @@
-import axios from 'axios';
-import { getAuthToken } from '../utils/authUtils';
 import logger from '../utils/logger';
-
-const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
+import { apiClient } from '../utils/apiClient';
 
 class JigNGService {
   constructor() {
-    this.api = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: 30000, // Aumentado a 30 segundos
-      headers: {
-        'ngrok-skip-browser-warning': 'true',
-        'Content-Type': 'application/json',
-      },
-    });
-
-    // Interceptor para agregar token
-    this.api.interceptors.request.use(
-      async (config) => {
-        const token = await getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
+    // Usar instancia compartida de axios con interceptor de refresh token
+    this.api = apiClient;
   }
 
   // Crear nuevo jig NG
@@ -52,9 +29,16 @@ class JigNGService {
     try {
       const params = new URLSearchParams();
       Object.keys(filters).forEach(key => {
-        if (filters[key]) {
-          params.append(key, filters[key]);
+        const value = filters[key];
+        if (value === undefined || value === null || value === '') return;
+        if (Array.isArray(value)) {
+          const joined = value.filter(Boolean).join(',');
+          if (joined) {
+            params.append(key, joined);
+          }
+          return;
         }
+        params.append(key, value);
       });
 
       const response = await this.api.get(`/jigs-ng/?${params.toString()}`);

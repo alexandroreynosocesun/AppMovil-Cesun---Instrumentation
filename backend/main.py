@@ -1,14 +1,16 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import RedirectResponse
 from sqlalchemy.orm import Session
 from pathlib import Path
 import uvicorn
 
 from app.database import get_db, engine
 from app.models import models
-from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage
-from app.config import CORS_ORIGINS, IS_PRODUCTION
+from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage, adaptadores, arduino_sequences, inventario
+from app.config import CORS_ORIGINS, IS_PRODUCTION, FORCE_HTTPS, API_HOST, API_PORT
 from app.utils.logger import get_logger
 from app.services.monitoring_service import init_monitoring
 
@@ -19,7 +21,7 @@ logger = get_logger(__name__)
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
-    title="Sistema de Validación de Jigs",
+    title="Hisense CheckApp",
     description="""
     ## API para digitalizar validaciones de jigs
     
@@ -64,6 +66,20 @@ app = FastAPI(
 # Inicializar monitoreo (Prometheus y Sentry)
 init_monitoring(app)
 
+# Middleware para forzar HTTPS en producción
+if IS_PRODUCTION and FORCE_HTTPS:
+    class HTTPSRedirectMiddleware(BaseHTTPMiddleware):
+        async def dispatch(self, request: Request, call_next):
+            # Verificar si la petición viene por HTTP
+            if request.url.scheme == "http":
+                # Redirigir a HTTPS
+                https_url = request.url.replace(scheme="https")
+                return RedirectResponse(url=str(https_url), status_code=301)
+            return await call_next(request)
+    
+    app.add_middleware(HTTPSRedirectMiddleware)
+    logger.info("🔒 Middleware de redirección HTTP a HTTPS activado")
+
 # Configurar CORS basado en variables de entorno
 cors_origins = CORS_ORIGINS if CORS_ORIGINS else ["*"]
 if IS_PRODUCTION and "*" in cors_origins:
@@ -91,6 +107,9 @@ app.include_router(registro.router, prefix="/api/registro", tags=["registro"])
 app.include_router(damaged_labels.router, prefix="/api", tags=["damaged-labels"])
 app.include_router(auditoria.router, prefix="/api/auditoria", tags=["auditoria"])
 app.include_router(storage.router, prefix="/api/storage", tags=["storage"])
+app.include_router(adaptadores.router, prefix="/api/adaptadores", tags=["adaptadores"])
+app.include_router(arduino_sequences.router, prefix="/api/arduino-sequences", tags=["arduino-sequences"])
+app.include_router(inventario.router, prefix="/api/inventario", tags=["inventario"])
 
 # Montar directorio de uploads para servir imágenes
 uploads_dir = Path(__file__).parent / "uploads"
@@ -99,30 +118,31 @@ app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 @app.get("/")
 async def root():
-    return {"message": "Sistema de Validación de Jigs API"}
+    return {"message": "Hisense CheckApp API"}
 
 @app.get("/health")
 async def health_check():
     """Health check básico"""
     from app.services.cache_service import cache_service
     from app.database import engine
-    
+    from sqlalchemy import text
+
     health_status = {
         "status": "ok",
         "message": "API funcionando correctamente",
         "database": "connected",
         "cache": "enabled" if cache_service.enabled else "disabled"
     }
-    
+
     # Verificar conexión a base de datos
     try:
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
     except Exception as e:
         health_status["database"] = "disconnected"
         health_status["status"] = "degraded"
         health_status["database_error"] = str(e)
-    
+
     return health_status
 
 @app.get("/api/health")
@@ -130,19 +150,20 @@ async def api_health_check():
     """Health check detallado para API"""
     from app.services.cache_service import cache_service
     from app.database import engine
+    from sqlalchemy import text
     import time
-    
+
     checks = {
         "api": "ok",
         "database": "checking",
         "cache": "checking"
     }
-    
+
     # Verificar base de datos
     try:
         start = time.time()
         with engine.connect() as conn:
-            conn.execute("SELECT 1")
+            conn.execute(text("SELECT 1"))
         db_time = time.time() - start
         checks["database"] = "ok"
         checks["database_response_time"] = f"{db_time:.3f}s"

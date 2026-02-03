@@ -16,6 +16,21 @@ from typing import List, Dict, Any
 from ..models.models import Validacion, Jig, Tecnico
 from ..utils.logger import logger
 
+def normalize_turno(turno: str) -> str:
+    """Normalizar turno: convertir 'mañana', 'noche', 'fines' a 'A', 'B', 'C'"""
+    if not turno:
+        return 'N/A'
+    turno_lower = turno.lower().strip()
+    if turno_lower in ['mañana', 'manana', 'a']:
+        return 'A'
+    elif turno_lower in ['noche', 'b']:
+        return 'B'
+    elif turno_lower in ['fines', 'c']:
+        return 'C'
+    else:
+        # Si ya es A, B o C, retornarlo en mayúsculas
+        return turno.upper()
+
 def generate_validation_pdf(validation: Validacion, jig: Jig, tecnico: Tecnico) -> str:
     """Generar PDF de validación individual"""
     
@@ -74,7 +89,7 @@ def generate_validation_pdf(validation: Validacion, jig: Jig, tecnico: Tecnico) 
     tecnico_info = [
         ["Técnico:", tecnico.nombre],
         ["Número de Empleado:", tecnico.numero_empleado],
-        ["Turno:", validation.turno]
+        ["Turno:", normalize_turno(validation.turno)]
     ]
     
     tecnico_table = Table(tecnico_info, colWidths=[2*inch, 3*inch])
@@ -111,7 +126,7 @@ def generate_validation_pdf(validation: Validacion, jig: Jig, tecnico: Tecnico) 
     
     story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
-    story.append(Paragraph("Sistema de Validación de Jigs - Departamento de Instrumentación", 
+    story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
     
     # Construir PDF
@@ -146,7 +161,7 @@ def generate_turn_report_pdf(validations: List[Validacion], tecnico: Tecnico, tu
     
     # Encabezado
     story.append(Paragraph("REPORTE DE TURNO", title_style))
-    story.append(Paragraph(f"Turno: {turno} - Fecha: {fecha}", styles['Heading2']))
+    story.append(Paragraph(f"Turno: {normalize_turno(turno)} - Fecha: {fecha}", styles['Heading2']))
     story.append(Spacer(1, 20))
     
     # Información del técnico
@@ -242,7 +257,7 @@ def generate_turn_report_pdf(validations: List[Validacion], tecnico: Tecnico, tu
     
     story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
-    story.append(Paragraph("Sistema de Validación de Jigs - Departamento de Instrumentación", 
+    story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
     
     # Construir PDF
@@ -276,8 +291,8 @@ def generate_validation_report_pdf(validations: List[Validacion], tecnico: Tecni
     )
     
     # Encabezado
-    story.append(Paragraph("REPORTE DE VALIDACIÓN DE JIGS", title_style))
-    story.append(Paragraph(f"Fecha: {fecha} - Turno: {turno}", styles['Heading2']))
+    story.append(Paragraph("REPORTE DE VALIDACIÓN - HISENSE CHECKAPP", title_style))
+    story.append(Paragraph(f"Fecha: {fecha} - Turno: {normalize_turno(turno)}", styles['Heading2']))
     story.append(Spacer(1, 20))
     
     # Información del técnico
@@ -373,7 +388,7 @@ def generate_validation_report_pdf(validations: List[Validacion], tecnico: Tecni
     
     story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
-    story.append(Paragraph("Sistema de Validación de Jigs - Departamento de Instrumentación", 
+    story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
     
     # Construir PDF
@@ -435,7 +450,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
         
         # Encabezado de la empresa
         story.append(Paragraph("DEPARTAMENTO DE INSTRUMENTACIÓN", title_style))
-        story.append(Paragraph("REPORTE DE VALIDACIÓN DE JIGS", header_style))
+        story.append(Paragraph("REPORTE DE VALIDACIÓN - HISENSE CHECKAPP", header_style))
         story.append(Spacer(1, 20))
         
         # Formatear fecha para mostrar solo la fecha (sin hora)
@@ -472,7 +487,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
         # Información del reporte en formato de estado de cuenta
         report_info = [
             ["Modelo:", modelo, "Fecha:", fecha_display],
-            ["Turno:", report_data.get('turno', ''), "Técnico:", report_data.get('tecnico', '')],
+            ["Turno:", normalize_turno(report_data.get('turno', '')), "Técnico:", report_data.get('tecnico', '')],
             ["Línea:", linea, "Total de Jigs:", str(len(validations))]
         ]
         
@@ -508,7 +523,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
                     validation.get('numero_jig', ''),
                     validation.get('tipo', '').upper(),
                     validation.get('estado', ''),
-                    validation.get('turno', ''),
+                    normalize_turno(validation.get('turno', '')),
                     validation.get('comentario', 'Sin comentarios')[:40] + '...' if len(validation.get('comentario', '')) > 40 else validation.get('comentario', 'Sin comentarios')
                 ])
             
@@ -613,7 +628,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
         
         story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
                               footer_style))
-        story.append(Paragraph("Sistema de Validación de Jigs - Departamento de Instrumentación", 
+        story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                               footer_style))
         
         # Construir PDF
@@ -622,16 +637,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
         return filepath
         
     except Exception as e:
-        print(f"Error generando PDF: {e}")
-        # Crear un PDF de error
-        error_filename = f"error_report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
-        error_filepath = os.path.join("reports", error_filename)
-        
-        # Crear PDF simple de error
-        error_doc = SimpleDocTemplate(error_filepath, pagesize=A4)
-        error_story = []
-        error_story.append(Paragraph("ERROR GENERANDO REPORTE", title_style))
-        error_story.append(Paragraph(f"Error: {str(e)}", styles['Normal']))
-        error_doc.build(error_story)
-        
-        return error_filepath
+        error_message = str(e) if str(e) else f"{type(e).__name__}: Error desconocido"
+        logger.error(f"Error generando PDF de reporte por lotes: {error_message}", exc_info=True)
+        # Lanzar la excepción para que el router la maneje
+        raise Exception(f"Error generando PDF: {error_message}")

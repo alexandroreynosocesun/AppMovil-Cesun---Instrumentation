@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -10,6 +10,7 @@ import {
   Text,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
   Button,
@@ -19,16 +20,22 @@ import {
   ActivityIndicator
 } from 'react-native-paper';
 import { jigService } from '../services/JigService';
+import { adminService } from '../services/AdminService';
 import { jigNGService } from '../services/JigNGService';
 import { offlineService } from '../services/OfflineService';
 import { useAuth } from '../contexts/AuthContext';
+import { useValidation } from '../contexts/ValidationContext';
+import { useLanguage } from '../contexts/LanguageContext';
+import { formatDateTime12Hour } from '../utils/dateUtils';
 import logger from '../utils/logger';
 
 const { width, height } = Dimensions.get('window');
 
 export default function QRScannerScreen({ navigation, route }) {
   const { mode } = route.params || {};
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const { validations } = useValidation();
+  const { t } = useLanguage();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -40,6 +47,10 @@ export default function QRScannerScreen({ navigation, route }) {
   const [cameraReady, setCameraReady] = useState(false);
   const [containerLayout, setContainerLayout] = useState({ width: 0, height: 0 });
   const [cameraKey, setCameraKey] = useState(0);
+  const [tecnicosMap, setTecnicosMap] = useState({});
+  const [showingLastValidationAlert, setShowingLastValidationAlert] = useState(false);
+  const scanLockRef = useRef(false);
+  const alertLockRef = useRef(false);
 
   const hasPermission = permission?.granted;
 
@@ -73,6 +84,9 @@ export default function QRScannerScreen({ navigation, route }) {
       setLastScannedQR(null);
       setCameraActive(true);
       setCameraReady(false);
+      setShowingLastValidationAlert(false);
+      scanLockRef.current = false;
+      alertLockRef.current = false;
       
       // Forzar re-render del scanner y re-montaje de la cámara en Android
       setTimeout(() => {
@@ -88,6 +102,7 @@ export default function QRScannerScreen({ navigation, route }) {
   const handleBarCodeScanned = async ({ data }) => {
     // Prevenir múltiples escaneos del mismo QR
     if (scanned || loading || !cameraActive) return;
+    if (scanLockRef.current) return;
     
     // Evitar escanear el mismo QR consecutivamente
     if (lastScannedQR === data) return;
@@ -97,6 +112,7 @@ export default function QRScannerScreen({ navigation, route }) {
     setScanned(true);
     setLoading(true);
     setLastScannedQR(data);
+    scanLockRef.current = true;
     
     // Limpiar timeout anterior si existe
     if (scanTimeout) {
@@ -122,11 +138,11 @@ export default function QRScannerScreen({ navigation, route }) {
           if (ngStatus.success && ngStatus.hasActiveNG) {
             // El jig ya tiene un NG activo, mostrar mensaje y ir a detalles
             Alert.alert(
-              '⚠️ Jig ya dado de baja',
-              `Este jig ya tiene un reporte NG activo (${ngStatus.jigNG.estado}). ¿Deseas ver los detalles?`,
+              `⚠️ ${t('jigAlreadyDeactivated')}`,
+              t('jigAlreadyDeactivatedDesc', { status: ngStatus.jigNG.estado }),
               [
                 {
-                  text: 'Cancelar',
+                  text: t('cancel'),
                   style: 'cancel',
                   onPress: () => {
                     setScanned(false);
@@ -135,7 +151,7 @@ export default function QRScannerScreen({ navigation, route }) {
                   }
                 },
                 {
-                  text: 'Ver Detalles',
+                  text: t('viewDetails'),
                   onPress: () => {
                     navigation.navigate('JigNGDetail', { 
                       jigId: ngStatus.jigNG.id 
@@ -152,12 +168,29 @@ export default function QRScannerScreen({ navigation, route }) {
             });
           }
         } else {
-          // Navegar a pantalla de validación con los datos del jig
-          navigation.navigate('Validation', { 
-            jig: result.data.jig,
-            validaciones: result.data.validaciones,
-            reparaciones: result.data.reparaciones
-          });
+          const jigInfoMessage = getJigInfoMessage(result.data.jig);
+
+          if (showingLastValidationAlert || alertLockRef.current) {
+            return;
+          }
+
+          setShowingLastValidationAlert(true);
+          alertLockRef.current = true;
+          Alert.alert(
+            '📋 Información del Jig',
+            jigInfoMessage,
+            [
+              {
+                text: 'OK',
+                style: 'default',
+                onPress: () => {
+                  setShowingLastValidationAlert(false);
+                  alertLockRef.current = false;
+                  resetScanner();
+                }
+              }
+            ]
+          );
         }
       } else {
         // Manejar diferentes tipos de errores con mensajes amigables
@@ -173,11 +206,11 @@ export default function QRScannerScreen({ navigation, route }) {
           setShowNotFoundModal(true);
         } else if (result.error === 'UNAUTHORIZED') {
           Alert.alert(
-            '🔐 Sesión Expirada',
+            `🔐 ${t('sessionExpired')}`,
             result.message,
             [
               { 
-                text: 'Iniciar Sesión', 
+                text: t('signIn'), 
                 onPress: async () => {
                   setScanned(false);
                   setCameraActive(true);
@@ -189,18 +222,18 @@ export default function QRScannerScreen({ navigation, route }) {
           );
         } else if (result.error === 'NETWORK_ERROR') {
           Alert.alert(
-            '📡 Sin Conexión',
+            `📡 ${t('noConnection')}`,
             result.message,
             [
               { 
-                text: 'Reintentar', 
+                text: t('retry'), 
                 onPress: () => {
                   setScanned(false);
                   setCameraActive(true);
                 }
               },
               { 
-                text: 'Cancelar', 
+                text: t('cancel'), 
                 onPress: () => {
                   setScanned(false);
                   setCameraActive(true);
@@ -210,18 +243,18 @@ export default function QRScannerScreen({ navigation, route }) {
           );
         } else {
           Alert.alert(
-            '❌ Error',
-            result.message || 'Ocurrió un error inesperado. Por favor, intenta nuevamente.',
+            `❌ ${t('error')}`,
+            result.message || t('qrProcessingError'),
             [
               { 
-                text: 'Reintentar', 
+                text: t('retry'), 
                 onPress: () => {
                   setScanned(false);
                   setCameraActive(true);
                 }
               },
               { 
-                text: 'Cancelar', 
+                text: t('cancel'), 
                 onPress: () => {
                   setScanned(false);
                   setCameraActive(true);
@@ -232,12 +265,100 @@ export default function QRScannerScreen({ navigation, route }) {
         }
       }
     } catch (error) {
-      Alert.alert('Error', 'Error al procesar el código QR');
+      Alert.alert(t('error'), t('qrProcessingError'));
       setScanned(false);
       setCameraActive(true);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadTecnicosMap = async () => {
+    if (tecnicosMap && Object.keys(tecnicosMap).length > 0) {
+      return tecnicosMap;
+    }
+
+    try {
+      const result = await adminService.getTecnicos();
+      if (result.success) {
+        let tecnicosList = [];
+        if (Array.isArray(result.data)) {
+          tecnicosList = result.data;
+        } else if (Array.isArray(result.data?.items)) {
+          tecnicosList = result.data.items;
+        }
+
+        const map = {};
+        tecnicosList.forEach(tecnico => {
+          const suffix = tecnico.numero_empleado ? ` (${tecnico.numero_empleado})` : '';
+          map[tecnico.id] = `${tecnico.nombre}${suffix}`;
+        });
+        setTecnicosMap(map);
+        return map;
+      }
+    } catch (error) {
+      logger.error('Error cargando técnicos:', error);
+    }
+
+    return {};
+  };
+
+  const getTechnicianLabel = async (validation) => {
+    const directName = validation?.tecnico?.nombre || validation?.tecnico_nombre;
+    if (directName) {
+      return directName;
+    }
+
+    const tecnicoId = validation?.tecnico_id;
+    if (!tecnicoId) {
+      // Si no hay técnico en el objeto (validación local), usar el usuario actual
+      return user?.nombre || t('notAvailable');
+    }
+
+    const map = await loadTecnicosMap();
+    return map[tecnicoId] || `ID ${tecnicoId}`;
+  };
+
+  const getLocalValidationsForJig = (jig) => {
+    if (!jig || !Array.isArray(validations) || validations.length === 0) {
+      return [];
+    }
+
+    return validations.filter(v => {
+      if (v?.jig?.id && jig?.id) {
+        return v.jig.id === jig.id;
+      }
+      if (v?.jig?.codigo_qr && jig?.codigo_qr) {
+        return v.jig.codigo_qr === jig.codigo_qr;
+      }
+      // Fallback por modelo si no hay IDs
+      if (v?.modelo_actual && jig?.modelo_actual) {
+        return v.modelo_actual === jig.modelo_actual;
+      }
+      return false;
+    });
+  };
+
+  const getJigInfoMessage = (jig) => {
+    let message = '';
+
+    // Información de última validación
+    if (jig.fecha_ultima_validacion) {
+      const formattedDate = formatDateTime12Hour(jig.fecha_ultima_validacion);
+      message += `✅ Última validación\n\n`;
+      message += `📅 ${formattedDate}\n\n`;
+
+      if (jig.tecnico_ultima_validacion?.nombre) {
+        message += `👤 ${jig.tecnico_ultima_validacion.nombre}`;
+        if (jig.turno_ultima_validacion) {
+          message += ` - T${jig.turno_ultima_validacion}`;
+        }
+      }
+    } else {
+      message = `⚠️ No hay validaciones previas para este jig`;
+    }
+
+    return message;
   };
 
   const handleAddNewJig = (qrCode) => {
@@ -255,7 +376,7 @@ export default function QRScannerScreen({ navigation, route }) {
         setCameraActive(true);
         setLastScannedQR(null);
         // Opcional: mostrar mensaje de éxito
-        Alert.alert('Éxito', 'Jig creado correctamente. Puedes escanearlo nuevamente.');
+        Alert.alert(t('success'), t('jigCreatedSuccess'));
       }
     });
   };
@@ -271,6 +392,9 @@ export default function QRScannerScreen({ navigation, route }) {
     setLoading(false);
     setLastScannedQR(null);
     setCameraActive(true);
+    setShowingLastValidationAlert(false);
+    scanLockRef.current = false;
+    alertLockRef.current = false;
   };
 
   if (hasPermission === null) {
@@ -279,7 +403,7 @@ export default function QRScannerScreen({ navigation, route }) {
         <Card style={styles.card}>
           <Card.Content>
             <ActivityIndicator size="large" />
-            <Paragraph style={styles.text}>Solicitando permisos de cámara...</Paragraph>
+            <Paragraph style={styles.text}>{t('requestingCameraPermissions')}</Paragraph>
           </Card.Content>
         </Card>
       </View>
@@ -291,12 +415,12 @@ export default function QRScannerScreen({ navigation, route }) {
       <View style={styles.container}>
         <Card style={styles.card}>
           <Card.Content>
-            <Title>Permisos de Cámara</Title>
+            <Title>{t('cameraPermissions')}</Title>
             <Paragraph>
-              Necesitamos acceso a la cámara para escanear códigos QR.
+              {t('cameraPermissionsDesc')}
             </Paragraph>
             <Button mode="contained" onPress={requestPermission} style={styles.button}>
-              Permitir Acceso
+              {t('allowAccess')}
             </Button>
           </Card.Content>
         </Card>
@@ -312,8 +436,9 @@ export default function QRScannerScreen({ navigation, route }) {
   };
 
   return (
-    <View 
+    <SafeAreaView 
       style={styles.container}
+      edges={['top', 'bottom']}
       onLayout={handleContainerLayout}
     >
       {cameraReady ? (
@@ -328,7 +453,7 @@ export default function QRScannerScreen({ navigation, route }) {
       ) : (
         <View style={[StyleSheet.absoluteFillObject, styles.cameraPlaceholder]}>
           <ActivityIndicator size="large" color="#2196F3" />
-          <Text style={styles.cameraPlaceholderText}>Inicializando cámara...</Text>
+          <Text style={styles.cameraPlaceholderText}>{t('initializingCamera')}</Text>
         </View>
       )}
       
@@ -341,22 +466,31 @@ export default function QRScannerScreen({ navigation, route }) {
         <Card style={styles.instructionCard}>
           <Card.Content>
             <Title style={styles.instructionTitle}>
-              {mode === 'ng' ? 'Escanear Jig NG' : 'Escanear Código QR'}
+              {mode === 'ng' ? t('scanJigNG') : t('scanQRCode')}
             </Title>
             <Paragraph style={styles.instructionText}>
               {mode === 'ng' 
-                ? 'Apunta la cámara al código QR del jig que quieres dar de baja como NG'
-                : 'Apunta la cámara al código QR del jig'
+                ? t('scanNGInstruction')
+                : t('scanQRInstruction')
               }
             </Paragraph>
-            {mode !== 'ng' && (
+            {mode !== 'ng' ? (
               <Button
                 mode="outlined"
-                onPress={() => navigation.navigate('AddJig')}
+                onPress={() => navigation.navigate('AddJig', { manualEntry: true })}
                 style={styles.addButton}
                 icon="plus-circle"
               >
-                Agregar Jig Manualmente
+                {t('addJigManually')}
+              </Button>
+            ) : (
+              <Button
+                mode="outlined"
+                onPress={() => navigation.navigate('AddJigNG', { manualEntry: true })}
+                style={styles.addButton}
+                icon="alert-circle-outline"
+              >
+                {t('addJigManually')}
               </Button>
             )}
           </Card.Content>
@@ -369,7 +503,7 @@ export default function QRScannerScreen({ navigation, route }) {
           <Card style={styles.loadingCard}>
             <Card.Content>
               <ActivityIndicator size="small" />
-              <Paragraph>Procesando...</Paragraph>
+              <Paragraph>{t('processing')}</Paragraph>
             </Card.Content>
           </Card>
         )}
@@ -380,7 +514,7 @@ export default function QRScannerScreen({ navigation, route }) {
             onPress={resetScanner}
             style={styles.button}
           >
-            Escanear de Nuevo
+            {t('scanAgain')}
           </Button>
         )}
         
@@ -388,7 +522,7 @@ export default function QRScannerScreen({ navigation, route }) {
           <Card style={styles.disabledCard}>
             <Card.Content>
               <Paragraph style={styles.disabledText}>
-                Cámara pausada - Procesando QR...
+                {t('cameraPaused')}
               </Paragraph>
             </Card.Content>
           </Card>
@@ -404,29 +538,28 @@ export default function QRScannerScreen({ navigation, route }) {
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>🔍 Jig No Encontrado</Text>
+            <Text style={styles.modalTitle}>🔍 {t('jigNotFound')}</Text>
             <Text style={styles.modalMessage}>
-              El código QR escaneado no está registrado en el sistema.
-              {'\n\n'}¿Deseas agregar este jig nuevo?
+              {t('jigNotFoundDesc')}
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowNotFoundModal(false)}
               >
-                <Text style={styles.cancelButtonText}>Cancelar</Text>
+                <Text style={styles.cancelButtonText}>{t('cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.addButton]}
                 onPress={() => handleAddNewJig(pendingQRCode)}
               >
-                <Text style={styles.addButtonText}>Agregar Jig</Text>
+                <Text style={styles.addButtonText}>{t('addJig')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -443,12 +576,16 @@ const styles = StyleSheet.create({
     bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 5, // Mejorado: zIndex explícito para overlay sobre la cámara
   },
   scanArea: {
     width: width * 0.8,
-    height: width * 0.8,
+    aspectRatio: 1, // Mejorado: Mantiene área de escaneo cuadrada
+    maxWidth: 300, // Mejorado: Tamaño máximo para tablets
+    maxHeight: 300,
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'center', // Mejorado: Centrado explícito
   },
   scanFrame: {
     width: '100%',
@@ -475,6 +612,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 8,
+    zIndex: 6, // Mejorado: zIndex explícito para tarjeta de instrucciones sobre overlay
   },
   instructionTitle: {
     textAlign: 'center',
@@ -496,6 +634,7 @@ const styles = StyleSheet.create({
     bottom: 50,
     left: 20,
     right: 20,
+    zIndex: 7, // Mejorado: zIndex explícito para controles sobre otros elementos
   },
   loadingCard: {
     backgroundColor: 'rgba(31, 31, 31, 0.95)',
@@ -531,6 +670,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+    zIndex: 100, // Mejorado: zIndex muy alto para modales sobre todo
   },
   modalContent: {
     backgroundColor: '#1F1F1F',
@@ -538,8 +678,10 @@ const styles = StyleSheet.create({
     padding: 24,
     margin: 20,
     minWidth: 280,
+    maxWidth: '90%', // Mejorado: Responsive en pantallas pequeñas
     borderWidth: 1,
     borderColor: '#333333',
+    alignSelf: 'center', // Mejorado: Centrado explícito
   },
   modalTitle: {
     fontSize: 20,
@@ -558,6 +700,7 @@ const styles = StyleSheet.create({
   modalButtons: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    alignItems: 'center', // Mejorado: Alineación vertical
     gap: 12,
   },
   modalButton: {

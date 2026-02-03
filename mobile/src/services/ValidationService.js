@@ -1,34 +1,11 @@
-import axios from 'axios';
-import { getAuthToken } from '../utils/authUtils';
 import { offlineService } from './OfflineService';
 import logger from '../utils/logger';
-
-const API_BASE_URL = 'https://0a0075381ed5.ngrok-free.app/api';
+import { apiClient } from '../utils/apiClient';
 
 class ValidationService {
   constructor() {
-    this.api = axios.create({
-      baseURL: API_BASE_URL,
-      timeout: 30000, // Aumentado a 30 segundos
-      headers: {
-        'ngrok-skip-browser-warning': 'true',
-        'Content-Type': 'application/json',
-      },
-    });
-
-    // Interceptor para agregar token
-    this.api.interceptors.request.use(
-      async (config) => {
-        const token = await getAuthToken();
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
-        }
-        return config;
-      },
-      (error) => {
-        return Promise.reject(error);
-      }
-    );
+    // Usar instancia compartida de axios con interceptor de refresh token
+    this.api = apiClient;
   }
 
   async createValidation(validationData) {
@@ -172,6 +149,22 @@ class ValidationService {
       return {
         success: false,
         error: error.response?.data?.detail || 'Error marcando validación como completada'
+      };
+    }
+  }
+
+  async deleteValidation(validationId) {
+    try {
+      const response = await this.api.delete(`/validations/${validationId}`);
+      return {
+        success: true,
+        data: response.data
+      };
+    } catch (error) {
+      logger.error('Error eliminando validación:', error);
+      return {
+        success: false,
+        error: error.response?.data?.detail || 'Error eliminando validación'
       };
     }
   }

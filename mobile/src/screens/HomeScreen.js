@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Platform
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Card,
   Title,
@@ -28,6 +29,7 @@ import {
 } from 'react-native-paper';
 import { useAuth } from '../contexts/AuthContext';
 import { useValidation } from '../contexts/ValidationContext';
+import { useLanguage } from '../contexts/LanguageContext';
 import { offlineService } from '../services/OfflineService';
 import logger from '../utils/logger';
 import { validationService } from '../services/ValidationService';
@@ -41,13 +43,21 @@ const { width, height } = Dimensions.get('window');
 export default function HomeScreen({ navigation }) {
   const { user, logout } = useAuth();
   const { validations, getValidationsByModel } = useValidation();
+  const { t } = useLanguage();
   const { isWeb, isDesktop, isTablet, maxWidth, containerPadding, gridColumns } = usePlatform();
+  const turnoValue = (user?.turno_actual || 'N/A').toString().trim();
+  const turnoLetter = turnoValue ? turnoValue.charAt(0).toUpperCase() : '';
+  const turnoRest = turnoValue ? turnoValue.slice(1) : '';
+  const turnoColors = { A: '#2196F3', B: '#4CAF50', C: '#FF9800' };
+  const turnoColor = turnoColors[turnoLetter];
   const [isOnline, setIsOnline] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [fadeAnim] = useState(new Animated.Value(0));
   const [slideAnim] = useState(new Animated.Value(50));
   const [hasAssignedValidations, setHasAssignedValidations] = useState(false);
   const [checkingAssignedValidations, setCheckingAssignedValidations] = useState(false);
+  const [hasCreatedValidations, setHasCreatedValidations] = useState(false);
+  const [checkingCreatedValidations, setCheckingCreatedValidations] = useState(false);
 
   // Detectar validaciones en curso (modelos con validaciones pero sin completar)
   const getInProgressValidations = () => {
@@ -136,8 +146,9 @@ export default function HomeScreen({ navigation }) {
         
         // Filtrar SOLO las validaciones asignadas a este usuario y que NO estén completadas (pendientes)
         // Estas son las asignadas por ingenieros con rol "asignaciones"
+        const userId = Number(user?.id);
         const assignedPending = all.filter(v => {
-          const isAssigned = v.tecnico_asignado_id === user?.id;
+          const isAssigned = Number(v.tecnico_asignado_id) === userId;
           const isPending = !v.completada;
           const matches = isAssigned && isPending;
           
@@ -146,6 +157,12 @@ export default function HomeScreen({ navigation }) {
           }
           return matches;
         });
+
+        const createdPending = all.filter(v => {
+          const isCreator = Number(v.tecnico_id) === userId;
+          const isPending = !v.completada;
+          return isCreator && isPending;
+        });
         
         logger.info(`✅ [HomeScreen] Validaciones asignadas PENDIENTES encontradas: ${assignedPending.length}`);
         logger.info(`📋 [HomeScreen] Detalles de validaciones pendientes:`);
@@ -153,7 +170,7 @@ export default function HomeScreen({ navigation }) {
           logger.info(`  - ID: ${v.id}, Modelo: ${v.modelo_actual || 'N/A'}, Completada: ${v.completada}, Técnico asignado: ${v.tecnico_asignado_id}`);
         });
         
-        // El botón solo se habilita si hay al menos una validación pendiente asignada
+        // El botón solo se habilita si hay validaciones pendientes asignadas
         setHasAssignedValidations(assignedPending.length > 0);
       } else {
         logger.error('❌ [HomeScreen] Error verificando validaciones:', result.error);
@@ -167,10 +184,53 @@ export default function HomeScreen({ navigation }) {
     }
   };
 
+  // Función para verificar si el usuario tiene validaciones creadas (para ingenieros/asignaciones)
+  const checkCreatedValidations = async () => {
+    if (user?.tipo_usuario !== 'asignaciones' && user?.tipo_usuario !== 'ingeniero') {
+      return;
+    }
+    
+    try {
+      setCheckingCreatedValidations(true);
+      logger.info('🔄 [HomeScreen] Verificando validaciones creadas...');
+      
+      const result = await validationService.getValidations();
+      
+      if (result.success) {
+        let all = [];
+        if (result.data) {
+          if (Array.isArray(result.data)) {
+            all = result.data;
+          } else if (result.data.items && Array.isArray(result.data.items)) {
+            all = result.data.items;
+          }
+        }
+        
+        // Filtrar validaciones creadas por este usuario (tecnico_id === user.id)
+        const userId = Number(user?.id);
+        const mine = all.filter(v => Number(v.tecnico_id) === userId);
+        
+        logger.info(`📊 [HomeScreen] Validaciones creadas por usuario: ${mine.length}`);
+        setHasCreatedValidations(mine.length > 0);
+      } else {
+        setHasCreatedValidations(false);
+      }
+    } catch (error) {
+      logger.error('❌ [HomeScreen] Error verificando validaciones creadas:', error);
+      setHasCreatedValidations(false);
+    } finally {
+      setCheckingCreatedValidations(false);
+    }
+  };
+
   useEffect(() => {
     // Verificar validaciones asignadas al cargar si es técnico/validaciones
     if (user && (user.tipo_usuario === 'tecnico' || user.tipo_usuario === 'validaciones' || user.tipo_usuario === 'validacion')) {
       checkAssignedValidations();
+    }
+    // Verificar validaciones creadas al cargar si es ingeniero/asignaciones
+    if (user && (user.tipo_usuario === 'asignaciones' || user.tipo_usuario === 'ingeniero')) {
+      checkCreatedValidations();
     }
   }, [user]);
 
@@ -181,6 +241,10 @@ export default function HomeScreen({ navigation }) {
         logger.info('🔄 [HomeScreen] Pantalla recibió foco, verificando validaciones asignadas...');
         checkAssignedValidations();
       }
+      if (user && (user.tipo_usuario === 'asignaciones' || user.tipo_usuario === 'ingeniero')) {
+        logger.info('🔄 [HomeScreen] Pantalla recibió foco, verificando validaciones creadas...');
+        checkCreatedValidations();
+      }
     }, [user])
   );
 
@@ -190,21 +254,33 @@ export default function HomeScreen({ navigation }) {
     if (user?.tipo_usuario === 'tecnico' || user?.tipo_usuario === 'validaciones' || user?.tipo_usuario === 'validacion') {
       await checkAssignedValidations();
     }
+    // Verificar validaciones creadas si es ingeniero/asignaciones
+    if (user?.tipo_usuario === 'asignaciones' || user?.tipo_usuario === 'ingeniero') {
+      await checkCreatedValidations();
+    }
     setTimeout(() => setRefreshing(false), 1000);
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Cerrar Sesión',
-      '¿Estás seguro de que quieres cerrar sesión?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Cerrar Sesión', 
-          onPress: logout
-        }
-      ]
-    );
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      // En web usar window.confirm
+      if (window.confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+        logout();
+      }
+    } else {
+      // En móvil usar Alert.alert
+      Alert.alert(
+        'Cerrar Sesión',
+        '¿Estás seguro de que quieres cerrar sesión?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { 
+            text: 'Cerrar Sesión', 
+            onPress: logout
+          }
+        ]
+      );
+    }
   };
 
   const handleScanQR = () => {
@@ -223,7 +299,7 @@ export default function HomeScreen({ navigation }) {
   const normalizedRole = (user?.tipo_usuario || '').toLowerCase().trim();
 
   return (
-    <View style={[styles.container, isWeb && webStyles.container]}>
+    <SafeAreaView style={[styles.container, isWeb && webStyles.container]} edges={['top']}>
       <StatusBar barStyle="light-content" backgroundColor="#1A1A1A" />
       
       {/* Fondo con gradiente */}
@@ -244,22 +320,24 @@ export default function HomeScreen({ navigation }) {
         />
         <View style={styles.headerContent}>
           <View style={styles.headerLeft}>
-            <Animated.Text 
-              style={[
-                styles.headerTitle,
-                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-              ]}
-            >
-              🔧 Validación de Jigs
-            </Animated.Text>
-            <Animated.Text 
-              style={[
-                styles.headerSubtitle,
-                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
-              ]}
-            >
-              Departamento de Instrumentación
-            </Animated.Text>
+            <View style={styles.headerTitleRow}>
+              <Animated.Text 
+                style={[
+                  styles.headerTitle,
+                  { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+                ]}
+              >
+                {t('appName')}
+              </Animated.Text>
+              <Animated.Text 
+                style={[
+                  styles.headerSubtitleInline,
+                  { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }
+                ]}
+              >
+                {t('department')}
+              </Animated.Text>
+            </View>
           </View>
           <View style={styles.headerRight}>
             <View style={styles.statusContainer}>
@@ -270,18 +348,11 @@ export default function HomeScreen({ navigation }) {
                 style={[styles.statusChip, { backgroundColor: 'rgba(255, 255, 255, 0.1)' }]}
                 textStyle={{ color: isOnline ? '#4CAF50' : '#F44336', fontSize: 12, fontWeight: 'bold' }}
               >
-                {isOnline ? 'Online' : 'Offline'}
+                {isOnline ? t('online') : t('offline')}
               </Chip>
             </View>
           </View>
         </View>
-        {/* Línea decorativa inferior con gradiente */}
-        <LinearGradient
-          colors={['#2196F3', '#4CAF50', '#FF9800', '#F44336']}
-          style={styles.headerBottomLine}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 0 }}
-        />
       </View>
 
       {/* Contenido principal */}
@@ -309,24 +380,69 @@ export default function HomeScreen({ navigation }) {
           ]}
         >
           <LinearGradient
-            colors={['#2196F3', '#1976D2', '#0D47A1']}
+            colors={['#3A3A3A', '#323232', '#2A2A2A']}
             style={styles.welcomeCard}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
           >
             <View style={styles.welcomeContent}>
-              <Text style={styles.welcomeText}>¡Bienvenido!</Text>
+              <Text style={styles.welcomeText}>{t('welcome')}</Text>
               <Text style={styles.userName}>{user?.nombre}</Text>
-              <View style={styles.userInfoContainer}>
-                <IconButton icon="clock-outline" size={16} iconColor="#FFFFFF" />
-                <Text style={styles.userInfo}>Turno: {user?.turno_actual || 'N/A'}</Text>
-              </View>
-              <View style={styles.userInfoContainer}>
-                <IconButton icon="account-badge" size={16} iconColor="#FFFFFF" />
-                <Text style={styles.userInfo}>Rol: {user?.tipo_usuario}</Text>
+              <View style={styles.userInfoRow}>
+                <View style={styles.userInfoContainer}>
+                  <IconButton icon="clock-outline" size={16} iconColor="#FFFFFF" />
+                  <Text style={styles.userInfo}>
+                    {t('turno')}:{" "}
+                    {turnoLetter ? (
+                      <>
+                        <Text style={[styles.userInfo, styles.turnoLetter, turnoColor ? { color: turnoColor } : null]}>
+                          {turnoLetter}
+                        </Text>
+                        {turnoRest}
+                      </>
+                    ) : (
+                      user?.turno_actual || 'N/A'
+                    )}
+                  </Text>
+                </View>
+                <View style={styles.userInfoContainer}>
+                  <IconButton icon="account-badge" size={16} iconColor="#FFFFFF" />
+                  <Text style={styles.userInfo}>{t('role')}: {user?.tipo_usuario}</Text>
+                </View>
               </View>
             </View>
           </LinearGradient>
+        </Animated.View>
+
+        {/* Botón para volver a selección de módulo */}
+        <Animated.View
+          style={[
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            { marginBottom: 12 }
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ModuleSelection')}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#9C27B0', '#7B1FA2', '#4A148C']}
+              style={styles.assignButtonCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.assignButtonContent}>
+                <View style={styles.assignButtonLeft}>
+                  <IconButton icon="apps" size={32} iconColor="#FFFFFF" />
+                  <View style={styles.assignButtonTextContainer}>
+                    <Text style={styles.assignButtonTitle}>{t('backToModules')}</Text>
+                    <Text style={styles.assignButtonSubtitle}>{t('backToModulesDesc')}</Text>
+                  </View>
+                </View>
+                <IconButton icon="chevron-right" size={24} iconColor="#FFFFFF" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
         </Animated.View>
 
         {/* Botón de Continuar Validación en Curso - Solo para técnicos */}
@@ -358,10 +474,10 @@ export default function HomeScreen({ navigation }) {
                     <IconButton icon="play-circle-outline" size={32} iconColor="#FFFFFF" />
                     <View style={styles.assignButtonTextContainer}>
                       <Text style={styles.assignButtonTitle}>
-                        Continuar validación {currentInProgressModel}
+                        {t('continueValidation', { model: currentInProgressModel })}
                       </Text>
                       <Text style={styles.assignButtonSubtitle}>
-                        {getValidationsByModel(currentInProgressModel).length} validaciones registradas
+                        {t('validationsRegistered', { count: getValidationsByModel(currentInProgressModel).length })}
                       </Text>
                     </View>
                   </View>
@@ -373,7 +489,7 @@ export default function HomeScreen({ navigation }) {
         )}
 
         {/* Botones para Asignaciones */}
-        {normalizedRole === 'asignaciones' && (
+        {(normalizedRole === 'asignaciones' || normalizedRole === 'ingeniero') && (
           <>
             {/* Botón de Asignar Validaciones */}
             <Animated.View
@@ -396,9 +512,9 @@ export default function HomeScreen({ navigation }) {
                     <View style={styles.assignButtonLeft}>
                       <IconButton icon="account-plus" size={32} iconColor="#FFFFFF" />
                       <View style={styles.assignButtonTextContainer}>
-                        <Text style={styles.assignButtonTitle}>Asignar Validaciones</Text>
+                        <Text style={styles.assignButtonTitle}>{t('assignValidations')}</Text>
                         <Text style={styles.assignButtonSubtitle}>
-                          Asigna validaciones a técnicos por número de empleado
+                          {t('assignValidationsDesc')}
                         </Text>
                       </View>
                     </View>
@@ -408,40 +524,51 @@ export default function HomeScreen({ navigation }) {
               </TouchableOpacity>
             </Animated.View>
 
-            {/* Botón de Estatus de Validaciones */}
-            <Animated.View
-              style={[
-                { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
-                { marginBottom: 20 }
-              ]}
-            >
-              <TouchableOpacity
-                onPress={() => navigation.navigate('ActiveValidations')}
-                activeOpacity={0.8}
-              >
-                <LinearGradient
-                  colors={['#4CAF50', '#388E3C', '#1B5E20']}
-                  style={styles.assignButtonCard}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                >
-                  <View style={styles.assignButtonContent}>
-                    <View style={styles.assignButtonLeft}>
-                      <IconButton icon="check-circle-outline" size={32} iconColor="#FFFFFF" />
-                      <View style={styles.assignButtonTextContainer}>
-                        <Text style={styles.assignButtonTitle}>Estatus de Validaciones</Text>
-                        <Text style={styles.assignButtonSubtitle}>
-                          Revisa las validaciones que has asignado
-                        </Text>
-                      </View>
-                    </View>
-                    <IconButton icon="chevron-right" size={24} iconColor="#FFFFFF" />
-                  </View>
-                </LinearGradient>
-              </TouchableOpacity>
-            </Animated.View>
           </>
         )}
+
+        {/* Botón de Estatus de Validaciones - Disponible para todos los roles */}
+        <Animated.View
+          style={[
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            { marginBottom: 20 }
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => navigation.navigate('ActiveValidations')}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#4CAF50', '#388E3C', '#1B5E20']}
+              style={styles.assignButtonCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.assignButtonContent}>
+                <View style={styles.assignButtonLeft}>
+                  <IconButton 
+                    icon="check-circle-outline" 
+                    size={32} 
+                    iconColor="#FFFFFF"
+                  />
+                  <View style={styles.assignButtonTextContainer}>
+                    <Text style={styles.assignButtonTitle}>
+                      {t('validationStatus')}
+                    </Text>
+                    <Text style={styles.assignButtonSubtitle}>
+                      {t('validationStatusDesc')}
+                    </Text>
+                  </View>
+                </View>
+                <IconButton 
+                  icon="chevron-right" 
+                  size={24} 
+                  iconColor="#FFFFFF"
+                />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
 
         {/* Botón para técnicos / validaciones: Validaciones asignadas */}
         {(normalizedRole === 'tecnico' || normalizedRole === 'validaciones' || normalizedRole === 'validacion') && (
@@ -484,15 +611,15 @@ export default function HomeScreen({ navigation }) {
                         styles.assignButtonTitle,
                         !hasAssignedValidations && styles.assignButtonTitleDisabled
                       ]}>
-                        Validaciones asignadas
+                        {t('assignedValidations')}
                       </Text>
                       <Text style={[
                         styles.assignButtonSubtitle,
                         !hasAssignedValidations && styles.assignButtonSubtitleDisabled
                       ]}>
                         {hasAssignedValidations 
-                          ? 'Consulta y valida las asignaciones pendientes'
-                          : 'No tienes validaciones pendientes asignadas'
+                          ? t('assignedValidationsDesc')
+                          : t('noPendingValidations')
                         }
                       </Text>
                     </View>
@@ -512,6 +639,37 @@ export default function HomeScreen({ navigation }) {
           </Animated.View>
         )}
 
+        {/* Botón: Validar manualmente */}
+        <Animated.View
+          style={[
+            { opacity: fadeAnim, transform: [{ translateY: slideAnim }] },
+            { marginBottom: 20 }
+          ]}
+        >
+          <TouchableOpacity
+            onPress={() => navigation.navigate('AllJigs', { manualValidation: true })}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={['#2196F3', '#1976D2', '#0D47A1']}
+              style={styles.assignButtonCard}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              <View style={styles.assignButtonContent}>
+                <View style={styles.assignButtonLeft}>
+                  <IconButton icon="clipboard-check-outline" size={32} iconColor="#FFFFFF" />
+                  <View style={styles.assignButtonTextContainer}>
+                    <Text style={styles.assignButtonTitle}>Validar manualmente</Text>
+                    <Text style={styles.assignButtonSubtitle}>Selecciona un jig en la lista</Text>
+                  </View>
+                </View>
+                <IconButton icon="chevron-right" size={24} iconColor="#FFFFFF" />
+              </View>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+
         {/* Información del sistema con mejor diseño */}
         <Animated.View
           style={[
@@ -522,7 +680,7 @@ export default function HomeScreen({ navigation }) {
             <Card.Content>
               <View style={styles.cardHeader}>
                 <IconButton icon="information" size={24} iconColor="#2196F3" />
-                <Title style={styles.cardTitle}>Información del Sistema</Title>
+                <Title style={styles.cardTitle}>{t('systemInfo')}</Title>
               </View>
               <Divider style={styles.divider} />
               <View style={styles.infoList}>
@@ -531,8 +689,8 @@ export default function HomeScreen({ navigation }) {
                     <IconButton icon="qrcode-scan" size={24} iconColor="#2196F3" />
                   </View>
                   <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoTitle}>Escanear QR</Text>
-                    <Text style={styles.infoText}>Escanea el código QR del jig para validar</Text>
+                    <Text style={styles.infoTitle}>{t('scanQR')}</Text>
+                    <Text style={styles.infoText}>{t('scanQRDesc')}</Text>
                   </View>
                 </TouchableOpacity>
                 
@@ -541,8 +699,8 @@ export default function HomeScreen({ navigation }) {
                     <IconButton icon="wifi-off" size={24} iconColor="#4CAF50" />
                   </View>
                   <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoTitle}>Modo Offline</Text>
-                    <Text style={styles.infoText}>Funciona offline y sincroniza automáticamente</Text>
+                    <Text style={styles.infoTitle}>{t('offlineMode')}</Text>
+                    <Text style={styles.infoText}>{t('offlineModeDesc')}</Text>
                   </View>
                 </TouchableOpacity>
                 
@@ -551,8 +709,8 @@ export default function HomeScreen({ navigation }) {
                     <IconButton icon="file-pdf-box" size={24} iconColor="#F44336" />
                   </View>
                   <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoTitle}>Reportes PDF</Text>
-                    <Text style={styles.infoText}>Genera reportes PDF automáticamente</Text>
+                    <Text style={styles.infoTitle}>{t('pdfReports')}</Text>
+                    <Text style={styles.infoText}>{t('pdfReportsDesc')}</Text>
                   </View>
                 </TouchableOpacity>
                 
@@ -561,8 +719,8 @@ export default function HomeScreen({ navigation }) {
                     <IconButton icon="upload" size={24} iconColor="#FF9800" />
                   </View>
                   <View style={styles.infoTextContainer}>
-                    <Text style={styles.infoTitle}>Sistema de Auditoría</Text>
-                    <Text style={styles.infoText}>Todos los PDFs se almacenan para auditoría</Text>
+                    <Text style={styles.infoTitle}>{t('auditSystem')}</Text>
+                    <Text style={styles.infoText}>{t('auditSystemDesc')}</Text>
                   </View>
                 </TouchableOpacity>
             </View>
@@ -587,7 +745,7 @@ export default function HomeScreen({ navigation }) {
           >
             <View style={styles.bottomButtonContent}>
               <IconButton icon="package-variant" size={24} iconColor="#FFFFFF" />
-              <Text style={styles.bottomButtonLabel}>Todos los Jigs</Text>
+              <Text style={styles.bottomButtonLabel}>{t('allJigs')}</Text>
             </View>
           </TouchableOpacity>
 
@@ -598,7 +756,7 @@ export default function HomeScreen({ navigation }) {
           >
             <View style={styles.bottomButtonContent}>
               <IconButton icon="alert-circle" size={24} iconColor="#FF9800" />
-              <Text style={styles.bottomButtonLabel}>Jigs NG</Text>
+              <Text style={styles.bottomButtonLabel}>{t('jigsNG')}</Text>
             </View>
           </TouchableOpacity>
 
@@ -614,7 +772,7 @@ export default function HomeScreen({ navigation }) {
               end={{ x: 1, y: 1 }}
             >
               <IconButton icon="qrcode-scan" size={28} iconColor="#FFFFFF" />
-              <Text style={styles.centerBottomButtonText}>Escanear</Text>
+              <Text style={styles.centerBottomButtonText}>{t('scan')}</Text>
             </LinearGradient>
           </TouchableOpacity>
 
@@ -625,7 +783,7 @@ export default function HomeScreen({ navigation }) {
           >
             <View style={styles.bottomButtonContent}>
               <IconButton icon="file-document-multiple" size={24} iconColor="#9C27B0" />
-              <Text style={styles.bottomButtonLabel}>Auditoría</Text>
+              <Text style={styles.bottomButtonLabel}>{t('audit')}</Text>
             </View>
           </TouchableOpacity>
 
@@ -636,18 +794,18 @@ export default function HomeScreen({ navigation }) {
           >
             <View style={styles.bottomButtonContent}>
               <IconButton icon="account" size={24} iconColor="#2196F3" />
-              <Text style={styles.bottomButtonLabel}>Perfil</Text>
+              <Text style={styles.bottomButtonLabel}>{t('profile')}</Text>
             </View>
           </TouchableOpacity>
         </View>
 
         {/* Botones adicionales */}
         <View style={styles.additionalButtons}>
-          {/* Si es adminAlex, solo mostrar Admin y Salir */}
+          {/* Si es adminAlex, solo mostrar Admin, Inventario y Salir */}
           {user?.usuario === 'adminAlex' ? (
             <>
               {/* Botón de administración - solo para adminAlex */}
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.additionalButtonTouchable, { borderColor: '#FF9800' }]}
                 onPress={() => navigation.navigate('Admin')}
               >
@@ -655,7 +813,16 @@ export default function HomeScreen({ navigation }) {
                 <Text style={[styles.additionalButtonText, { color: '#FF9800' }]}>Admin</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
+              {/* Botón de inventario - para adminAlex */}
+              <TouchableOpacity
+                style={[styles.additionalButtonTouchable, { borderColor: '#00BCD4' }]}
+                onPress={() => navigation.navigate('Inventario')}
+              >
+                <IconButton icon="clipboard-list" size={20} iconColor="#00BCD4" />
+                <Text style={[styles.additionalButtonText, { color: '#00BCD4' }]}>Inventario</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 style={styles.logoutButtonTouchable}
                 onPress={handleLogout}
               >
@@ -676,8 +843,8 @@ export default function HomeScreen({ navigation }) {
                 </TouchableOpacity>
               )}
 
-              {/* Botón de asignar validaciones - solo para asignaciones */}
-              {user?.tipo_usuario === 'asignaciones' && (
+              {/* Botón de asignar validaciones - para ingenieros (asignaciones) */}
+              {(user?.tipo_usuario === 'asignaciones' || user?.tipo_usuario === 'ingeniero') && (
                 <TouchableOpacity 
                   style={[styles.additionalButtonTouchable, { borderColor: '#9C27B0' }]}
                   onPress={() => navigation.navigate('AssignValidation')}
@@ -700,12 +867,23 @@ export default function HomeScreen({ navigation }) {
 
               {/* Botón para ver reportes - solo gestión */}
               {(user?.tipo_usuario === 'gestion' || user?.tipo_usuario === 'Gestion') && (
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={[styles.additionalButtonTouchable, { borderColor: '#9C27B0' }]}
                   onPress={() => navigation.navigate('DamagedLabelsList')}
                 >
                   <IconButton icon="format-list-bulleted" size={20} iconColor="#9C27B0" />
                   <Text style={[styles.additionalButtonText, { color: '#9C27B0' }]}>Ver Reportes</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Botón de inventario - admin, gestión e ingeniero */}
+              {(user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'gestion' || user?.tipo_usuario === 'Gestion' || user?.tipo_usuario === 'ingeniero' || user?.usuario === 'adminAlex') && (
+                <TouchableOpacity
+                  style={[styles.additionalButtonTouchable, { borderColor: '#00BCD4' }]}
+                  onPress={() => navigation.navigate('Inventario')}
+                >
+                  <IconButton icon="clipboard-list" size={20} iconColor="#00BCD4" />
+                  <Text style={[styles.additionalButtonText, { color: '#00BCD4' }]}>Inventario</Text>
                 </TouchableOpacity>
               )}
 
@@ -742,7 +920,7 @@ export default function HomeScreen({ navigation }) {
           )}
         </View>
       </LinearGradient>
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -768,6 +946,14 @@ const styles = StyleSheet.create({
     paddingTop: 15,
     paddingBottom: 20,
     position: 'relative',
+    ...Platform.select({
+      web: {
+        paddingHorizontal: 0, // Se aplica dinámicamente
+        maxWidth: 1400,
+        alignSelf: 'center',
+        width: '100%',
+      },
+    }),
   },
   headerGradient: {
     position: 'absolute',
@@ -775,32 +961,47 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 0, // Capa base del header
   },
   headerContent: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    zIndex: 1,
+    zIndex: 2, // Contenido sobre el gradiente
+    ...Platform.select({
+      web: {
+        maxWidth: 1400,
+        alignSelf: 'center',
+        width: '100%',
+      },
+    }),
   },
   headerLeft: {
     flex: 1,
   },
+  headerTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
   headerTitle: {
-    fontSize: 28,
+    fontSize: 24,
     fontWeight: 'bold',
     color: '#FFFFFF',
     textShadowColor: 'rgba(0, 0, 0, 0.5)',
     textShadowOffset: { width: 0, height: 3 },
     textShadowRadius: 6,
     letterSpacing: 0.5,
+    fontFamily: 'Times New Roman',
   },
-  headerSubtitle: {
-    fontSize: 14,
+  headerSubtitleInline: {
+    fontSize: 18,
     color: '#B0B0B0',
-    marginTop: 4,
     fontWeight: '400',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
+    fontFamily: 'Times New Roman',
   },
   headerRight: {
     alignItems: 'flex-end',
@@ -836,6 +1037,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 3,
     opacity: 0.8,
+    zIndex: 1, // Línea decorativa sobre el gradiente
   },
   scrollView: {
     flex: 1,
@@ -843,48 +1045,73 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20,
     paddingBottom: 180,
-    // Padding responsive se aplica dinámicamente
+    ...Platform.select({
+      web: {
+        paddingBottom: 200, // Más espacio para el bottomBar en web
+      },
+    }),
   },
   welcomeSection: {
-    marginBottom: 30,
+    marginBottom: 18,
   },
   welcomeCard: {
-    borderRadius: 20,
-    elevation: 8,
+    borderRadius: 16,
+    elevation: 4,
     shadowColor: '#2196F3',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    ...Platform.select({
+      web: {
+        maxWidth: 600,
+        alignSelf: 'center',
+        width: '100%',
+        minHeight: 120,
+      },
+      default: {
+        minHeight: 120,
+      },
+    }),
   },
   welcomeContent: {
     alignItems: 'center',
-    paddingVertical: 25,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
   welcomeText: {
-    fontSize: 32,
+    fontSize: 22,
     fontWeight: 'bold',
     color: '#FFFFFF',
-    marginBottom: 8,
-    textShadowColor: 'rgba(0, 0, 0, 0.3)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 4,
+    marginBottom: 4,
+    textShadowColor: 'rgba(0, 0, 0, 0.2)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
   userName: {
-    fontSize: 24,
-    color: '#FFFFFF',
+    fontSize: 18,
+    color: '#F2F2F2',
     fontWeight: '600',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   userInfoContainer: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+  userInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
   userInfo: {
-    fontSize: 16,
-    color: '#E3F2FD',
+    fontSize: 13,
+    color: '#DADADA',
     marginLeft: 4,
     fontWeight: '500',
+  },
+  turnoLetter: {
+    fontWeight: '700',
   },
   infoCard: {
     backgroundColor: '#2C2C2C',
@@ -897,6 +1124,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     borderWidth: 1,
     borderColor: '#3C3C3C',
+    ...Platform.select({
+      web: {
+        maxWidth: 800,
+        alignSelf: 'center',
+        width: '100%',
+        boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+      },
+    }),
   },
   cardHeader: {
     flexDirection: 'row',
@@ -914,7 +1149,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   infoList: {
-    gap: 8,
+    gap: 12, // Mejorado: Espaciado consistente entre elementos
   },
   infoItem: {
     flexDirection: 'row',
@@ -923,7 +1158,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 12,
     backgroundColor: '#3C3C3C',
-    marginBottom: 8,
+    // marginBottom removido - ahora se usa gap en el contenedor padre
   },
   infoIconContainer: {
     marginRight: 12,
@@ -948,6 +1183,13 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 12,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        boxShadow: '0 6px 12px rgba(33, 150, 243, 0.4)',
+      },
+    }),
   },
   centerBottomButton: {
     width: 70,
@@ -956,6 +1198,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
+    ...Platform.select({
+      web: {
+        width: 80,
+        height: 80,
+        borderRadius: 40,
+      },
+    }),
   },
   centerBottomButtonText: {
     color: '#FFFFFF',
@@ -976,22 +1225,47 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 25,
     paddingHorizontal: 20,
-    // En web, centrar y limitar ancho
-    ...(Platform.OS === 'web' && {
-      maxWidth: 1400,
-      alignSelf: 'center',
-      width: '100%',
+    zIndex: 9999,
+    backgroundColor: '#2C2C2C',
+    ...Platform.select({
+      web: {
+        position: 'fixed',
+        width: '100%',
+        boxShadow: '0 -4px 8px rgba(0, 0, 0, 0.3)',
+        borderTopLeftRadius: 16,
+        borderTopRightRadius: 16,
+        backgroundColor: '#2C2C2C',
+      },
+      default: {},
     }),
   },
   bottomButtons: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    alignItems: 'center',
     marginBottom: 20,
+    gap: 8,
+    ...Platform.select({
+      web: {
+        maxWidth: 1200,
+        alignSelf: 'center',
+        width: '100%',
+        justifyContent: 'space-evenly',
+      },
+    }),
   },
   bottomButtonTouchable: {
     flex: 1,
     marginHorizontal: 5,
     alignItems: 'center',
+    ...Platform.select({
+      web: {
+        minWidth: 80,
+        maxWidth: 150,
+        cursor: 'pointer',
+        transition: 'opacity 0.2s',
+      },
+    }),
   },
   bottomButtonContent: {
     alignItems: 'center',
@@ -1007,6 +1281,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap', // Mejorado: Permite que los botones se envuelvan en pantallas pequeñas
+    gap: 8, // Mejorado: Espaciado consistente
   },
   additionalButtonTouchable: {
     flex: 1,
@@ -1019,6 +1295,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    ...Platform.select({
+      web: {
+        minWidth: 100,
+        cursor: 'pointer',
+      },
+    }),
   },
   additionalButtonText: {
     fontSize: 12,
@@ -1077,7 +1359,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 4,
   },
-  assignButtonSubtitleDisabled: {
+  assignButtonTitleDisabled: {
     color: '#999999',
   },
   assignButtonSubtitle: {

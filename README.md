@@ -1,4 +1,4 @@
-# 📱 Sistema de Validación de Jigs - Aplicación Móvil
+# 📱 Hisense CheckApp - Aplicación Móvil
 
 Sistema integral para la gestión, validación y seguimiento de jigs industriales, proporcionando una solución completa para el control de calidad y mantenimiento de equipos de producción.
 

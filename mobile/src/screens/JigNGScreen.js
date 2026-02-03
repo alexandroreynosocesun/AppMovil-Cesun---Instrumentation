@@ -14,39 +14,54 @@ import {
 import { Card, Title, Paragraph, Searchbar, Chip, FAB, IconButton } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { jigNGService } from '../services/JigNGService';
+import { useLanguage } from '../contexts/LanguageContext';
 import logger from '../utils/logger';
+import { formatDate, formatTime12Hour } from '../utils/dateUtils';
 
 const { width } = Dimensions.get('window');
 
 export default function JigNGScreen({ navigation }) {
+  const { t } = useLanguage();
   const [jigsNG, setJigsNG] = useState([]);
   const [filteredJigsNG, setFilteredJigsNG] = useState([]);
   const [modelGroups, setModelGroups] = useState({});
+  const [typeGroups, setTypeGroups] = useState({});
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [totalToRepair, setTotalToRepair] = useState(0);
+  const [currentView, setCurrentView] = useState('types'); // 'types', 'models'
+  const [selectedType, setSelectedType] = useState(null);
+  const typeDisplayNames = {
+    manual: { name: 'Manuales', letter: 'M', color: '#2196F3' },
+    semiautomatic: { name: 'Semi-automático', letter: 'S', color: '#4CAF50' },
+    'new semiautomatic': { name: 'Nuevo Semi-automático', letter: 'N', color: '#FF9800' }
+  };
+  const typeOrder = ['manual', 'semiautomatic', 'new semiautomatic'];
 
-  // Función para agrupar jigs NG por modelo
-  const groupJigsNGByModel = (jigsList) => {
+  // Función para agrupar jigs NG por tipo y modelo
+  const groupJigsNGByTypeAndModel = (jigsList) => {
     const grouped = {};
     jigsList.forEach(jigNG => {
-      const model = jigNG.jig?.modelo_actual || 'Sin Modelo';
-      if (!grouped[model]) {
-        grouped[model] = [];
+      const type = jigNG.jig?.tipo || 'manual';
+      const model = jigNG.jig?.modelo_actual || t('noModel');
+      if (!grouped[type]) {
+        grouped[type] = {};
       }
-      grouped[model].push(jigNG);
+      if (!grouped[type][model]) {
+        grouped[type][model] = [];
+      }
+      grouped[type][model].push(jigNG);
     });
-    
-    // Ordenar jigs NG dentro de cada modelo por fecha
-    Object.keys(grouped).forEach(model => {
-      grouped[model].sort((a, b) => {
-        const dateA = new Date(a.fecha_ng || 0);
-        const dateB = new Date(b.fecha_ng || 0);
-        return dateB - dateA; // Más recientes primero
+    Object.keys(grouped).forEach(type => {
+      Object.keys(grouped[type]).forEach(model => {
+        grouped[type][model].sort((a, b) => {
+          const dateA = new Date(a.fecha_ng || 0);
+          const dateB = new Date(b.fecha_ng || 0);
+          return dateB - dateA;
+        });
       });
     });
-    
     return grouped;
   };
 
@@ -56,7 +71,11 @@ export default function JigNGScreen({ navigation }) {
     setLoading(true);
     
     try {
-      const result = await jigNGService.getAllJigsNG();
+      const result = await jigNGService.getJigsNG({
+        estado: ['pendiente', 'en_reparacion'],
+        include_foto: false,
+        page_size: 100
+      });
       
       if (result.success && result.data) {
         // Manejar estructura paginada (con items) o array directo
@@ -76,7 +95,7 @@ export default function JigNGScreen({ navigation }) {
           setFilteredJigsNG([]);
           setModelGroups({});
           setTotalToRepair(0);
-          Alert.alert('Error', 'Formato de datos inválido del servidor');
+          Alert.alert(t('error'), t('invalidDataFormat'));
           return;
         }
         
@@ -88,13 +107,14 @@ export default function JigNGScreen({ navigation }) {
         logger.info('✅ Jigs NG pendientes:', pendingJigs.length);
         setJigsNG(pendingJigs);
         
-        // Agrupar por modelo
-        const grouped = groupJigsNGByModel(pendingJigs);
-        setModelGroups(grouped);
+        // Agrupar por tipo y modelo
+        const grouped = groupJigsNGByTypeAndModel(pendingJigs);
+        setTypeGroups(grouped);
+        setModelGroups({});
         
-        // Actualizar lista filtrada
-        const modelNames = Object.keys(grouped);
-        setFilteredJigsNG(modelNames);
+        // Actualizar lista filtrada (tipos)
+        const typeNames = Object.keys(grouped);
+        setFilteredJigsNG(typeNames);
         
         // Actualizar total
         setTotalToRepair(pendingJigs.length);
@@ -104,7 +124,7 @@ export default function JigNGScreen({ navigation }) {
         setFilteredJigsNG([]);
         setModelGroups({});
         setTotalToRepair(0);
-        Alert.alert('Error', result.error || result.message || 'Error al cargar jigs NG');
+        Alert.alert(t('error'), result.error || result.message || t('errorLoadingJigsNG'));
       }
     } catch (error) {
       logger.error('❌ Error inesperado:', error);
@@ -112,7 +132,7 @@ export default function JigNGScreen({ navigation }) {
       setFilteredJigsNG([]);
       setModelGroups({});
       setTotalToRepair(0);
-      Alert.alert('Error', 'Error inesperado al cargar jigs NG');
+      Alert.alert(t('error'), t('unexpectedErrorLoading'));
     } finally {
       setLoading(false);
     }
@@ -135,12 +155,13 @@ export default function JigNGScreen({ navigation }) {
     }
 
     // Agrupar por modelo
-    const grouped = groupJigsNGByModel(filtered);
-    setModelGroups(grouped);
+    const grouped = groupJigsNGByTypeAndModel(filtered);
+    setTypeGroups(grouped);
+    setModelGroups({});
     
-    // Actualizar lista filtrada con nombres de modelos
-    const modelNames = Object.keys(grouped);
-    setFilteredJigsNG(modelNames);
+    // Actualizar lista filtrada con nombres de tipos
+    const typeNames = Object.keys(grouped);
+    setFilteredJigsNG(typeNames);
     
     // Actualizar total
     setTotalToRepair(filtered.length);
@@ -166,7 +187,7 @@ export default function JigNGScreen({ navigation }) {
 
   // Función para capitalizar estado
   const capitalizeStatus = (estado) => {
-    if (!estado) return 'Sin Estado';
+    if (!estado) return t('noStatus');
     return estado.charAt(0).toUpperCase() + estado.slice(1).toLowerCase();
   };
 
@@ -176,12 +197,13 @@ export default function JigNGScreen({ navigation }) {
     setJigsNG(updatedJigs);
     
     // Reagrupar
-    const grouped = groupJigsNGByModel(updatedJigs);
-    setModelGroups(grouped);
+    const grouped = groupJigsNGByTypeAndModel(updatedJigs);
+    setTypeGroups(grouped);
+    setModelGroups({});
     
     // Actualizar lista filtrada
-    const modelNames = Object.keys(grouped);
-    setFilteredJigsNG(modelNames);
+    const typeNames = Object.keys(grouped);
+    setFilteredJigsNG(typeNames);
     
     // Actualizar total
     setTotalToRepair(updatedJigs.length);
@@ -199,9 +221,14 @@ export default function JigNGScreen({ navigation }) {
     }, [loadJigsNG])
   );
 
+  const openTypeModels = (typeName) => {
+    setSelectedType(typeName);
+    setCurrentView('models');
+  };
+
   // Renderizar tarjeta de modelo con múltiples jigs NG
   const renderModelCard = ({ item: modelName }) => {
-    const jigsInModel = modelGroups[modelName] || [];
+    const jigsInModel = typeGroups[selectedType]?.[modelName] || [];
     
     return (
       <Card style={styles.modelCard}>
@@ -212,7 +239,7 @@ export default function JigNGScreen({ navigation }) {
               style={[styles.modelCountChip]}
               textStyle={styles.modelCountChipText}
             >
-              {jigsInModel.length} {jigsInModel.length === 1 ? 'jig' : 'jigs'}
+              {jigsInModel.length} {jigsInModel.length === 1 ? t('jig') : t('jigs')}
             </Chip>
           </View>
           
@@ -241,28 +268,28 @@ export default function JigNGScreen({ navigation }) {
                 
                 <View style={styles.jigNGDetails}>
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Tipo:</Text>
+                    <Text style={styles.detailLabel}>{t('type')}</Text>
                     <Text style={styles.detailValue}>{jigNG.jig?.tipo || 'N/A'}</Text>
                   </View>
                   
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Problema:</Text>
+                    <Text style={styles.detailLabel}>{t('problem')}</Text>
                     <Text style={styles.detailValue} numberOfLines={2}>
-                      {jigNG.motivo || 'Sin descripción'}
+                      {jigNG.motivo || t('noDescription')}
                     </Text>
                   </View>
                   
                   {jigNG.fecha_ng && (
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Fecha:</Text>
+                      <Text style={styles.detailLabel}>{t('date')}</Text>
                       <Text style={styles.detailValue}>
-                        {new Date(jigNG.fecha_ng).toLocaleDateString()}
+                        {formatDate(jigNG.fecha_ng)} {formatTime12Hour(jigNG.fecha_ng)}
                       </Text>
                     </View>
                   )}
                   
                   <View style={styles.detailRow}>
-                    <Text style={styles.detailLabel}>Reportado por:</Text>
+                    <Text style={styles.detailLabel}>{t('reportedBy')}</Text>
                     <Text style={styles.detailValue}>
                       {jigNG.tecnico_ng?.nombre || jigNG.usuario_reporte || 'N/A'}
                     </Text>
@@ -276,14 +303,45 @@ export default function JigNGScreen({ navigation }) {
     );
   };
 
+  const renderTypeCard = ({ item: typeName }) => {
+    const models = Object.keys(typeGroups[typeName] || {});
+    if (!models.length) return null;
+    const typeInfo = typeDisplayNames[typeName] || {
+      name: typeName.charAt(0).toUpperCase() + typeName.slice(1),
+      letter: typeName.charAt(0).toUpperCase(),
+      color: '#1976D2'
+    };
+    const totalCount = models.reduce((acc, model) => acc + (typeGroups[typeName]?.[model]?.length || 0), 0);
+    return (
+      <TouchableOpacity
+        style={styles.typeCard}
+        onPress={() => openTypeModels(typeName)}
+        activeOpacity={0.8}
+      >
+        <Card style={styles.typeCardContent}>
+          <Card.Content>
+            <View style={styles.typeCardHeader}>
+              <View style={[styles.typeBadge, { backgroundColor: typeInfo.color }]}>
+                <Text style={styles.typeBadgeText}>{typeInfo.letter}</Text>
+              </View>
+              <Text style={styles.typeTitle}>{typeInfo.name}</Text>
+            </View>
+            <Text style={styles.typeCountText}>{totalCount} {totalCount === 1 ? t('jig') : t('jigs')}</Text>
+            <Text style={styles.typeHint}>Toca para ver jigs</Text>
+          </Card.Content>
+        </Card>
+      </TouchableOpacity>
+    );
+  };
+
   // Renderizar estado vacío
   const renderEmptyState = () => (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyStateTitle}>No hay jigs NG pendientes</Text>
+      <Text style={styles.emptyStateTitle}>{t('noPendingJigsNG')}</Text>
       <Text style={styles.emptyStateSubtitle}>
         {searchQuery
-          ? 'No se encontraron jigs NG con los filtros aplicados'
-          : 'No hay jigs NG que requieran reparación'
+          ? t('noJigsNGFound')
+          : t('noJigsNGToRepair')
         }
       </Text>
     </View>
@@ -293,7 +351,7 @@ export default function JigNGScreen({ navigation }) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2196F3" />
-        <Text style={styles.loadingText}>Cargando jigs NG...</Text>
+        <Text style={styles.loadingText}>{t('loadingJigsNG')}</Text>
       </View>
     );
   }
@@ -303,7 +361,7 @@ export default function JigNGScreen({ navigation }) {
       {/* Header */}
       <View style={styles.header}>
         <Searchbar
-          placeholder="Buscar por número, modelo, tipo o problema..."
+          placeholder={t('searchJigsNGPlaceholder')}
           onChangeText={handleSearch}
           value={searchQuery}
           style={styles.searchbar}
@@ -317,16 +375,34 @@ export default function JigNGScreen({ navigation }) {
           <View style={styles.totalBox}>
             <Text style={styles.totalIcon}>🔧</Text>
             <Text style={styles.totalNumber}>{totalToRepair}</Text>
-            <Text style={styles.totalLabel}>Total de jigs a reparar</Text>
+            <Text style={styles.totalLabel}>{t('totalJigsToRepair')}</Text>
           </View>
         </View>
       </View>
 
+      {currentView === 'models' && (
+        <View style={styles.backButtonContainer}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => {
+              setCurrentView('types');
+              setSelectedType(null);
+            }}
+          >
+            <Text style={styles.backButtonText}>← Atrás</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Lista de modelos con jigs NG */}
       <FlatList
-        data={filteredJigsNG}
+        data={
+          currentView === 'models'
+            ? Object.keys(typeGroups[selectedType] || {}).sort()
+            : typeOrder.filter(type => (typeGroups[type] && Object.keys(typeGroups[type]).length > 0))
+        }
         keyExtractor={(item) => item}
-        renderItem={renderModelCard}
+        renderItem={currentView === 'models' ? renderModelCard : renderTypeCard}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -340,13 +416,6 @@ export default function JigNGScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       />
 
-      {/* FAB para agregar */}
-      <FAB
-        style={styles.fab}
-        icon="plus"
-        onPress={() => navigation.navigate('AddJigNG')}
-        label="Agregar Jig NG"
-      />
     </View>
   );
 }
@@ -416,11 +485,28 @@ const styles = StyleSheet.create({
     padding: 16,
     flexGrow: 1,
   },
+  backButtonContainer: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  backButton: {
+    backgroundColor: '#2C2C2C',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  backButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
   modelCard: {
     backgroundColor: '#1E1E1E',
     elevation: 4,
     borderRadius: 12,
     marginBottom: 16,
+    minHeight: 170,
   },
   modelCardHeader: {
     flexDirection: 'row',
@@ -436,6 +522,65 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     flex: 1,
+  },
+  typeSection: {
+    marginBottom: 16,
+  },
+  typeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+    paddingHorizontal: 6,
+  },
+  typeBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 8,
+  },
+  typeBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  typeTitle: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
+  typeCard: {
+    marginBottom: 16,
+  },
+  typeCardContent: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#333333',
+    minHeight: 150,
+    justifyContent: 'center',
+  },
+  typeCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    justifyContent: 'center',
+  },
+  typeCountText: {
+    color: '#E0E0E0',
+    fontSize: 20,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  typeHint: {
+    color: '#2196F3',
+    fontSize: 14,
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  typeModelCard: {
+    marginBottom: 12,
   },
   modelCountChip: {
     backgroundColor: '#2C2C2C',
@@ -471,12 +616,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   statusChip: {
-    height: 24,
+    height: 30,
+    paddingHorizontal: 8,
   },
   statusChipText: {
     color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
   },
   jigNGDetails: {
     gap: 8,
