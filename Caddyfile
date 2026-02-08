@@ -1,0 +1,17 @@
+# Caddyfile - Configuración de reverse proxy con SSL automático
+
+api.checkconfirm.com {
+    reverse_proxy backend:8000
+
+    # Headers de seguridad
+    header {
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy strict-origin-when-cross-origin
+    }
+
+    # Logs
+    log {
+        output file /data/access.log
+    }
+}
