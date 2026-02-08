@@ -246,19 +246,39 @@ export default function LoginScreen({ navigation }) {
     setLoading(true);
     try {
       const result = await login(usuario, password);
-      
+
       if (result.success) {
         // Si no hay credenciales guardadas y la biometría está disponible, ofrecer guardar
         if (!hasSavedCredentials && biometricAvailable) {
+          Alert.alert(
+            t('saveCredentials') || 'Guardar credenciales',
+            `¿Deseas guardar tus credenciales para usar ${biometricType} en futuros inicios de sesión?`,
+            [
+              {
+                text: 'No',
+                style: 'cancel',
+                onPress: () => {
+                  navigation.navigate('ModuleSelection');
+                }
+              },
+              {
+                text: 'Sí',
+                onPress: async () => {
+                  const saved = await saveBiometricCredentials(usuario, password);
+                  if (saved) {
+                    setHasSavedCredentials(true);
+                  }
+                  navigation.navigate('ModuleSelection');
+                }
+              }
+            ]
+          );
+        } else {
+          // Sin biometría, navegar directamente
           setTimeout(() => {
-            handleSaveBiometricCredentials();
-          }, 500);
+            navigation.navigate('ModuleSelection');
+          }, 100);
         }
-        
-        // Pequeño delay para asegurar que el contexto se actualice
-        setTimeout(() => {
-          navigation.navigate('ModuleSelection');
-        }, 100);
       } else {
         Alert.alert('Error', result.error || 'Error al iniciar sesión');
       }
