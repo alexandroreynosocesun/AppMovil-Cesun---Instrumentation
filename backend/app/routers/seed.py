@@ -172,7 +172,7 @@ def parse_pcb_csv(csv_content: str):
 # ---------- Endpoints ----------
 
 def ensure_admin(current_user: Tecnico):
-    if current_user.tipo_usuario not in ["admin", "ingeniero"]:
+    if current_user.tipo_usuario not in ["admin", "superadmin", "ingeniero"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores o ingenieros pueden ejecutar seed."
