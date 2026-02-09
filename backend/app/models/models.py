@@ -238,8 +238,8 @@ class ModeloMainboardConector(Base):
     id = Column(Integer, primary_key=True, index=True)
     nombre_conector = Column(String(100), nullable=False, index=True)  # ZH-MINI-HD-2, etc.
     modelo_mainboard = Column(String(100), nullable=False)  # 10939, 11493, etc.
-    modelo_interno = Column(String(100), nullable=True)  # 50A53FUR, 65C350U, etc.
-    tool_sw = Column(String(100), nullable=True)  # mini 08, SKD, 4K VB1, etc.
+    modelo_interno = Column(Text, nullable=True)  # Puede tener múltiples modelos separados por coma
+    tool_sw = Column(Text, nullable=True)  # mini 08, SKD, 4K VB1, etc.
     created_at = Column(DateTime, default=datetime.utcnow)
     
     __table_args__ = (
