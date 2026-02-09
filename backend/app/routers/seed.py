@@ -135,7 +135,8 @@ def parse_pcb_csv(csv_content: str):
         modelo_interno = row[1].strip() if row[1] else ""
         modelo_mainboard = row[4].strip() if row[4] else ""
         nombre_conector = row[16].strip() if row[16] else ""
-        tool_value = row[17].strip() if len(row) > 17 and row[17] else ""
+        tool_type = row[17].strip() if len(row) > 17 and row[17] else ""  # TOOL (ej: MINI LVDS, SKD)
+        tool_sw = row[18].strip() if len(row) > 18 and row[18] else ""    # TOOL SW (ej: Mini08, Mini18)
 
         # Saltar filas sin datos esenciales
         if not modelo_mainboard or not nombre_conector:
@@ -154,8 +155,11 @@ def parse_pcb_csv(csv_content: str):
 
         if modelo_interno and modelo_interno != '/':
             aggregated[key]["modelos_internos"].add(modelo_interno)
-        if tool_value and tool_value != '/':
-            aggregated[key]["tools_sw"].add(tool_value)
+        # Guardar TOOL y TOOL SW por separado
+        if tool_type and tool_type != '/':
+            aggregated[key]["tools_sw"].add(tool_type)
+        if tool_sw and tool_sw != '/':
+            aggregated[key]["tools_sw"].add(tool_sw)
 
     # Convertir sets a strings separados por coma
     results = []
