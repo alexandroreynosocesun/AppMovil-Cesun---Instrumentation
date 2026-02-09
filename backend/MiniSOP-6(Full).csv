@@ -1,0 +1,221 @@
+﻿Selection,Sequence,Step,,Models,,Selection,Sequence,Step,,Models,,
+F6 + 1,HISENSE_3HDMI_5_US,Enter,CH 5.1+ Headphone,53061-50A60QUA(01),,F6 + 5,ROKU_AIR_3HDMI,Enter,CH 5.1 + Headphone,"13662-58A51LUR
+13662-50A51HUR
+53142-75A60QUR
+53139-65A60QUR",,
+,,1,IP+ Voltage,,,,,1,IP+ Voltage,,,
+,,2, MENU ,,,,,2, MENU,,,
+,,3,CH 6 + Button,,,,,3,CH 12,,,
+,,4, DMP (WIFI),,,,,4,AV + Button,,,
+,,5,HDMI1+ Optical,,,,,5, DMP (WIFI),,,
+,,6,HDMI2+ Optical,,,,,6,HDMI1+ Optical,,,
+,,7,HDMI3+ Optical,,,,,7,HDMI2+ Optical,,,
+,,8,AGING,,,,,8,HDMI3+ Optical,,,
+,,,,,,,,9,AGING,,,
+,,,,,,,,,,,,
+F6 + 2,VIDAA_3HDMI_28_COL_061,Enter,CH 28 + Headphone,"53061-43A60QUV
+53061-50A60QUV
+53061-55A60QUV
+53061-50Q60QUV
+53061-55Q60QUV
+53149-65A60QUV(02)
+53149-50Q60QUV
+53149-58A51LMV(1000)",,F6 + 6,ROKU_AIR_3HDMI_WIFI,Enter,CH 5.1 + Headphone,"T950R4T.PB701-40A40QUR
+T950R4T.PB701-43A40QUR",,
+,,1,IP+ Voltage,,,,,1,WIFI (F7) + Voltage,,,
+,,2, MENU,,,,,2, MENU,,,
+,,3,AV + Button,,,,,3,CH 12,,,
+,,,,,,,,4,AV + Button,,,
+,,4, DMP (WIFI),,,,,5, DMP (Video),,,
+,,5,HDMI1+ Optical,,,,,6,HDMI1+ Optical,,,
+,,6,HDMI2+ Optical,,,,,7,HDMI2+ Optical,,,
+,,7,HDMI3+ Optical,,,,,8,HDMI3+ Optical,,,
+,,8,AGING,,,,,9,AGING,,,
+F6 + 3,VIDAA_3HDMI_28_COL_401,Enter,CH 28 + Headphone,53230-75A60QUV,,F6 + 7,ROKU_AIR_3HDMI_NO_AV,Enter,CH 5.1+ Headphone,"R817T.PC701-55A60QUR(01)
+R817T.PC701-55A60QUR(02)
+53142-75Q60QUR(01)",,00563
+,,1,IP + Voltage,,,,,1,IP+ Voltage,,,62807446-4e44-462c-81af-fe441d6ed640
+,,2, MENU,,,,,2, MENU ,,,
+,,3,CH 13,,,,,3,CH 12 + Button,,,
+,,4,AV + Button,,,,,4, DMP (WIFI),,,
+,,5, DMP (WIFI),,,,,5,HDMI1+ Optical,,,
+,,6,HDMI1+ Optical,,,,,6,HDMI2+ Optical,,,
+,,7,HDMI2+ Optical,,,,,7,HDMI3+ Optical,,,
+,,8,HDMI3+ Optical,,,,,8,AGING,,,
+,,9,AGING,,,,,,,,,
+F6 + 4,VIDAA_3HDMI_5_MEX_GUA,Enter,CH 5.1 + Headphone,"53230-75A60QUV
+53230-75C350RS
+53061-43A60QUV
+53061-50A60QUV
+53061-55A60QUV
+53061-50Q60QUV
+53061-55Q60QUV
+53061-43A51HUV
+53061-50C350RS
+53061-50C350NS
+53061-55C350RS
+53149-65C350RS
+53149-65A60QUV",,F6 + 9,FIRETV_3HDMI_US_NO_IP,Enter,CH 5.1 + Headphone + Menu,"53010-32A40QUF
+53010-32V35RUF
+53011-40Q40QUF
+53011-40A40QUF
+53011-40V35RUF
+53011-43V35RUF
+53011-43A40QUF
+54920-32A40QUF(03)
+MT9021T.PB702-32V35NUF",,
+,,1,IP+ Voltage,,,,,1,CH 6 +  Voltage,,,
+,,2, MENU,,,,,2,AV + Button,,,
+,,3,CH 6,,,,,3, DMP (VIdeo),,,
+,,4,AV + Button,,,,,4,HDMI1+ Optical,,,
+,,5, DMP (WIFI),,,,,5,HDMI2+ Optical,,,
+,,6,HDMI1+ Optical,,,,,6,HDMI3+ Optical,,,
+,,7,HDMI2+ Optical,,,,,7,AGING,,,
+,,8,HDMI3+ Optical,,,,,,,,,
+,,9,AGING,,,,,,,,,
+F6 + 0,ROKU_AIR_3HDMI_NO_IP,Enter,CH 5.1 + Headphone,"13461-40A35HUR(0002)
+13033-43A35HUR
+13591-32A35HUR
+53143-43A60QUR",,F6 + ZOOM,VIDAA_2HDMI_28_COL_WIFI,Enter,CH 28 + Headphone,"51874-40A40QUV
+51874-40A40QSV
+51874-43A40QSV
+51874-43A40QUV
+51874-40V35RS
+51874-43V35RS
+51876-32A40QSV
+51876-32A40QUV
+51876-32V35RS
+NT72690T.PB713-50A40QSV",,
+,,1, MENU+ Voltage,,,,,1,IP+ Voltage,,,
+,,2,CH 12,,,,,2, MENU,,,
+,,3,AV + Button,,,,,3,CH 13,,,
+,,4, DMP (WIFI),,,,,4,AV + Button,,,
+,,5,HDMI1+ Optical,,,,,5, DMP (Video),,,
+,,6,HDMI2+ Optical,,,,,6,WIFI (F7),,,
+,,7,HDMI3+ Optical,,,,,7,HDMI1+ Optical,,,
+,,8,AGING,,,,,8,HDMI2+ Optical,,,
+,,,,,,,,9,AGING,,,
+F6 + IMAGE,FIRETV_3HDMI_US,Enter,CH 5.1 + Headphone + Menu,"53230-75C350NUF(02)
+53061-43C350NUF(02)
+53061-50C350NUF(02)
+53061-55C350NUF(02)
+53061-43Q60QUF
+53061-50Q60QUF
+53061-55Q60QUF
+53149-65A60QUF",,F6 + ENERGY,VIDAA_2HDMI_5_MEX_GUA_WIFI,Enter,CH 5.1 + Headphone,"51874-40A40QUV
+51874-40A40QSV
+51874-43A40QSV
+51874-43A40QUV
+51874-40V35RS
+51874-43V35RS
+51876-32A40QSV
+51876-32A40QUV
+51876-32V35RS
+13374-43V35MS(0003)
+NT72690T.PB713-50A40QSV
+52889-32A40QUV(02)",,
+,,1,IP+ Voltage,,,,,1,IP + Voltage,,,
+,,2,CH 6,,,,,2, MENU,,,
+,,3,AV + Button,,,,,3,CH 6,,,
+,,4, DMP (Video),,,,,4,AV + Button,,,
+,,5,HDMI1+ Optical,,,,,5, DMP (Video),,,
+,,6,HDMI2+ Optical,,,,,6,WIFI (F7),,,
+,,7,HDMI3+ Optical,,,,,7,HDMI1+ Optical,,,
+,,8,AGING,,,,,8,HDMI2+ Optical,,,
+,,,,,,,,9,AGING,,,
+F6 + 8,NORMAL,N/A,,,,F6 + PC,FIRETV_3HDMI_US_NO_IP_PC703,Enter,CH 5.1 + Headphone + Menu,"TPD.T962X3.PC703-43A51HUF
+TPD.T962X3.PC703-50A51HUF
+TPD.T962X3.PC703-55A51HUF",,
+,,,,,,,,1,CH 6 +  Voltage,,,
+,,,,,,,,2,AV + Button,,,
+,,,,,,,,3, DMP (VIdeo),,,
+,,,,,,,,4,HDMI1+ Optical,,,
+COM,EXIT,N/A,,,,,,5,HDMI2+ Optical,,,
+,,,,,,,,6,HDMI3+ Optical,,,
+,,,,,,,,7,AGING,,,
+,,,,,,,,,,,,
+F6 + BAL,VIDAA_3HDMI_5_MEX_GUA_NO_AV,Enter,CH 5.1 + Headphone,51170-58Q60SUV(01),,F6 + 3D,HISENSE_3HDMI_US_NO_AV_WIFI,Enter,CH 5.1+ Headphone,MT9216T.PB709-43A40QUA(0002),,
+,,1,IP+ Voltage,,,,,1,IP+ Voltage,,,
+,,2, MENU,,,,,2, MENU ,,,
+,,3,CH 6,,,,,3,CH 6 + Button,,,
+,,4, DMP (WIFI),,,,,4,WIFI,,,
+,,5,HDMI1+ Optical,,,,,5,HDMI1+ Optical,,,
+,,6,HDMI2+ Optical,,,,,6,HDMI2+ Optical,,,
+,,7,HDMI3+ Optical,,,,,7,HDMI3+ Optical,,,
+,,8,AGING,,,,,8,AGING,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
+,,,,,,,,,,,,
