@@ -8,6 +8,7 @@ import re
 from io import StringIO
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from typing import Optional, List
 from ..database import get_db
 from ..models.models import ArduinoSequence, ModeloMainboardConector, Tecnico
@@ -241,6 +242,15 @@ async def seed_mainboard_info(
 ):
     """Poblar modelos_mainboard_conector desde PCB CSV"""
     ensure_admin(current_user)
+
+    # Asegurar que las columnas sean TEXT (migración puede no haberse corrido)
+    try:
+        db.execute(text("ALTER TABLE modelos_mainboard_conector ALTER COLUMN modelo_interno TYPE TEXT"))
+        db.execute(text("ALTER TABLE modelos_mainboard_conector ALTER COLUMN tool_sw TYPE TEXT"))
+        db.commit()
+        logger.info("Columnas modelo_interno y tool_sw expandidas a TEXT")
+    except Exception:
+        db.rollback()  # Ya son TEXT, ignorar
 
     csv_path = _find_csv("New PCB information for HI-2025-12-3 (1)(New Pcb).csv")
     if not csv_path:
