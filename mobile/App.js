@@ -180,8 +180,48 @@ export default function App() {
       if (!viewport) {
         const meta = document.createElement('meta');
         meta.name = 'viewport';
-        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+        meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
         document.head.appendChild(meta);
+      } else {
+        viewport.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+      }
+
+      // iOS PWA meta tags - standalone sin barra de Safari
+      const iosPwaTags = [
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'apple-mobile-web-app-title', content: 'CheckApp' },
+        { name: 'mobile-web-app-capable', content: 'yes' },
+        { name: 'theme-color', content: '#2196F3' },
+      ];
+      iosPwaTags.forEach(({ name, content }) => {
+        if (!document.querySelector(`meta[name="${name}"]`)) {
+          const meta = document.createElement('meta');
+          meta.name = name;
+          meta.content = content;
+          document.head.appendChild(meta);
+        }
+      });
+
+      // Apple touch icon para el icono en pantalla de inicio
+      if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+        const touchIcon = document.createElement('link');
+        touchIcon.rel = 'apple-touch-icon';
+        touchIcon.href = '/icon.png';
+        document.head.appendChild(touchIcon);
+      }
+
+      // Link al manifest
+      if (!document.querySelector('link[rel="manifest"]')) {
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = '/manifest.json';
+        document.head.appendChild(manifestLink);
+      }
+
+      // Registrar Service Worker
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js').catch(() => {});
       }
 
       // Agregar favicon link para evitar errores 404/500

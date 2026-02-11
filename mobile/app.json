@@ -16,50 +16,32 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.empresa.jigsvalidation",
-      "infoPlist": {
-        "NSFaceIDUsageDescription": "Esta app usa Face ID para autenticación rápida y segura."
-      }
+      "bundleIdentifier": "com.empresa.jigsvalidation"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "name": "Hisense CheckApp",
+      "shortName": "CheckApp",
+      "lang": "es",
+      "themeColor": "#2196F3",
+      "backgroundColor": "#0F0F0F",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/"
     },
     "android": {
+      "package": "com.empresa.jigsvalidation",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.empresa.jigsvalidation",
       "permissions": [
         "CAMERA",
         "WRITE_EXTERNAL_STORAGE",
         "READ_EXTERNAL_STORAGE"
       ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png",
-      "bundler": "metro",
-      "name": "Hisense CheckApp - Web",
-      "description": "Hisense CheckApp - Sistema de validación de jigs industriales",
-      "themeColor": "#2196F3",
-      "backgroundColor": "#0F0F0F",
-      "lang": "es",
-      "scope": "/",
-      "startUrl": "/",
-      "display": "standalone",
-      "orientation": "any",
-      "build": {
-        "babel": {
-          "include": [
-            "expo-image-picker"
-          ]
-        }
-      }
-    },
     "plugins": [
-      [
-        "expo-barcode-scanner",
-        {
-          "cameraPermission": "Permitir acceso a la cámara para escanear códigos QR"
-        }
-      ],
       [
         "expo-camera",
         {
@@ -73,8 +55,16 @@
         {
           "faceIDPermission": "Permitir que $(PRODUCT_NAME) use Face ID para autenticación rápida y segura."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-sqlite"
     ],
+    "extra": {
+      "eas": {
+        "projectId": "60e28732-a85f-4ed5-a28c-92ba6592e288"
+      }
+    },
+    "owner": "alexandro.reynoso",
     "sdkVersion": "54.0.0"
   }
 }
