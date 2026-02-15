@@ -10,6 +10,7 @@ from ..models.models import AuditoriaPDF, Tecnico
 from ..schemas import AuditoriaPDF as AuditoriaPDFSchema, PaginatedResponse
 from ..auth import get_current_user
 from ..utils.logger import get_logger
+from ..services.cache_service import cache_service
 
 logger = get_logger(__name__)
 
@@ -153,8 +154,12 @@ async def delete_all_auditoria_pdfs(
             except Exception as e:
                 logger.warning(f"⚠️ Error eliminando archivo {pdf_path}: {e}")
         
+        # Invalidar caché
+        cache_service.delete("auditoria:stats")
+        cache_service.delete("auditoria:tecnicos")
+
         logger.info(f"⚠️ TODOS LOS PDFs DE AUDITORÍA ELIMINADOS por {current_user.usuario}. Total: {deleted_count}")
-        
+
         return {
             "success": True,
             "message": f"Todos los PDFs eliminados correctamente",
@@ -200,7 +205,11 @@ async def delete_auditoria_pdf(
     # Eliminar el registro de la base de datos
     db.delete(pdf_record)
     db.commit()
-    
+
+    # Invalidar caché
+    cache_service.delete("auditoria:stats")
+    cache_service.delete("auditoria:tecnicos")
+
     return {
         "success": True,
         "message": f"PDF {pdf_record.nombre_archivo} eliminado exitosamente"
@@ -211,15 +220,20 @@ async def get_auditoria_stats(
     db: Session = Depends(get_db),
     current_user: Tecnico = Depends(get_current_user)
 ):
-    """Obtener estadísticas de auditoría"""
+    """Obtener estadísticas de auditoría (con caché de 5 min)"""
+    # Intentar obtener de caché
+    cached = cache_service.get("auditoria:stats")
+    if cached:
+        return cached
+
     total_pdfs = db.query(AuditoriaPDF).count()
-    
+
     # PDFs por año
     pdfs_por_anio = db.query(
         AuditoriaPDF.fecha_anio,
         func.count(AuditoriaPDF.id).label('count')
     ).group_by(AuditoriaPDF.fecha_anio).all()
-    
+
     # PDFs por mes (del año actual)
     anio_actual = datetime.now().year
     pdfs_por_mes = db.query(
@@ -228,20 +242,20 @@ async def get_auditoria_stats(
     ).filter(
         AuditoriaPDF.fecha_anio == anio_actual
     ).group_by(AuditoriaPDF.fecha_mes).all()
-    
+
     # PDFs por turno
     pdfs_por_turno = db.query(
         AuditoriaPDF.turno,
         func.count(AuditoriaPDF.id).label('count')
     ).group_by(AuditoriaPDF.turno).all()
-    
+
     # PDFs por técnico
     pdfs_por_tecnico = db.query(
         AuditoriaPDF.tecnico_id,
         AuditoriaPDF.tecnico_nombre,
         func.count(AuditoriaPDF.id).label('count')
     ).group_by(AuditoriaPDF.tecnico_id, AuditoriaPDF.tecnico_nombre).all()
-    
+
     # PDFs por línea (excluyendo None)
     pdfs_por_linea = db.query(
         AuditoriaPDF.linea,
@@ -249,23 +263,28 @@ async def get_auditoria_stats(
     ).filter(
         AuditoriaPDF.linea.isnot(None)
     ).group_by(AuditoriaPDF.linea).all()
-    
+
     # Obtener lista de años disponibles ordenados
     anios_disponibles = sorted([anio for anio, _ in pdfs_por_anio], reverse=True)
-    
+
     # Obtener lista de líneas disponibles ordenadas (excluyendo None)
     lineas_disponibles = sorted([str(linea).strip() for linea, _ in pdfs_por_linea if linea], reverse=False)
-    
-    return {
+
+    result = {
         "total_pdfs": total_pdfs,
         "por_anio": {str(anio): count for anio, count in pdfs_por_anio},
-        "anios_disponibles": anios_disponibles,  # Lista de años disponibles
+        "anios_disponibles": anios_disponibles,
         "por_mes": {str(mes): count for mes, count in pdfs_por_mes},
         "por_turno": {turno: count for turno, count in pdfs_por_turno},
         "por_tecnico": {str(tecnico_id): {"nombre": nombre, "count": count} for tecnico_id, nombre, count in pdfs_por_tecnico},
         "por_linea": {str(linea): count for linea, count in pdfs_por_linea if linea},
-        "lineas_disponibles": lineas_disponibles  # Lista de líneas disponibles
+        "lineas_disponibles": lineas_disponibles
     }
+
+    # Guardar en caché por 5 minutos
+    cache_service.set("auditoria:stats", result, ttl=300)
+
+    return result
 
 @router.get("/tecnicos")
 async def get_tecnicos_con_reportes(
@@ -273,38 +292,32 @@ async def get_tecnicos_con_reportes(
     current_user: Tecnico = Depends(get_current_user)
 ):
     """
-    Obtener lista de técnicos con rol 'tecnico' o 'validaciones'
-    Incluye el número de reportes por técnico (0 si no tiene reportes)
+    Obtener lista de técnicos con rol 'tecnico' o 'validaciones' (con caché de 5 min)
     """
-    # Obtener todos los técnicos con los roles especificados
+    # Intentar obtener de caché
+    cached = cache_service.get("auditoria:tecnicos")
+    if cached:
+        return cached
+
     tecnicos_base = db.query(Tecnico).filter(
         Tecnico.tipo_usuario.in_(['tecnico', 'validaciones']),
         Tecnico.activo == True
     ).order_by(Tecnico.nombre).all()
-    
-    logger.info(f"📊 Técnicos encontrados: {len(tecnicos_base)}")
-    
+
     if not tecnicos_base:
-        return {
-            "tecnicos": [],
-            "total": 0
-        }
-    
-    # Obtener IDs de técnicos
+        return {"tecnicos": [], "total": 0}
+
     tecnico_ids = [t.id for t in tecnicos_base]
-    
-    # Obtener conteos de reportes por técnico
+
     conteos = db.query(
         AuditoriaPDF.tecnico_id,
         func.count(AuditoriaPDF.id).label('total')
     ).filter(
         AuditoriaPDF.tecnico_id.in_(tecnico_ids)
     ).group_by(AuditoriaPDF.tecnico_id).all()
-    
-    # Crear diccionario de conteos
+
     conteos_dict = {tecnico_id: int(total) for tecnico_id, total in conteos}
-    
-    # Formatear respuesta - incluir todos los técnicos, incluso sin reportes
+
     tecnicos = [
         {
             "id": tecnico.id,
@@ -314,13 +327,13 @@ async def get_tecnicos_con_reportes(
         }
         for tecnico in tecnicos_base
     ]
-    
-    logger.info(f"✅ Técnicos formateados: {len(tecnicos)}")
-    
-    return {
-        "tecnicos": tecnicos,
-        "total": len(tecnicos)
-    }
+
+    result = {"tecnicos": tecnicos, "total": len(tecnicos)}
+
+    # Guardar en caché por 5 minutos
+    cache_service.set("auditoria:tecnicos", result, ttl=300)
+
+    return result
 
 @router.get("/debug-lineas")
 async def debug_lineas(

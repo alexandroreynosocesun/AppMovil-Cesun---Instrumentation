@@ -2,6 +2,7 @@ import { Platform } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import logger from '../utils/logger';
+import { validationService } from './ValidationService';
 
 // Importar SQLite solo en móvil
 let SQLite = null;
@@ -485,8 +486,6 @@ class OfflineService {
             };
           }
 
-          // Importar dinámicamente para evitar dependencias circulares
-          const { validationService } = await import('./ValidationService');
           const result = await validationService.createValidation(validationData);
 
           if (result.success) {

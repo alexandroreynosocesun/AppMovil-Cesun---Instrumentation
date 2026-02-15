@@ -4,7 +4,7 @@ from sqlalchemy import func
 from typing import Optional, List
 from datetime import datetime
 from ..database import get_db
-from ..models.models import Adaptador, ConectorAdaptador, ValidacionAdaptador, ValidacionConector, Tecnico, ModeloMainboardConector
+from ..models.models import Adaptador, ConectorAdaptador, ValidacionAdaptador, ValidacionConector, Tecnico, ModeloMainboardConector, ArduinoSequence
 from ..schemas import (
     Adaptador as AdaptadorSchema,
     AdaptadorCreate,
@@ -860,6 +860,45 @@ async def get_mainboard_details(
     
     # Ordenar conectores por nombre
     resultado["conectores"].sort(key=lambda x: x["nombre_conector"])
-    
+
+    # Buscar secuencias Arduino asociadas a este modelo_mainboard
+    from sqlalchemy import or_
+
+    # Debug: contar total de registros en la tabla
+    total_arduino = db.query(ArduinoSequence).count()
+    logger.info(f"🔍 Arduino: Total registros en BD: {total_arduino}")
+
+    # Recopilar todos los modelos_internos de los conectores
+    all_modelos_internos = set()
+    for datos in conectores_dict.values():
+        all_modelos_internos.update(datos["modelos_internos"])
+
+    logger.info(f"🔍 Arduino: Buscando modelo_mainboard={modelo_mainboard}, modelos_internos={all_modelos_internos}")
+
+    # Buscar por modelo_mainboard O por modelo_interno
+    filters = [
+        ArduinoSequence.modelo.ilike(f"%{modelo_mainboard}%"),
+    ]
+    if all_modelos_internos:
+        filters.append(ArduinoSequence.modelo_interno.in_(list(all_modelos_internos)))
+
+    arduino_seqs = db.query(ArduinoSequence).filter(
+        or_(*filters)
+    ).order_by(ArduinoSequence.modelo_interno.asc(), ArduinoSequence.destino.asc()).all()
+
+    logger.info(f"🔍 Arduino: Encontrados {len(arduino_seqs)} registros")
+
+    resultado["arduino_sequences"] = [
+        {
+            "id": seq.id,
+            "modelo": seq.modelo,
+            "modelo_interno": seq.modelo_interno,
+            "destino": seq.destino,
+            "comando": seq.comando,
+            "pais": seq.pais
+        }
+        for seq in arduino_seqs
+    ]
+
     return resultado
 

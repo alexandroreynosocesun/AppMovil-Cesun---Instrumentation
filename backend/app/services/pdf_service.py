@@ -9,6 +9,7 @@ import base64
 import io
 
 from datetime import datetime
+from zoneinfo import ZoneInfo
 import os
 from typing import List, Dict, Any
 
@@ -38,7 +39,7 @@ def generate_validation_pdf(validation: Validacion, jig: Jig, tecnico: Tecnico) 
     os.makedirs("reports", exist_ok=True)
     
     # Nombre del archivo
-    filename = f"validation_{jig.numero_jig}_{validation.id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"
+    filename = f"validation_{jig.numero_jig}_{validation.id}_{datetime.now(ZoneInfo("America/Tijuana")).strftime('%Y%m%d_%H%M%S')}.pdf"
     filepath = os.path.join("reports", filename)
     
     # Crear documento PDF
@@ -124,7 +125,7 @@ def generate_validation_pdf(validation: Validacion, jig: Jig, tecnico: Tecnico) 
         textColor=colors.grey
     )
     
-    story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
+    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
     story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
@@ -141,7 +142,7 @@ def generate_turn_report_pdf(validations: List[Validacion], tecnico: Tecnico, tu
     os.makedirs("reports", exist_ok=True)
     
     # Nombre del archivo
-    filename = f"reporte_turno_{turno}_{fecha}_{datetime.now().strftime('%H%M%S')}.pdf"
+    filename = f"reporte_turno_{turno}_{fecha}_{datetime.now(ZoneInfo("America/Tijuana")).strftime('%H%M%S')}.pdf"
     filepath = os.path.join("reports", filename)
     
     # Crear documento PDF
@@ -255,7 +256,7 @@ def generate_turn_report_pdf(validations: List[Validacion], tecnico: Tecnico, tu
         textColor=colors.grey
     )
     
-    story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
+    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
     story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
@@ -272,7 +273,7 @@ def generate_validation_report_pdf(validations: List[Validacion], tecnico: Tecni
     os.makedirs("reports", exist_ok=True)
     
     # Nombre del archivo
-    filename = f"reporte_validacion_{fecha}_{turno}_{datetime.now().strftime('%H%M%S')}.pdf"
+    filename = f"reporte_validacion_{fecha}_{turno}_{datetime.now(ZoneInfo("America/Tijuana")).strftime('%H%M%S')}.pdf"
     filepath = os.path.join("reports", filename)
     
     # Crear documento PDF
@@ -386,7 +387,7 @@ def generate_validation_report_pdf(validations: List[Validacion], tecnico: Tecni
         textColor=colors.grey
     )
     
-    story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
+    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
     story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
@@ -412,17 +413,31 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
         
         # Nombre del archivo (limpiar caracteres inválidos)
         modelo = report_data.get('modelo', 'unknown')
-        fecha_raw = report_data.get('fecha', datetime.now().strftime('%Y%m%d'))
+        fecha_raw = report_data.get('fecha', datetime.now(ZoneInfo("America/Tijuana")).strftime('%Y%m%d'))
         
         logger.debug(f"Generando PDF - Modelo: {modelo}, Fecha: {fecha_raw}")
         
-        # Limpiar fecha de caracteres inválidos para nombre de archivo
-        if 'T' in str(fecha_raw):
-            fecha_clean = str(fecha_raw).split('T')[0].replace('-', '')
-        else:
-            fecha_clean = str(fecha_raw).replace('-', '').replace(':', '').replace(' ', '')
-        
-        filename = f"reporte_lote_{modelo}_{fecha_clean}_{datetime.now().strftime('%H%M%S')}.pdf"
+        # Formatear fecha legible para nombre de archivo (DD-MM-YYYY)
+        try:
+            if 'T' in str(fecha_raw):
+                fecha_obj = datetime.fromisoformat(str(fecha_raw).replace('Z', '+00:00'))
+            else:
+                fecha_obj = datetime.strptime(str(fecha_raw).replace('/', '-'), '%Y-%m-%d')
+            fecha_legible = fecha_obj.strftime('%d-%m-%Y')
+        except Exception:
+            fecha_legible = str(fecha_raw).replace('/', '-').replace(':', '-')
+
+        turno = report_data.get('turno', '').upper()
+        linea = report_data.get('linea', '')
+
+        # Construir nombre descriptivo: Reporte_52936_11-02-2026_T1_L3.pdf
+        partes = [modelo, fecha_legible]
+        if turno:
+            partes.append(f"T{turno}")
+        if linea and linea != '-' and linea.strip():
+            partes.append(f"L{linea.strip()}")
+
+        filename = f"Reporte_{'_'.join(partes)}.pdf"
         filepath = os.path.join(REPORTS_DIR, filename)
         
         # Crear documento PDF
@@ -626,7 +641,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
             textColor=colors.grey
         )
         
-        story.append(Paragraph(f"Reporte generado el: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}", 
+        story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
                               footer_style))
         story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                               footer_style))

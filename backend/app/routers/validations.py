@@ -12,6 +12,7 @@ from ..models.models import Tecnico
 from ..services.pdf_service import generate_validation_pdf, generate_turn_report_pdf, generate_validation_report_pdf, generate_batch_validation_report_pdf
 from ..utils.logger import api_logger, db_logger
 from ..utils.logger import get_logger
+from ..services.cache_service import cache_service
 
 logger = get_logger(__name__)
 
@@ -649,6 +650,9 @@ async def generate_batch_validation_report(
                     db.add(auditoria_pdf)
                     db.commit()
                     db.refresh(auditoria_pdf)
+                    # Invalidar caché de auditoría
+                    cache_service.delete("auditoria:stats")
+                    cache_service.delete("auditoria:tecnicos")
                     api_logger.info(f"✅ PDF guardado en auditoría exitosamente: ID={auditoria_pdf.id}, modelo={modelo}, linea={linea}, fecha={fecha_date}, turno={turno}, tecnico_id={tecnico_id}, nombre={auditoria_pdf.nombre_archivo}")
             except Exception as audit_error:
                 error_str = str(audit_error)
