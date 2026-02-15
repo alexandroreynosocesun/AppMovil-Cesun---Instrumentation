@@ -267,6 +267,18 @@ async def delete_user(
         db.query(SolicitudRegistro).filter(
             SolicitudRegistro.admin_id == user_id
         ).update({SolicitudRegistro.admin_id: None})
+
+        # 5b. Eliminar solicitud de registro del propio usuario (por usuario o numero_empleado)
+        solicitudes_propias = db.query(SolicitudRegistro).filter(
+            (SolicitudRegistro.usuario == user.usuario) |
+            (SolicitudRegistro.numero_empleado == user.numero_empleado)
+        ).count()
+        if solicitudes_propias > 0:
+            db.query(SolicitudRegistro).filter(
+                (SolicitudRegistro.usuario == user.usuario) |
+                (SolicitudRegistro.numero_empleado == user.numero_empleado)
+            ).delete(synchronize_session='fetch')
+            logger.info(f"Eliminadas {solicitudes_propias} solicitudes de registro del usuario {user.usuario}")
         
         # 6. Eliminar auditoria_pdfs asociados (tecnico_id es NOT NULL, así que debemos eliminarlos)
         auditoria_pdfs = db.query(AuditoriaPDF).filter(

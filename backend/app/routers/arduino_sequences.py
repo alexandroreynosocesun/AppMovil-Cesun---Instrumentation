@@ -20,7 +20,7 @@ def normalize_pais(value: Optional[str]) -> Optional[str]:
 
 
 def ensure_admin_or_engineer(current_user: Tecnico):
-    if current_user.tipo_usuario not in ["admin", "ingeniero"]:
+    if current_user.tipo_usuario not in ["admin", "superadmin", "ingeniero"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores o ingenieros pueden modificar secuencias."

@@ -141,7 +141,7 @@ async function refreshAccessToken() {
     logger.info('🔄 Intentando refrescar access token...');
     
     // Usar axios directamente sin interceptor para evitar loops
-    const response = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+    const response = await axios.post(`${API_BASE_URL}/api/auth/refresh`, {
       refresh_token: refreshToken
     }, {
       headers: {

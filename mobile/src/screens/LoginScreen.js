@@ -46,6 +46,7 @@ export default function LoginScreen({ navigation }) {
   const { t, changeLanguage, hasLanguagePreference } = useLanguage();
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   
@@ -396,7 +397,7 @@ export default function LoginScreen({ navigation }) {
                     onChangeText={setPassword}
                     mode="outlined"
                     style={[styles.input, { color: '#F5F5F5' }]}
-                    secureTextEntry
+                    secureTextEntry={!showPassword}
                     autoCapitalize="none"
                     textContentType="password"
                     autoComplete="password"
@@ -414,6 +415,7 @@ export default function LoginScreen({ navigation }) {
                     outlineColor="#333333"
                     activeOutlineColor="#4A4A4A"
                     textColor="#F5F5F5"
+                    right={<TextInput.Icon icon={showPassword ? "eye-off" : "eye"} color="#888888" onPress={() => setShowPassword(!showPassword)} />}
                   />
                   
                   <TouchableOpacity

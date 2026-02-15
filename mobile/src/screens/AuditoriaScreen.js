@@ -128,11 +128,10 @@ export default function AuditoriaScreen({ navigation }) {
   // Cargar estadísticas
   const loadStats = useCallback(async () => {
     try {
-      // Timeout de seguridad para evitar que se quede cargando
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('TIMEOUT')), 35000);
+        setTimeout(() => reject(new Error('TIMEOUT')), 10000);
       });
-      
+
       const result = await Promise.race([
         auditoriaService.getStats(),
         timeoutPromise
@@ -189,13 +188,10 @@ export default function AuditoriaScreen({ navigation }) {
   // Cargar técnicos con reportes
   const loadTecnicos = useCallback(async () => {
     try {
-      logger.info('👥 Cargando técnicos...');
-      
-      // Timeout de seguridad para evitar que se quede cargando
       const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('TIMEOUT')), 35000);
+        setTimeout(() => reject(new Error('TIMEOUT')), 10000);
       });
-      
+
       const result = await Promise.race([
         auditoriaService.getTecnicosConReportes(),
         timeoutPromise
