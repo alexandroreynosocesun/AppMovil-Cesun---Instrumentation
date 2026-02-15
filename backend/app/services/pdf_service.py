@@ -39,7 +39,7 @@ def generate_validation_pdf(validation: Validacion, jig: Jig, tecnico: Tecnico) 
     os.makedirs("reports", exist_ok=True)
     
     # Nombre del archivo
-    filename = f"validation_{jig.numero_jig}_{validation.id}_{datetime.now(ZoneInfo("America/Tijuana")).strftime('%Y%m%d_%H%M%S')}.pdf"
+    filename = f"validation_{jig.numero_jig}_{validation.id}_{datetime.now(ZoneInfo('America/Tijuana')).strftime('%Y%m%d_%H%M%S')}.pdf"
     filepath = os.path.join("reports", filename)
     
     # Crear documento PDF
@@ -125,7 +125,7 @@ def generate_validation_pdf(validation: Validacion, jig: Jig, tecnico: Tecnico) 
         textColor=colors.grey
     )
     
-    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
+    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo('America/Tijuana')).strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
     story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
@@ -142,7 +142,7 @@ def generate_turn_report_pdf(validations: List[Validacion], tecnico: Tecnico, tu
     os.makedirs("reports", exist_ok=True)
     
     # Nombre del archivo
-    filename = f"reporte_turno_{turno}_{fecha}_{datetime.now(ZoneInfo("America/Tijuana")).strftime('%H%M%S')}.pdf"
+    filename = f"reporte_turno_{turno}_{fecha}_{datetime.now(ZoneInfo('America/Tijuana')).strftime('%H%M%S')}.pdf"
     filepath = os.path.join("reports", filename)
     
     # Crear documento PDF
@@ -256,7 +256,7 @@ def generate_turn_report_pdf(validations: List[Validacion], tecnico: Tecnico, tu
         textColor=colors.grey
     )
     
-    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
+    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo('America/Tijuana')).strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
     story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
@@ -273,7 +273,7 @@ def generate_validation_report_pdf(validations: List[Validacion], tecnico: Tecni
     os.makedirs("reports", exist_ok=True)
     
     # Nombre del archivo
-    filename = f"reporte_validacion_{fecha}_{turno}_{datetime.now(ZoneInfo("America/Tijuana")).strftime('%H%M%S')}.pdf"
+    filename = f"reporte_validacion_{fecha}_{turno}_{datetime.now(ZoneInfo('America/Tijuana')).strftime('%H%M%S')}.pdf"
     filepath = os.path.join("reports", filename)
     
     # Crear documento PDF
@@ -387,7 +387,7 @@ def generate_validation_report_pdf(validations: List[Validacion], tecnico: Tecni
         textColor=colors.grey
     )
     
-    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
+    story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo('America/Tijuana')).strftime('%d/%m/%Y %H:%M:%S')}", 
                           footer_style))
     story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                           footer_style))
@@ -413,7 +413,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
         
         # Nombre del archivo (limpiar caracteres inválidos)
         modelo = report_data.get('modelo', 'unknown')
-        fecha_raw = report_data.get('fecha', datetime.now(ZoneInfo("America/Tijuana")).strftime('%Y%m%d'))
+        fecha_raw = report_data.get('fecha', datetime.now(ZoneInfo('America/Tijuana')).strftime('%Y%m%d'))
         
         logger.debug(f"Generando PDF - Modelo: {modelo}, Fecha: {fecha_raw}")
         
@@ -641,7 +641,7 @@ def generate_batch_validation_report_pdf(report_data: dict) -> str:
             textColor=colors.grey
         )
         
-        story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo("America/Tijuana")).strftime('%d/%m/%Y %H:%M:%S')}", 
+        story.append(Paragraph(f"Reporte generado el: {datetime.now(ZoneInfo('America/Tijuana')).strftime('%d/%m/%Y %H:%M:%S')}", 
                               footer_style))
         story.append(Paragraph("Hisense CheckApp - Departamento de Instrumentación", 
                               footer_style))
