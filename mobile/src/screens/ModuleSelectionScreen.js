@@ -135,10 +135,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#0F0F0F',
-    ...(Platform.OS === 'web' && {
-      minHeight: '100dvh',
-      height: '100%',
-    }),
   },
   backgroundGradient: {
     position: 'absolute',
@@ -155,9 +151,6 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingTop: 40,
     paddingBottom: 40,
-    ...(Platform.OS === 'web' && {
-      minHeight: '100dvh',
-    }),
   },
   header: {
     marginBottom: 40,
