@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, Alert, Dimensions } from 'react-native';
+import { View, StyleSheet, Alert, Dimensions, TouchableOpacity } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Button, Card, Title, Paragraph, ActivityIndicator } from 'react-native-paper';
+import { Button, Card, Title, Paragraph, ActivityIndicator, TextInput } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { adaptadorService } from '../services/AdaptadorService';
 import { formatDateTime12Hour } from '../utils/dateUtils';
@@ -13,6 +13,8 @@ export default function QRScannerVByOne({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualCode, setManualCode] = useState('');
   const isProcessingRef = useRef(false);
 
   const hasPermission = permission?.granted;
@@ -63,8 +65,8 @@ export default function QRScannerVByOne({ navigation }) {
     }, [])
   );
 
-  const handleBarCodeScanned = async ({ data }) => {
-    if (scanned || loading || isProcessingRef.current) return;
+  const processCode = async (data) => {
+    if (loading || isProcessingRef.current) return;
 
     isProcessingRef.current = true;
     setScanned(true);
@@ -99,6 +101,22 @@ export default function QRScannerVByOne({ navigation }) {
     }
   };
 
+  const handleBarCodeScanned = async ({ data }) => {
+    if (scanned || loading || isProcessingRef.current) return;
+    processCode(data);
+  };
+
+  const handleManualSubmit = () => {
+    const code = manualCode.trim();
+    if (!code) {
+      Alert.alert('Error', 'Ingresa un código.');
+      return;
+    }
+    setShowManualInput(false);
+    setManualCode('');
+    processCode(code);
+  };
+
   if (!hasPermission) {
     return (
       <View style={styles.container}>
@@ -131,6 +149,13 @@ export default function QRScannerVByOne({ navigation }) {
             <ActivityIndicator size="large" color="#FF9800" />
           </View>
         )}
+      </View>
+
+      {/* Botón de agregar manualmente */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.manualButton} onPress={() => navigation.navigate('AddVByOne', {})}>
+          <Paragraph style={styles.manualButtonText}>Agregar manualmente</Paragraph>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -170,5 +195,45 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 20,
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    paddingTop: 50,
+  },
+  manualButton: {
+    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FF9800',
+  },
+  manualButtonText: {
+    color: '#FF9800',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  manualInputContainer: {
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FF9800',
+  },
+  manualInput: {
+    backgroundColor: '#1E1E1E',
+    marginBottom: 12,
+  },
+  manualButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  manualBtn: {
+    borderRadius: 8,
   },
 });

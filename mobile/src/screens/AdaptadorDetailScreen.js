@@ -209,8 +209,8 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
           isPaired: true,
           primary: conector,
           secondary: pairConector,
-          // El estado es NG si alguno de los dos está NG
-          combinedEstado: (conector.estado === 'NG' || pairConector.estado === 'NG') ? 'NG' : 'OK'
+          // El estado es NG si alguno de los dos está NG, PENDIENTE si alguno es PENDIENTE
+          combinedEstado: (conector.estado === 'NG' || pairConector.estado === 'NG') ? 'NG' : (conector.estado === 'PENDIENTE' || pairConector.estado === 'PENDIENTE') ? 'PENDIENTE' : 'OK'
         });
         processed.add(conector.id);
         processed.add(pairConector.id);
@@ -322,10 +322,10 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
                             : group.primary.nombre_conector}
                         </Paragraph>
                         <Chip
-                          icon={group.combinedEstado === 'OK' ? 'check-circle' : 'alert-circle'}
+                          icon={group.combinedEstado === 'OK' ? 'check-circle' : group.combinedEstado === 'NG' ? 'alert-circle' : 'clock-outline'}
                           style={[
                             styles.conectorStatusChip,
-                            group.combinedEstado === 'OK' ? styles.conectorStatusOK : styles.conectorStatusNG
+                            group.combinedEstado === 'OK' ? styles.conectorStatusOK : group.combinedEstado === 'NG' ? styles.conectorStatusNG : styles.conectorStatusPending
                           ]}
                           onPress={() => handleToggleConectorEstado(group.primary)}
                           disabled={Boolean(updatingIds[group.primary.id]) || (group.isPaired && Boolean(updatingIds[group.secondary.id]))}
@@ -786,6 +786,9 @@ const styles = StyleSheet.create({
   },
   conectorStatusNG: {
     backgroundColor: '#F44336',
+  },
+  conectorStatusPending: {
+    backgroundColor: '#616161',
   },
   conectorInfo: {
     color: '#E0E0E0',
