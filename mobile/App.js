@@ -169,12 +169,9 @@ export default function App() {
           padding: 0;
           width: 100%;
           height: 100dvh;
-          min-height: 100dvh;
-          max-height: 100dvh;
           display: flex;
           flex-direction: column;
           background-color: #0F0F0F;
-          overflow: hidden;
           position: relative;
         }
         /* Mejorar scrollbar en web */
@@ -215,11 +212,6 @@ export default function App() {
         /* Prevenir bounce/overscroll en iOS PWA */
         html, body {
           overscroll-behavior: none;
-          -webkit-overflow-scrolling: touch;
-        }
-        /* Solo permitir scroll dentro de contenedores scrollable */
-        [data-testid], [role="scrollbar"] {
-          -webkit-overflow-scrolling: touch;
         }
       `;
       document.head.appendChild(style);
@@ -332,14 +324,11 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' && {
       margin: 0,
       padding: 0,
-      minHeight: '100dvh',
       height: '100dvh',
-      maxHeight: '100dvh',
       width: '100%',
       display: 'flex',
       flexDirection: 'column',
       backgroundColor: '#0F0F0F',
-      overflow: 'hidden',
       position: 'relative',
     }),
   },
