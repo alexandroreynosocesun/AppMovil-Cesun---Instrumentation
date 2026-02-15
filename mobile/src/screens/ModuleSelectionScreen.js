@@ -136,7 +136,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#0F0F0F',
     ...(Platform.OS === 'web' && {
-      minHeight: '100vh',
+      minHeight: '100dvh',
       height: '100%',
     }),
   },
@@ -156,7 +156,7 @@ const styles = StyleSheet.create({
     paddingTop: 40,
     paddingBottom: 40,
     ...(Platform.OS === 'web' && {
-      minHeight: '100vh',
+      minHeight: '100dvh',
     }),
   },
   header: {

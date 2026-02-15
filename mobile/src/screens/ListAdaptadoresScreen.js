@@ -62,8 +62,83 @@ export default function ListAdaptadoresScreen({ navigation }) {
   const normalizeSearch = (value) => String(value || '').trim();
   const searchValue = normalizeSearch(searchQuery);
 
+  const getConectorEstado = (adaptador) =>
+    adaptador?.conectores?.[0]?.estado || null;
+
+  const getConector = (adaptador) => adaptador?.conectores?.[0] || null;
+
   const hasNgConector = (adaptador) =>
     Array.isArray(adaptador.conectores) && adaptador.conectores.some(c => c.estado === 'NG');
+
+  const [updatingIds, setUpdatingIds] = useState({});
+
+  const handleMarkOk = (adaptador) => {
+    const conector = getConector(adaptador);
+    if (!conector?.id) {
+      Alert.alert('Sin conector', 'No se encontró el conector.');
+      return;
+    }
+    Alert.alert('Confirmar OK', '¿Marcar este adaptador como OK?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Marcar OK',
+        onPress: async () => {
+          setUpdatingIds(prev => ({ ...prev, [conector.id]: true }));
+          const result = await adaptadorService.updateConectorEstado(conector.id, 'OK');
+          if (result.success) {
+            loadAdaptadores();
+          } else {
+            Alert.alert('Error', 'No se pudo marcar como OK.');
+          }
+          setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
+        }
+      }
+    ]);
+  };
+
+  const handleOpenNg = (adaptador) => {
+    const conector = getConector(adaptador);
+    if (!conector?.id) {
+      Alert.alert('Sin conector', 'No se encontró el conector.');
+      return;
+    }
+    Alert.prompt
+      ? Alert.prompt('Marcar NG', 'Comentario (opcional):', [
+          { text: 'Cancelar', style: 'cancel' },
+          {
+            text: 'Confirmar NG',
+            style: 'destructive',
+            onPress: async (comment) => {
+              setUpdatingIds(prev => ({ ...prev, [conector.id]: true }));
+              const result = await adaptadorService.updateConectorEstado(conector.id, 'NG', comment || null);
+              if (result.success) {
+                loadAdaptadores();
+              } else {
+                Alert.alert('Error', 'No se pudo marcar como NG.');
+              }
+              setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
+            }
+          }
+        ])
+      : (async () => {
+          setUpdatingIds(prev => ({ ...prev, [conector.id]: true }));
+          const result = await adaptadorService.updateConectorEstado(conector.id, 'NG');
+          if (result.success) {
+            loadAdaptadores();
+          } else {
+            Alert.alert('Error', 'No se pudo marcar como NG.');
+          }
+          setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
+        })();
+  };
+
+  const handlePendientePress = (adaptador) => {
+    Alert.alert('Seleccionar estado', '¿Cuál es el estado de este adaptador?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'OK', onPress: () => handleMarkOk(adaptador) },
+      { text: 'NG', style: 'destructive', onPress: () => handleOpenNg(adaptador) }
+    ]);
+  };
 
   const getFilteredAdaptadores = () => {
     let items = adaptadores;
@@ -272,11 +347,31 @@ export default function ListAdaptadoresScreen({ navigation }) {
                             />
                           )}
                           <Title style={styles.itemTitle}>Adaptador #{adaptador.numero_adaptador}</Title>
-                          {!selectionMode && (
-                            <Chip icon="check-circle" style={styles.statusChip}>
-                              {adaptador.estado}
-                            </Chip>
-                          )}
+                          {!selectionMode && (() => {
+                            const estado = getConectorEstado(adaptador) || adaptador.estado;
+                            if (estado === 'PENDIENTE') {
+                              return (
+                                <Chip
+                                  icon="clock-outline"
+                                  style={styles.statusChipPending}
+                                  onPress={() => handlePendientePress(adaptador)}
+                                >
+                                  PENDIENTE
+                                </Chip>
+                              );
+                            } else if (estado === 'NG') {
+                              return (
+                                <Chip icon="alert-circle" style={styles.statusChipNg}>
+                                  NG
+                                </Chip>
+                              );
+                            }
+                            return (
+                              <Chip icon="check-circle" style={styles.statusChipOk}>
+                                OK
+                              </Chip>
+                            );
+                          })()}
                         </View>
                         <Paragraph style={styles.itemText}>QR: {adaptador.codigo_qr}</Paragraph>
                         <Paragraph style={styles.itemText}>Modelo: {adaptador.modelo_adaptador}</Paragraph>
@@ -446,8 +541,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     flex: 1,
   },
-  statusChip: {
-    backgroundColor: '#4CAF50',
+  statusChipOk: {
+    backgroundColor: '#2E7D32',
+  },
+  statusChipNg: {
+    backgroundColor: '#C62828',
+  },
+  statusChipPending: {
+    backgroundColor: '#616161',
   },
   itemText: {
     color: '#E0E0E0',

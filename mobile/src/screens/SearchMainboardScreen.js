@@ -7,7 +7,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
-  Alert
+  Alert,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -20,7 +21,8 @@ import {
   Chip,
   Button,
   Dialog,
-  Portal
+  Portal,
+  IconButton
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePlatform } from '../hooks/usePlatform';
@@ -41,6 +43,8 @@ export default function SearchMainboardScreen({ navigation }) {
   const [searchTimeout, setSearchTimeout] = useState(null);
   const searchInputRef = useRef(null);
   const [showArduinoDialog, setShowArduinoDialog] = useState(false);
+  const [selectedArduinoInterno, setSelectedArduinoInterno] = useState(null);
+  const [showArduinoFilterModal, setShowArduinoFilterModal] = useState(false);
   const [arduinoForm, setArduinoForm] = useState({
     comando: '', destino: '', pais: '', modelo: '', modelo_interno: ''
   });
@@ -70,6 +74,30 @@ export default function SearchMainboardScreen({ navigation }) {
     } else {
       Alert.alert('Error', result.error || 'No se pudo guardar');
     }
+  };
+
+  const handleDeleteArduino = (sequenceId) => {
+    Alert.alert(
+      'Eliminar secuencia',
+      '¿Seguro que quieres eliminar esta secuencia Arduino?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await arduinoSequenceService.deleteSequence(sequenceId);
+            if (result.success) {
+              if (selectedModel?.modelo_mainboard) {
+                handleSelectModel(selectedModel.modelo_mainboard);
+              }
+            } else {
+              Alert.alert('Error', result.error || 'No se pudo eliminar');
+            }
+          }
+        }
+      ]
+    );
   };
 
   useEffect(() => {
@@ -116,6 +144,7 @@ export default function SearchMainboardScreen({ navigation }) {
     setSearchQuery(modeloMainboard);
     setSuggestions([]);
     setSelectedModel(null);
+    setSelectedArduinoInterno(null);
     setLoadingDetails(true);
 
     try {
@@ -238,9 +267,11 @@ export default function SearchMainboardScreen({ navigation }) {
               <View style={styles.detailsContainer}>
                 <Card style={styles.detailsCard}>
                   <Card.Content>
-                    <Title style={styles.detailsTitle}>
-                      Modelo Mainboard: {selectedModel.modelo_mainboard}
-                    </Title>
+                    <View style={styles.mainboardHeader}>
+                      <Chip icon="developer-board" style={styles.mainboardChip} textStyle={styles.mainboardChipText}>
+                        {selectedModel.modelo_mainboard}
+                      </Chip>
+                    </View>
                     <Divider style={styles.divider} />
 
                     {selectedModel.conectores && selectedModel.conectores.length > 0 ? (
@@ -338,37 +369,79 @@ export default function SearchMainboardScreen({ navigation }) {
                     <Divider style={styles.divider} />
                     <View style={styles.arduinoSection}>
                       <View style={styles.arduinoHeader}>
-                        <Chip icon="microchip" style={styles.arduinoChip} textStyle={styles.chipText}>
+                        <Chip icon="memory" style={styles.arduinoChip} textStyle={styles.chipText}>
                           Arduino
                         </Chip>
-                        {canEditArduino && (
-                          <Button
-                            mode="contained"
-                            compact
-                            onPress={() => {
-                              setArduinoForm(prev => ({ ...prev, modelo: selectedModel?.modelo_mainboard || '' }));
-                              setShowArduinoDialog(true);
-                            }}
-                            buttonColor="#FF5722"
-                            textColor="#FFFFFF"
-                            style={styles.addArduinoButton}
-                          >
-                            Agregar
-                          </Button>
-                        )}
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {selectedModel.arduino_sequences && selectedModel.arduino_sequences.length > 0 && (
+                            <Button
+                              mode="outlined"
+                              compact
+                              icon="filter-variant"
+                              onPress={() => setShowArduinoFilterModal(true)}
+                              textColor="#B0B0B0"
+                              style={styles.arduinoFilterButton}
+                            >
+                              {selectedArduinoInterno || 'Filtrar'}
+                            </Button>
+                          )}
+                          {canEditArduino && (
+                            <Button
+                              mode="contained"
+                              compact
+                              onPress={() => {
+                                setArduinoForm(prev => ({ ...prev, modelo: selectedModel?.modelo_mainboard || '' }));
+                                setShowArduinoDialog(true);
+                              }}
+                              buttonColor="#37474F"
+                              textColor="#FFFFFF"
+                              style={styles.addArduinoButton}
+                            >
+                              Agregar
+                            </Button>
+                          )}
+                        </View>
                       </View>
+                      {selectedArduinoInterno && (
+                        <TouchableOpacity onPress={() => setSelectedArduinoInterno(null)} style={styles.activeFilterRow}>
+                          <Chip
+                            icon="close-circle"
+                            style={styles.activeFilterChip}
+                            textStyle={styles.activeFilterChipText}
+                            onPress={() => setSelectedArduinoInterno(null)}
+                          >
+                            {selectedArduinoInterno}
+                          </Chip>
+                        </TouchableOpacity>
+                      )}
                       {selectedModel.arduino_sequences && selectedModel.arduino_sequences.length > 0 ? (
-                        selectedModel.arduino_sequences.map((seq, i) => (
+                        (selectedArduinoInterno
+                          ? selectedModel.arduino_sequences.filter(s => s.modelo_interno === selectedArduinoInterno)
+                          : selectedModel.arduino_sequences
+                        ).map((seq, i, arr) => (
                           <View key={seq.id || i} style={styles.arduinoItem}>
-                            <Paragraph style={styles.arduinoField}>
-                              Modelo interno: <Paragraph style={styles.arduinoValue}>{seq.modelo_interno}</Paragraph>
-                            </Paragraph>
-                            <Paragraph style={styles.arduinoField}>
-                              Destino: <Paragraph style={styles.arduinoValue}>{seq.destino}</Paragraph>
-                            </Paragraph>
-                            <Paragraph style={styles.arduinoField}>
-                              Comando: <Paragraph style={styles.arduinoValue}>{seq.comando}</Paragraph>
-                            </Paragraph>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <View style={{ flex: 1 }}>
+                                <Paragraph style={styles.arduinoField}>
+                                  Modelo interno: <Paragraph style={styles.arduinoValue}>{seq.modelo_interno}</Paragraph>
+                                </Paragraph>
+                                <Paragraph style={styles.arduinoField}>
+                                  Destino: <Paragraph style={styles.arduinoValue}>{seq.destino}</Paragraph>
+                                </Paragraph>
+                                <Paragraph style={styles.arduinoField}>
+                                  Comando: <Paragraph style={styles.arduinoValue}>{seq.comando}</Paragraph>
+                                </Paragraph>
+                              </View>
+                              {canEditArduino && seq.id && (
+                                <IconButton
+                                  icon="delete-outline"
+                                  iconColor="#EF5350"
+                                  size={20}
+                                  onPress={() => handleDeleteArduino(seq.id)}
+                                  style={{ margin: -4 }}
+                                />
+                              )}
+                            </View>
                             {seq.pais ? (
                               <View style={styles.chipsContainer}>
                                 {seq.pais.split(',').map((p, j) => (
@@ -378,7 +451,7 @@ export default function SearchMainboardScreen({ navigation }) {
                                 ))}
                               </View>
                             ) : null}
-                            {i < selectedModel.arduino_sequences.length - 1 && (
+                            {i < arr.length - 1 && (
                               <Divider style={styles.arduinoDivider} />
                             )}
                           </View>
@@ -403,68 +476,128 @@ export default function SearchMainboardScreen({ navigation }) {
         </KeyboardAvoidingView>
       </SafeAreaView>
 
+      {/* Modal Agregar Secuencia Arduino */}
+      <Modal
+        visible={showArduinoDialog}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowArduinoDialog(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowArduinoDialog(false)}
+          />
+          <View style={styles.modalContent}>
+            <Title style={styles.modalTitle}>Agregar Secuencia Arduino</Title>
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <TextInput
+                label="Modelo Mainboard"
+                value={arduinoForm.modelo || selectedModel?.modelo_mainboard || ''}
+                mode="outlined"
+                style={styles.dialogInput}
+                dense
+                disabled
+                textColor="#AAAAAA"
+                outlineColor="#333333"
+              />
+              <TextInput
+                label="Modelo interno"
+                value={arduinoForm.modelo_interno}
+                onChangeText={(text) => setArduinoForm(prev => ({ ...prev, modelo_interno: text }))}
+                mode="outlined"
+                style={styles.dialogInput}
+                dense
+                textColor="#F5F5F5"
+                outlineColor="#333333"
+                activeOutlineColor="#2196F3"
+              />
+              <TextInput
+                label="Destino"
+                value={arduinoForm.destino}
+                onChangeText={(text) => setArduinoForm(prev => ({ ...prev, destino: text }))}
+                mode="outlined"
+                style={styles.dialogInput}
+                dense
+                textColor="#F5F5F5"
+                outlineColor="#333333"
+                activeOutlineColor="#2196F3"
+              />
+              <TextInput
+                label="Comando"
+                value={arduinoForm.comando}
+                onChangeText={(text) => setArduinoForm(prev => ({ ...prev, comando: text }))}
+                mode="outlined"
+                style={styles.dialogInput}
+                dense
+                textColor="#F5F5F5"
+                outlineColor="#333333"
+                activeOutlineColor="#2196F3"
+              />
+              <TextInput
+                label="País(es) (COL/MEX/GUA/US)"
+                value={arduinoForm.pais}
+                onChangeText={(text) => setArduinoForm(prev => ({ ...prev, pais: text }))}
+                mode="outlined"
+                style={styles.dialogInput}
+                dense
+                textColor="#F5F5F5"
+                outlineColor="#333333"
+                activeOutlineColor="#2196F3"
+              />
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <Button onPress={() => setShowArduinoDialog(false)} textColor="#B0B0B0" style={{ flex: 1 }}>Cancelar</Button>
+              <Button mode="contained" onPress={handleSaveArduino} buttonColor="#2196F3" style={{ flex: 1 }}>Guardar</Button>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <Portal>
-        <Dialog visible={showArduinoDialog} onDismiss={() => setShowArduinoDialog(false)} style={styles.dialog}>
-          <Dialog.Title style={styles.dialogTitle}>Agregar Secuencia Arduino</Dialog.Title>
+
+        {/* Modal de filtro de modelo interno Arduino */}
+        <Dialog
+          visible={showArduinoFilterModal}
+          onDismiss={() => setShowArduinoFilterModal(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>Seleccionar Modelo Interno</Dialog.Title>
           <Dialog.Content>
-            <TextInput
-              label="Modelo Mainboard"
-              value={arduinoForm.modelo || selectedModel?.modelo_mainboard || ''}
-              mode="outlined"
-              style={styles.dialogInput}
-              dense
-              disabled
-              textColor="#AAAAAA"
-              outlineColor="#333333"
-            />
-            <TextInput
-              label="Modelo interno"
-              value={arduinoForm.modelo_interno}
-              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, modelo_interno: text }))}
-              mode="outlined"
-              style={styles.dialogInput}
-              dense
-              textColor="#F5F5F5"
-              outlineColor="#333333"
-              activeOutlineColor="#FF5722"
-            />
-            <TextInput
-              label="Destino"
-              value={arduinoForm.destino}
-              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, destino: text }))}
-              mode="outlined"
-              style={styles.dialogInput}
-              dense
-              textColor="#F5F5F5"
-              outlineColor="#333333"
-              activeOutlineColor="#FF5722"
-            />
-            <TextInput
-              label="Comando"
-              value={arduinoForm.comando}
-              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, comando: text }))}
-              mode="outlined"
-              style={styles.dialogInput}
-              dense
-              textColor="#F5F5F5"
-              outlineColor="#333333"
-              activeOutlineColor="#FF5722"
-            />
-            <TextInput
-              label="País(es) (COL/MEX/GUA/US)"
-              value={arduinoForm.pais}
-              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, pais: text }))}
-              mode="outlined"
-              style={styles.dialogInput}
-              dense
-              textColor="#F5F5F5"
-              outlineColor="#333333"
-              activeOutlineColor="#FF5722"
-            />
+            <ScrollView style={{ maxHeight: 300 }}>
+              <TouchableOpacity
+                style={[styles.filterModalItem, !selectedArduinoInterno && styles.filterModalItemActive]}
+                onPress={() => { setSelectedArduinoInterno(null); setShowArduinoFilterModal(false); }}
+              >
+                <Paragraph style={[styles.filterModalItemText, !selectedArduinoInterno && styles.filterModalItemTextActive]}>
+                  Todos
+                </Paragraph>
+                <Paragraph style={styles.filterModalItemCount}>
+                  {selectedModel?.arduino_sequences?.length || 0}
+                </Paragraph>
+              </TouchableOpacity>
+              {selectedModel?.arduino_sequences && [...new Set(selectedModel.arduino_sequences.map(s => s.modelo_interno).filter(Boolean))].sort().map(interno => (
+                <TouchableOpacity
+                  key={interno}
+                  style={[styles.filterModalItem, selectedArduinoInterno === interno && styles.filterModalItemActive]}
+                  onPress={() => { setSelectedArduinoInterno(interno); setShowArduinoFilterModal(false); }}
+                >
+                  <Paragraph style={[styles.filterModalItemText, selectedArduinoInterno === interno && styles.filterModalItemTextActive]}>
+                    {interno}
+                  </Paragraph>
+                  <Paragraph style={styles.filterModalItemCount}>
+                    {selectedModel.arduino_sequences.filter(s => s.modelo_interno === interno).length}
+                  </Paragraph>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowArduinoDialog(false)} textColor="#B0B0B0">Cancelar</Button>
-            <Button mode="contained" onPress={handleSaveArduino} buttonColor="#FF5722">Guardar</Button>
+            <Button onPress={() => setShowArduinoFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -556,6 +689,18 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 16,
   },
+  mainboardHeader: {
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  mainboardChip: {
+    backgroundColor: '#37474F',
+  },
+  mainboardChipText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '700',
+  },
   divider: {
     backgroundColor: '#444444',
     marginVertical: 16,
@@ -567,7 +712,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   conectorChip: {
-    backgroundColor: '#2196F3',
+    backgroundColor: '#37474F',
     alignSelf: 'flex-start',
   },
   chipText: {
@@ -600,7 +745,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF9800',
   },
   toolChip: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#37474F',
     marginRight: 8,
     marginBottom: 8,
   },
@@ -640,11 +785,55 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   arduinoChip: {
-    backgroundColor: '#FF5722',
+    backgroundColor: '#37474F',
     alignSelf: 'flex-start',
   },
   addArduinoButton: {
     borderRadius: 8,
+  },
+  arduinoFilterButton: {
+    borderColor: '#555555',
+    borderRadius: 8,
+  },
+  activeFilterRow: {
+    marginBottom: 12,
+    alignItems: 'flex-start',
+  },
+  activeFilterChip: {
+    backgroundColor: '#37474F',
+  },
+  activeFilterChipText: {
+    color: '#E0E0E0',
+    fontSize: 13,
+  },
+  filterModalItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#333333',
+    marginBottom: 8,
+    backgroundColor: '#2A2A2A',
+  },
+  filterModalItemActive: {
+    borderColor: '#2196F3',
+    backgroundColor: '#1B2A44',
+  },
+  filterModalItemText: {
+    color: '#E0E0E0',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  filterModalItemTextActive: {
+    color: '#FFFFFF',
+  },
+  filterModalItemCount: {
+    color: '#888888',
+    fontSize: 14,
+    fontWeight: '600',
   },
   arduinoItem: {
     marginBottom: 12,
@@ -680,6 +869,37 @@ const styles = StyleSheet.create({
     color: '#E0E0E0',
     fontSize: 12,
     fontWeight: '600',
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  modalContent: {
+    backgroundColor: '#1E1E1E',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  modalTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#333333',
   },
   dialog: {
     backgroundColor: '#1E1E1E',

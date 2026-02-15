@@ -325,9 +325,10 @@ export default function AuthNavigator() {
 const styles = StyleSheet.create({
   navigatorContainer: {
     flex: 1,
+    backgroundColor: '#0F0F0F',
     ...(Platform.OS === 'web' && {
       height: '100%',
-      minHeight: '100vh',
+      minHeight: '100dvh',
       display: 'flex',
       flexDirection: 'column',
     }),
@@ -338,8 +339,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#0F0F0F',
     ...(Platform.OS === 'web' && {
-      height: '100vh',
-      minHeight: '100vh',
+      height: '100dvh',
+      minHeight: '100dvh',
     }),
   },
 });

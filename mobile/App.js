@@ -1,8 +1,8 @@
-import React, { useEffect } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useEffect, useState } from 'react';
+import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { Provider as PaperProvider } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
-import { Platform, StyleSheet, View } from 'react-native';
+import { Platform, StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
 
 // Contextos
 import { LanguageProvider } from './src/contexts/LanguageContext';
@@ -13,6 +13,42 @@ import { ValidationProvider } from './src/contexts/ValidationContext';
 import AuthNavigator from './src/components/AuthNavigator';
 
 export default function App() {
+  const [showUpdateBanner, setShowUpdateBanner] = useState(false);
+
+  // Escuchar actualizaciones del Service Worker
+  useEffect(() => {
+    if (Platform.OS === 'web' && 'serviceWorker' in navigator) {
+      const handleMessage = (event) => {
+        if (event.data && event.data.type === 'SW_UPDATED') {
+          setShowUpdateBanner(true);
+        }
+      };
+      navigator.serviceWorker.addEventListener('message', handleMessage);
+
+      // También detectar cuando hay un nuevo SW esperando
+      navigator.serviceWorker.ready.then((registration) => {
+        registration.addEventListener('updatefound', () => {
+          const newWorker = registration.installing;
+          if (newWorker) {
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                setShowUpdateBanner(true);
+              }
+            });
+          }
+        });
+      });
+
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleMessage);
+      };
+    }
+  }, []);
+
+  const handleUpdate = () => {
+    window.location.reload();
+  };
+
   // Manejar errores globales en web (especialmente errores de extensiones del navegador)
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -109,6 +145,10 @@ export default function App() {
         body {
           margin: 0;
           padding: 0;
+          padding-top: env(safe-area-inset-top);
+          padding-bottom: env(safe-area-inset-bottom);
+          padding-left: env(safe-area-inset-left);
+          padding-right: env(safe-area-inset-right);
           width: 100%;
           height: 100%;
           overflow: hidden;
@@ -128,9 +168,9 @@ export default function App() {
           margin: 0;
           padding: 0;
           width: 100%;
-          height: 100%;
-          min-height: 100vh;
-          max-height: 100vh;
+          height: 100dvh;
+          min-height: 100dvh;
+          max-height: 100dvh;
           display: flex;
           flex-direction: column;
           background-color: #0F0F0F;
@@ -171,6 +211,15 @@ export default function App() {
           input, select, textarea {
             font-size: 16px !important;
           }
+        }
+        /* Prevenir bounce/overscroll en iOS PWA */
+        html, body {
+          overscroll-behavior: none;
+          -webkit-overflow-scrolling: touch;
+        }
+        /* Solo permitir scroll dentro de contenedores scrollable */
+        [data-testid], [role="scrollbar"] {
+          -webkit-overflow-scrolling: touch;
         }
       `;
       document.head.appendChild(style);
@@ -247,10 +296,27 @@ export default function App() {
       <PaperProvider>
         <AuthProvider>
           <ValidationProvider>
-            <NavigationContainer>
+            <NavigationContainer theme={{
+              ...DefaultTheme,
+              colors: {
+                ...DefaultTheme.colors,
+                background: '#0F0F0F',
+                card: '#1A1A1A',
+                text: '#FFFFFF',
+                border: '#333333',
+              },
+            }}>
               <View style={styles.appContainer}>
                 <StatusBar style="auto" />
                 <AuthNavigator />
+                {showUpdateBanner && Platform.OS === 'web' && (
+                  <TouchableOpacity style={styles.updateBanner} onPress={handleUpdate} activeOpacity={0.8}>
+                    <Text style={styles.updateText}>Nueva versión disponible</Text>
+                    <View style={styles.updateButton}>
+                      <Text style={styles.updateButtonText}>Actualizar</Text>
+                    </View>
+                  </TouchableOpacity>
+                )}
               </View>
             </NavigationContainer>
           </ValidationProvider>
@@ -266,9 +332,9 @@ const styles = StyleSheet.create({
     ...(Platform.OS === 'web' && {
       margin: 0,
       padding: 0,
-      minHeight: '100vh',
-      height: '100vh',
-      maxHeight: '100vh',
+      minHeight: '100dvh',
+      height: '100dvh',
+      maxHeight: '100dvh',
       width: '100%',
       display: 'flex',
       flexDirection: 'column',
@@ -276,5 +342,41 @@ const styles = StyleSheet.create({
       overflow: 'hidden',
       position: 'relative',
     }),
+  },
+  updateBanner: {
+    position: 'absolute',
+    bottom: 24,
+    left: 16,
+    right: 16,
+    backgroundColor: '#2196F3',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...(Platform.OS === 'web' && {
+      boxShadow: '0 4px 20px rgba(33, 150, 243, 0.4)',
+      zIndex: 9999,
+      bottom: 'calc(24px + env(safe-area-inset-bottom))',
+    }),
+  },
+  updateText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
+    flex: 1,
+  },
+  updateButton: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginLeft: 12,
+  },
+  updateButtonText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
   },
 });

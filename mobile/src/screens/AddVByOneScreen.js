@@ -27,9 +27,21 @@ const CATEGORIES = [
   { key: 'lvds_2k', label: '2K LVDS', modelo: 'LVDS_2K' },
 ];
 
+const generarQR = (categoriaKey, numero) => {
+  if (!numero) return '';
+  switch (categoriaKey) {
+    case 'vbyone': return `V-VByOne-NA-${numero}`;
+    case 'mini_lvds': return `MINI LVDS ${numero}`;
+    case 'lvds_2k': return `L-LVDS-NA-${numero}`;
+    default: return '';
+  }
+};
+
 export default function AddVByOneScreen({ navigation, route }) {
+  const isManual = !route?.params?.codigo_qr;
   const [loading, setLoading] = useState(false);
   const [showCategoriaModal, setShowCategoriaModal] = useState(false);
+  const [manualStep, setManualStep] = useState(isManual ? 1 : 0); // 0=scan flow, 1=select cat, 2=enter number
   const [formData, setFormData] = useState({
     codigo_qr: route?.params?.codigo_qr || '',
     categoria: route?.params?.category || '',
@@ -49,6 +61,7 @@ export default function AddVByOneScreen({ navigation, route }) {
     }
   }, [formData.categoria]);
 
+  // Para flujo QR: extraer número del código escaneado
   const extraerNumero = (qr) => {
     if (!qr) return '';
     const partes = qr.split('-');
@@ -59,7 +72,7 @@ export default function AddVByOneScreen({ navigation, route }) {
   };
 
   useEffect(() => {
-    if (formData.codigo_qr) {
+    if (!isManual && formData.codigo_qr) {
       const numero = extraerNumero(formData.codigo_qr);
       setFormData(prev => ({
         ...prev,
@@ -67,6 +80,14 @@ export default function AddVByOneScreen({ navigation, route }) {
       }));
     }
   }, [formData.codigo_qr]);
+
+  // Para flujo manual: auto-generar QR cuando cambia número
+  useEffect(() => {
+    if (isManual && formData.categoria && formData.numero_adaptador) {
+      const qr = generarQR(formData.categoria, formData.numero_adaptador);
+      setFormData(prev => ({ ...prev, codigo_qr: qr }));
+    }
+  }, [formData.numero_adaptador, formData.categoria]);
 
   const handleInputChange = (field, value) => {
     setFormData(prev => ({
@@ -83,6 +104,9 @@ export default function AddVByOneScreen({ navigation, route }) {
       modelo_adaptador: categoria ? categoria.modelo : prev.modelo_adaptador
     }));
     setShowCategoriaModal(false);
+    if (isManual) {
+      setManualStep(2);
+    }
   };
 
   const handleSave = async () => {
@@ -95,7 +119,7 @@ export default function AddVByOneScreen({ navigation, route }) {
       return;
     }
     if (!formData.numero_adaptador.trim()) {
-      Alert.alert('Número inválido', 'No se pudo extraer el número del QR.');
+      Alert.alert('Número inválido', 'Ingresa el número del adaptador.');
       return;
     }
 
@@ -129,6 +153,101 @@ export default function AddVByOneScreen({ navigation, route }) {
 
   const categoriaSeleccionada = getCategoriaByKey(formData.categoria);
 
+  // ===== FLUJO MANUAL: Paso 1 - Seleccionar categoría =====
+  if (isManual && manualStep === 1) {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title style={styles.title}>Selecciona categoría</Title>
+              <Paragraph style={styles.stepHint}>Paso 1 de 2</Paragraph>
+              {CATEGORIES.map(cat => (
+                <TouchableOpacity
+                  key={cat.key}
+                  style={styles.categoryCard}
+                  onPress={() => handleSelectCategoria(cat.key)}
+                  activeOpacity={0.7}
+                >
+                  <Paragraph style={styles.categoryLabel}>{cat.label}</Paragraph>
+                </TouchableOpacity>
+              ))}
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ===== FLUJO MANUAL: Paso 2 - Ingresar número =====
+  if (isManual && manualStep === 2) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title style={styles.title}>Ingresa el número</Title>
+              <Paragraph style={styles.stepHint}>Paso 2 de 2 — {categoriaSeleccionada?.label}</Paragraph>
+
+              <TextInput
+                label="Número de etiqueta"
+                value={formData.numero_adaptador}
+                onChangeText={(value) => handleInputChange('numero_adaptador', value)}
+                mode="outlined"
+                style={styles.input}
+                placeholder="Ej: 001, 045..."
+                textColor="#FFFFFF"
+                placeholderTextColor="#808080"
+                outlineColor="#3A3A3A"
+                activeOutlineColor="#FF9800"
+                autoFocus
+                keyboardType="default"
+                theme={{ colors: { primary: '#FF9800', background: '#1E1E1E', surface: '#1E1E1E', text: '#FFFFFF', placeholder: '#808080' } }}
+              />
+
+              {formData.codigo_qr ? (
+                <View style={styles.qrPreview}>
+                  <Paragraph style={styles.qrPreviewLabel}>QR generado:</Paragraph>
+                  <Paragraph style={styles.qrPreviewValue}>{formData.codigo_qr}</Paragraph>
+                </View>
+              ) : null}
+
+              <View style={styles.manualButtons}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    setManualStep(1);
+                    setFormData(prev => ({ ...prev, categoria: '', modelo_adaptador: '', numero_adaptador: '', codigo_qr: '' }));
+                  }}
+                  textColor="#B0B0B0"
+                  style={styles.backBtn}
+                >
+                  Cambiar categoría
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleSave}
+                  buttonColor="#FF9800"
+                  style={styles.saveBtn}
+                  contentStyle={styles.saveButtonContent}
+                  labelStyle={styles.saveButtonLabel}
+                  loading={loading}
+                  disabled={loading || !formData.numero_adaptador.trim()}
+                >
+                  Guardar
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ===== FLUJO QR (escaneado): formulario original =====
   return (
     <KeyboardAvoidingView
       style={styles.container}
@@ -150,15 +269,7 @@ export default function AddVByOneScreen({ navigation, route }) {
               placeholderTextColor="#808080"
               outlineColor="#3A3A3A"
               activeOutlineColor="#FF9800"
-              theme={{
-                colors: {
-                  primary: '#FF9800',
-                  background: '#1E1E1E',
-                  surface: '#1E1E1E',
-                  text: '#FFFFFF',
-                  placeholder: '#808080',
-                }
-              }}
+              theme={{ colors: { primary: '#FF9800', background: '#1E1E1E', surface: '#1E1E1E', text: '#FFFFFF', placeholder: '#808080' } }}
             />
 
             <TouchableOpacity onPress={() => setShowCategoriaModal(true)} activeOpacity={0.7}>
@@ -174,15 +285,7 @@ export default function AddVByOneScreen({ navigation, route }) {
                   outlineColor="#3A3A3A"
                   activeOutlineColor="#FF9800"
                   right={<TextInput.Icon icon="chevron-down" color="#888888" />}
-                  theme={{
-                    colors: {
-                      primary: '#FF9800',
-                      background: '#1E1E1E',
-                      surface: '#1E1E1E',
-                      text: '#FFFFFF',
-                      placeholder: '#808080',
-                    }
-                  }}
+                  theme={{ colors: { primary: '#FF9800', background: '#1E1E1E', surface: '#1E1E1E', text: '#FFFFFF', placeholder: '#808080' } }}
                 />
               </View>
             </TouchableOpacity>
@@ -198,15 +301,7 @@ export default function AddVByOneScreen({ navigation, route }) {
               placeholderTextColor="#808080"
               outlineColor="#3A3A3A"
               activeOutlineColor="#FF9800"
-              theme={{
-                colors: {
-                  primary: '#FF9800',
-                  background: '#1E1E1E',
-                  surface: '#1E1E1E',
-                  text: '#FFFFFF',
-                  placeholder: '#808080',
-                }
-              }}
+              theme={{ colors: { primary: '#FF9800', background: '#1E1E1E', surface: '#1E1E1E', text: '#FFFFFF', placeholder: '#808080' } }}
             />
 
             <Button
@@ -280,11 +375,59 @@ const styles = StyleSheet.create({
   title: {
     color: '#FFFFFF',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  stepHint: {
+    color: '#FF9800',
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 14,
   },
   input: {
     marginBottom: 12,
     backgroundColor: '#1E1E1E',
+  },
+  categoryCard: {
+    backgroundColor: '#0F0F0F',
+    borderRadius: 12,
+    paddingVertical: 18,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#333',
+    alignItems: 'center',
+  },
+  categoryLabel: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  qrPreview: {
+    backgroundColor: '#0F0F0F',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  qrPreviewLabel: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  qrPreviewValue: {
+    color: '#FF9800',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  manualButtons: {
+    gap: 10,
+  },
+  backBtn: {
+    borderColor: '#555',
+    borderRadius: 10,
+  },
+  saveBtn: {
+    borderRadius: 12,
   },
   saveButton: {
     marginTop: 8,
