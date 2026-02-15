@@ -26,6 +26,7 @@ import { formatDate, formatTime12Hour } from '../utils/dateUtils';
 import { useAuth } from '../contexts/AuthContext';
 import { useValidation } from '../contexts/ValidationContext';
 import logger from '../utils/logger';
+import { getAuthToken } from '../utils/authUtils';
 
 const { width } = Dimensions.get('window');
 
@@ -261,7 +262,6 @@ export default function AllJigsScreen({ navigation, route }) {
       logger.info('🔍 Cargando todos los jigs...');
       
       // Debug: Verificar token antes de hacer la petición
-      const { getAuthToken } = await import('../utils/authUtils');
       const token = await getAuthToken();
       logger.info('🔍 Token disponible:', token ? 'Sí' : 'No');
       logger.info('🔍 Token preview:', token ? token.substring(0, 20) + '...' : 'null');

@@ -6,7 +6,8 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  FlatList
+  FlatList,
+  Alert
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
@@ -17,16 +18,21 @@ import {
   ActivityIndicator,
   Divider,
   Chip,
-  Button
+  Button,
+  Dialog,
+  Portal
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePlatform } from '../hooks/usePlatform';
 import { webStyles } from '../utils/webStyles';
+import { useAuth } from '../contexts/AuthContext';
 import { adaptadorService } from '../services/AdaptadorService';
+import { arduinoSequenceService } from '../services/ArduinoSequenceService';
 import logger from '../utils/logger';
 
 export default function SearchMainboardScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -34,6 +40,37 @@ export default function SearchMainboardScreen({ navigation }) {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
   const searchInputRef = useRef(null);
+  const [showArduinoDialog, setShowArduinoDialog] = useState(false);
+  const [arduinoForm, setArduinoForm] = useState({
+    comando: '', destino: '', pais: '', modelo: '', modelo_interno: ''
+  });
+
+  const canEditArduino = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
+
+  const handleSaveArduino = async () => {
+    if (!arduinoForm.modelo_interno || !arduinoForm.destino || !arduinoForm.comando) {
+      Alert.alert('Error', 'Completa modelo interno, destino y comando.');
+      return;
+    }
+    const payload = {
+      comando: arduinoForm.comando.trim(),
+      destino: arduinoForm.destino.trim(),
+      pais: arduinoForm.pais.trim(),
+      modelo: selectedModel?.modelo_mainboard || arduinoForm.modelo.trim(),
+      modelo_interno: arduinoForm.modelo_interno.trim()
+    };
+    const result = await arduinoSequenceService.createSequence(payload);
+    if (result.success) {
+      setShowArduinoDialog(false);
+      setArduinoForm({ comando: '', destino: '', pais: '', modelo: '', modelo_interno: '' });
+      // Recargar detalles para ver la nueva secuencia
+      if (selectedModel?.modelo_mainboard) {
+        handleSelectModel(selectedModel.modelo_mainboard);
+      }
+    } else {
+      Alert.alert('Error', result.error || 'No se pudo guardar');
+    }
+  };
 
   useEffect(() => {
     // Limpiar timeout anterior cuando cambia el query
@@ -296,6 +333,60 @@ export default function SearchMainboardScreen({ navigation }) {
                         No se encontró información para este modelo de mainboard.
                       </Paragraph>
                     )}
+
+                    {/* Seccion Arduino */}
+                    <Divider style={styles.divider} />
+                    <View style={styles.arduinoSection}>
+                      <View style={styles.arduinoHeader}>
+                        <Chip icon="microchip" style={styles.arduinoChip} textStyle={styles.chipText}>
+                          Arduino
+                        </Chip>
+                        {canEditArduino && (
+                          <Button
+                            mode="contained"
+                            compact
+                            onPress={() => {
+                              setArduinoForm(prev => ({ ...prev, modelo: selectedModel?.modelo_mainboard || '' }));
+                              setShowArduinoDialog(true);
+                            }}
+                            buttonColor="#FF5722"
+                            textColor="#FFFFFF"
+                            style={styles.addArduinoButton}
+                          >
+                            Agregar
+                          </Button>
+                        )}
+                      </View>
+                      {selectedModel.arduino_sequences && selectedModel.arduino_sequences.length > 0 ? (
+                        selectedModel.arduino_sequences.map((seq, i) => (
+                          <View key={seq.id || i} style={styles.arduinoItem}>
+                            <Paragraph style={styles.arduinoField}>
+                              Modelo interno: <Paragraph style={styles.arduinoValue}>{seq.modelo_interno}</Paragraph>
+                            </Paragraph>
+                            <Paragraph style={styles.arduinoField}>
+                              Destino: <Paragraph style={styles.arduinoValue}>{seq.destino}</Paragraph>
+                            </Paragraph>
+                            <Paragraph style={styles.arduinoField}>
+                              Comando: <Paragraph style={styles.arduinoValue}>{seq.comando}</Paragraph>
+                            </Paragraph>
+                            {seq.pais ? (
+                              <View style={styles.chipsContainer}>
+                                {seq.pais.split(',').map((p, j) => (
+                                  <Chip key={j} style={styles.paisChip} textStyle={styles.paisChipText}>
+                                    {p.trim()}
+                                  </Chip>
+                                ))}
+                              </View>
+                            ) : null}
+                            {i < selectedModel.arduino_sequences.length - 1 && (
+                              <Divider style={styles.arduinoDivider} />
+                            )}
+                          </View>
+                        ))
+                      ) : (
+                        <Paragraph style={styles.arduinoNA}>N/A</Paragraph>
+                      )}
+                    </View>
                   </Card.Content>
                 </Card>
               </View>
@@ -311,6 +402,72 @@ export default function SearchMainboardScreen({ navigation }) {
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      <Portal>
+        <Dialog visible={showArduinoDialog} onDismiss={() => setShowArduinoDialog(false)} style={styles.dialog}>
+          <Dialog.Title style={styles.dialogTitle}>Agregar Secuencia Arduino</Dialog.Title>
+          <Dialog.Content>
+            <TextInput
+              label="Modelo Mainboard"
+              value={arduinoForm.modelo || selectedModel?.modelo_mainboard || ''}
+              mode="outlined"
+              style={styles.dialogInput}
+              dense
+              disabled
+              textColor="#AAAAAA"
+              outlineColor="#333333"
+            />
+            <TextInput
+              label="Modelo interno"
+              value={arduinoForm.modelo_interno}
+              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, modelo_interno: text }))}
+              mode="outlined"
+              style={styles.dialogInput}
+              dense
+              textColor="#F5F5F5"
+              outlineColor="#333333"
+              activeOutlineColor="#FF5722"
+            />
+            <TextInput
+              label="Destino"
+              value={arduinoForm.destino}
+              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, destino: text }))}
+              mode="outlined"
+              style={styles.dialogInput}
+              dense
+              textColor="#F5F5F5"
+              outlineColor="#333333"
+              activeOutlineColor="#FF5722"
+            />
+            <TextInput
+              label="Comando"
+              value={arduinoForm.comando}
+              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, comando: text }))}
+              mode="outlined"
+              style={styles.dialogInput}
+              dense
+              textColor="#F5F5F5"
+              outlineColor="#333333"
+              activeOutlineColor="#FF5722"
+            />
+            <TextInput
+              label="País(es) (COL/MEX/GUA/US)"
+              value={arduinoForm.pais}
+              onChangeText={(text) => setArduinoForm(prev => ({ ...prev, pais: text }))}
+              mode="outlined"
+              style={styles.dialogInput}
+              dense
+              textColor="#F5F5F5"
+              outlineColor="#333333"
+              activeOutlineColor="#FF5722"
+            />
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowArduinoDialog(false)} textColor="#B0B0B0">Cancelar</Button>
+            <Button mode="contained" onPress={handleSaveArduino} buttonColor="#FF5722">Guardar</Button>
+          </Dialog.Actions>
+        </Dialog>
+      </Portal>
     </View>
   );
 }
@@ -468,5 +625,71 @@ const styles = StyleSheet.create({
     color: '#B0B0B0',
     textAlign: 'center',
     fontSize: 16,
+  },
+  emptyInfoText: {
+    color: '#888888',
+    fontSize: 14,
+  },
+  arduinoSection: {
+    marginTop: 8,
+  },
+  arduinoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  arduinoChip: {
+    backgroundColor: '#FF5722',
+    alignSelf: 'flex-start',
+  },
+  addArduinoButton: {
+    borderRadius: 8,
+  },
+  arduinoItem: {
+    marginBottom: 12,
+    paddingLeft: 8,
+  },
+  arduinoField: {
+    color: '#B0B0B0',
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  arduinoValue: {
+    color: '#E0E0E0',
+    fontWeight: '600',
+  },
+  arduinoNA: {
+    color: '#888888',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingVertical: 12,
+  },
+  arduinoDivider: {
+    backgroundColor: '#444444',
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  paisChip: {
+    backgroundColor: '#37474F',
+    marginRight: 6,
+    marginTop: 4,
+  },
+  paisChipText: {
+    color: '#E0E0E0',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  dialog: {
+    backgroundColor: '#1E1E1E',
+    borderRadius: 12,
+  },
+  dialogTitle: {
+    color: '#FFFFFF',
+  },
+  dialogInput: {
+    marginBottom: 10,
+    backgroundColor: '#2A2A2A',
   },
 });

@@ -107,17 +107,7 @@ export default function AdaptadoresHomeScreen({ navigation }) {
               Buscar
             </Button>
 
-            <Button
-              mode="contained"
-              icon="microchip"
-              onPress={() => navigation.navigate('ArduinoSequences')}
-              style={styles.categoryButton}
-              contentStyle={styles.categoryButtonContent}
-              labelStyle={styles.categoryButtonLabel}
-              buttonColor="#FF5722"
-            >
-              Arduino
-            </Button>
+
           </View>
         </ScrollView>
         

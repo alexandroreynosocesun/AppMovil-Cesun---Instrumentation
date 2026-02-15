@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -41,7 +41,7 @@ export default function ArduinoSequencesScreen() {
     modelo_interno: ''
   });
 
-  const canEdit = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'ingeniero';
+  const canEdit = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
 
   const loadSequences = async () => {
     if (!searchModelo.trim()) {
@@ -167,14 +167,15 @@ export default function ArduinoSequencesScreen() {
         <Card style={[styles.card, styles.headerCard]}>
           <Card.Content>
             <Title style={styles.title}>Arduino</Title>
-            <Paragraph style={styles.subtitle}>Busca por modelo y consulta comando/destino</Paragraph>
+            <Paragraph style={styles.subtitle}>Busca por modelo mainboard y consulta comando/destino</Paragraph>
           </Card.Content>
         </Card>
 
         <Card style={[styles.card, styles.searchCard]}>
           <Card.Content>
             <TextInput
-              label="Modelo"
+              label="Modelo Mainboard"
+              placeholder="Ej: 10939, 11493..."
               value={searchModelo}
               onChangeText={setSearchModelo}
               mode="outlined"
@@ -312,7 +313,8 @@ export default function ArduinoSequencesScreen() {
           <Dialog.Title>Agregar Secuencia</Dialog.Title>
           <Dialog.Content>
             <TextInput
-              label="Modelo"
+              label="Modelo Mainboard"
+              placeholder="Ej: 10939, 11493..."
               value={formData.modelo}
               onChangeText={(text) => setFormData(prev => ({ ...prev, modelo: text }))}
               mode="outlined"

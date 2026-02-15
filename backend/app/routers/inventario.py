@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime
+from zoneinfo import ZoneInfo
 from io import BytesIO
 from reportlab.lib.pagesizes import letter, landscape
 from reportlab.lib import colors
@@ -18,7 +19,7 @@ router = APIRouter()
 
 def ensure_gestion_or_admin(current_user: Tecnico):
     """Solo usuarios de gestión, admin o ingeniero pueden acceder"""
-    if current_user.tipo_usuario not in ["admin", "gestion", "ingeniero"]:
+    if current_user.tipo_usuario not in ["admin", "superadmin", "gestion", "ingeniero"]:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo administradores, gestión o ingenieros pueden generar inventarios"
@@ -54,14 +55,35 @@ async def generar_inventario_pdf(
         # Verificar estado de los conectores
         tiene_ng = False
         ng_comentarios = []
+        conectores_reportados = set()  # Para evitar duplicados de conectores que comparten posición física
 
         for conector in adaptador.conectores:
             if conector.estado == "NG":
-                tiene_ng = True
-                detalle = f"{adaptador.numero_adaptador} - {conector.nombre_conector}"
-                if conector.comentario_ng:
-                    detalle += f": {conector.comentario_ng}"
-                ng_comentarios.append(detalle)
+                # Los conectores 1/3 y 2/4 comparten el mismo conector físico
+                # Solo reportar uno de cada par
+                nombre = conector.nombre_conector
+
+                # Crear identificador único para conectores que comparten posición
+                # Ejemplo: ZH-MINI-HD-1 y ZH-MINI-HD-3 -> ZH-MINI-HD-1/3
+                conector_base = nombre
+                if nombre.endswith('-1'):
+                    conector_base = nombre[:-1] + '1/3'
+                elif nombre.endswith('-3'):
+                    conector_base = nombre[:-1] + '1/3'
+                elif nombre.endswith('-2'):
+                    conector_base = nombre[:-1] + '2/4'
+                elif nombre.endswith('-4'):
+                    conector_base = nombre[:-1] + '2/4'
+
+                # Solo agregar si no hemos reportado este conector físico
+                clave_conector = f"{adaptador.numero_adaptador}-{conector_base}"
+                if clave_conector not in conectores_reportados:
+                    conectores_reportados.add(clave_conector)
+                    tiene_ng = True
+                    detalle = f"{adaptador.numero_adaptador} - {conector_base}"
+                    if conector.comentario_ng:
+                        detalle += f": {conector.comentario_ng}"
+                    ng_comentarios.append(detalle)
 
         if tiene_ng:
             inventario[tipo]['ng'] += 1
@@ -84,7 +106,8 @@ async def generar_inventario_pdf(
     )
 
     # Título
-    fecha_actual = datetime.now().strftime("%d/%m/%Y %H:%M")
+    tz_tijuana = ZoneInfo("America/Tijuana")
+    fecha_actual = datetime.now(tz_tijuana).strftime("%d/%m/%Y %H:%M")
     elements.append(Paragraph(f"{nombre_inventario}", title_style))
     elements.append(Paragraph(f"Fecha: {fecha_actual}", styles['Normal']))
     elements.append(Paragraph(f"Generado por: {current_user.nombre}", styles['Normal']))
@@ -146,9 +169,11 @@ async def generar_inventario_pdf(
     doc.build(elements)
     buffer.seek(0)
 
-    # Nombre del archivo
-    fecha_archivo = datetime.now().strftime("%Y%m%d_%H%M")
-    filename = f"inventario_{fecha_archivo}.pdf"
+    # Nombre del archivo - incluir nombre del inventario para fácil identificación
+    fecha_archivo = datetime.now(tz_tijuana).strftime("%d-%m-%Y")
+    # Sanitizar nombre para uso en filename (quitar caracteres no válidos)
+    nombre_safe = "".join(c if c.isalnum() or c in (' ', '-', '_') else '' for c in nombre_inventario).strip().replace(' ', '_')
+    filename = f"{nombre_safe}_{fecha_archivo}.pdf"
 
     return StreamingResponse(
         buffer,
@@ -177,16 +202,35 @@ async def obtener_resumen_inventario(
 
         tiene_ng = False
         ng_comentarios = []
+        conectores_reportados = set()  # Para evitar duplicados de conectores que comparten posición física
 
         for conector in adaptador.conectores:
             if conector.estado == "NG":
-                tiene_ng = True
-                detalle = {
-                    'adaptador': adaptador.numero_adaptador,
-                    'conector': conector.nombre_conector,
-                    'comentario': conector.comentario_ng
-                }
-                ng_comentarios.append(detalle)
+                # Los conectores 1/3 y 2/4 comparten el mismo conector físico
+                nombre = conector.nombre_conector
+
+                # Crear identificador único para conectores que comparten posición
+                conector_base = nombre
+                if nombre.endswith('-1'):
+                    conector_base = nombre[:-1] + '1/3'
+                elif nombre.endswith('-3'):
+                    conector_base = nombre[:-1] + '1/3'
+                elif nombre.endswith('-2'):
+                    conector_base = nombre[:-1] + '2/4'
+                elif nombre.endswith('-4'):
+                    conector_base = nombre[:-1] + '2/4'
+
+                # Solo agregar si no hemos reportado este conector físico
+                clave_conector = f"{adaptador.numero_adaptador}-{conector_base}"
+                if clave_conector not in conectores_reportados:
+                    conectores_reportados.add(clave_conector)
+                    tiene_ng = True
+                    detalle = {
+                        'adaptador': adaptador.numero_adaptador,
+                        'conector': conector_base,
+                        'comentario': conector.comentario_ng
+                    }
+                    ng_comentarios.append(detalle)
 
         if tiene_ng:
             inventario[tipo]['ng'] += 1
@@ -214,5 +258,5 @@ async def obtener_resumen_inventario(
     return {
         'items': resultado,
         'total': total,
-        'fecha': datetime.now().isoformat()
+        'fecha': datetime.now(ZoneInfo("America/Tijuana")).isoformat()
     }

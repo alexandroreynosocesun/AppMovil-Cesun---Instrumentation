@@ -877,7 +877,7 @@ export default function HomeScreen({ navigation }) {
               )}
 
               {/* Botón de inventario - admin, gestión e ingeniero */}
-              {(user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'gestion' || user?.tipo_usuario === 'Gestion' || user?.tipo_usuario === 'ingeniero' || user?.usuario === 'adminAlex') && (
+              {(user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'gestion' || user?.tipo_usuario === 'Gestion' || user?.tipo_usuario === 'ingeniero' || user?.usuario === 'adminAlex') && (
                 <TouchableOpacity
                   style={[styles.additionalButtonTouchable, { borderColor: '#00BCD4' }]}
                   onPress={() => navigation.navigate('Inventario')}

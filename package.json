@@ -1,5 +1,15 @@
 {
   "dependencies": {
-    "expo-file-system": "^19.0.19"
+    "expo-barcode-scanner": "^13.0.1",
+    "expo-file-system": "^19.0.19",
+    "expo": "~54.0.33",
+    "react": "19.1.0",
+    "react-native": "0.81.5"
+  },
+  "name": "APP Movil",
+  "version": "1.0.0",
+  "scripts": {
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   }
 }
