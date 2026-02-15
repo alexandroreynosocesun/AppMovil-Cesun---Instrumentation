@@ -17,7 +17,6 @@ export const webStyles = StyleSheet.create({
       maxWidth: isDesktop ? 1400 : '100%',
       alignSelf: 'center',
       width: '100%',
-      minHeight: '100dvh',
       height: '100%',
       paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 0,
       display: 'flex',

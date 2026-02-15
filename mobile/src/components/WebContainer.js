@@ -25,9 +25,6 @@ const styles = StyleSheet.create({
     flex: 1,
     alignSelf: 'center',
     width: '100%',
-    ...(Platform.OS === 'web' && {
-      minHeight: '100dvh',
-    }),
   },
 });
 

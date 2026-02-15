@@ -710,10 +710,6 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    ...(Platform.OS === 'web' && {
-      minHeight: '100dvh',
-      height: '100%',
-    }),
   },
   backgroundGradient: {
     position: 'absolute',
@@ -731,8 +727,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 40,
     ...(Platform.OS === 'web' && {
-      minHeight: '100dvh',
-      height: '100%',
       display: 'flex',
       flexDirection: 'column',
       justifyContent: 'center',
