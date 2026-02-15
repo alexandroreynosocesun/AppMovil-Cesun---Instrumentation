@@ -106,6 +106,14 @@ export default function ListConvertidoresScreen({ navigation }) {
     };
   };
 
+  const handlePendientePress = (convertidor) => {
+    Alert.alert('Seleccionar estado', '¿Cuál es el estado de este convertidor?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'OK', onPress: () => handleMarkOk(convertidor) },
+      { text: 'NG', style: 'destructive', onPress: () => handleOpenNg(convertidor) }
+    ]);
+  };
+
   const handleOpenNg = (convertidor) => {
     const conector = convertidor?.conectores?.[0];
     if (!conector?.id) {
@@ -385,52 +393,57 @@ export default function ListConvertidoresScreen({ navigation }) {
                   <Card.Content>
                   <View style={styles.itemHeader}>
                     <Title style={styles.itemTitle}>Convertidor #{convertidor.numero_adaptador}</Title>
-                    <Chip
-                      icon={getConectorEstado(convertidor) === 'NG' ? 'alert-circle' : 'check-circle'}
-                      style={[
-                        styles.statusChip,
-                        getConectorEstado(convertidor) === 'NG' ? styles.statusChipNg : styles.statusChipOk
-                      ]}
-                    >
-                      {getConectorEstado(convertidor) === 'NG' ? 'NG' : convertidor.estado}
-                    </Chip>
+                    {(() => {
+                      const estado = getConectorEstado(convertidor) || convertidor.estado;
+                      if (estado === 'PENDIENTE') {
+                        return (
+                          <Chip icon="clock-outline" style={styles.statusChipPending} onPress={() => handlePendientePress(convertidor)}>
+                            PENDIENTE
+                          </Chip>
+                        );
+                      } else if (estado === 'NG') {
+                        return <Chip icon="alert-circle" style={styles.statusChipNg}>NG</Chip>;
+                      }
+                      return <Chip icon="check-circle" style={styles.statusChipOk}>OK</Chip>;
+                    })()}
                   </View>
                   <Paragraph style={styles.itemText}>QR: {convertidor.codigo_qr}</Paragraph>
                   <View style={styles.conectorRow}>
-                    <Chip
-                      icon={getConectorEstado(convertidor) === 'NG' ? 'alert-circle' : 'check-circle'}
-                      style={[
-                        styles.conectorChip,
-                        getConectorEstado(convertidor) === 'NG' ? styles.conectorChipNg : styles.conectorChipOk
-                      ]}
-                    >
-                      {getConectorEstado(convertidor) || 'SIN ESTADO'}
-                    </Chip>
-                    {getConectorEstado(convertidor) === 'NG' ? (
-                      <Button
-                        mode="contained"
-                        style={styles.okButton}
-                        buttonColor="#2E7D32"
-                        loading={Boolean(updatingIds[getConector(convertidor)?.id])}
-                        onPress={() => handleMarkOk(convertidor)}
-                      >
-                        Marcar OK
-                      </Button>
-                    ) : (
-                      <Button
-                        mode="contained"
-                        style={styles.ngButton}
-                        buttonColor="#E53935"
-                        icon="alert-circle"
-                        uppercase={false}
-                        contentStyle={styles.ngButtonContent}
-                        labelStyle={styles.ngButtonLabel}
-                        loading={Boolean(updatingIds[getConector(convertidor)?.id])}
-                        onPress={() => handleOpenNg(convertidor)}
-                      >
-                        NG
-                      </Button>
-                    )}
+                    {(() => {
+                      const estado = getConectorEstado(convertidor);
+                      if (estado === 'PENDIENTE') {
+                        return (
+                          <Chip icon="clock-outline" style={[styles.conectorChip, styles.conectorChipPending]} onPress={() => handlePendientePress(convertidor)}>
+                            PENDIENTE
+                          </Chip>
+                        );
+                      } else if (estado === 'NG') {
+                        return <Chip icon="alert-circle" style={[styles.conectorChip, styles.conectorChipNg]}>{estado}</Chip>;
+                      }
+                      return <Chip icon="check-circle" style={[styles.conectorChip, styles.conectorChipOk]}>{estado || 'SIN ESTADO'}</Chip>;
+                    })()}
+                    {(() => {
+                      const estado = getConectorEstado(convertidor);
+                      const isUpdating = Boolean(updatingIds[getConector(convertidor)?.id]);
+                      if (estado === 'PENDIENTE') {
+                        return (
+                          <Button mode="contained" style={styles.ngButton} buttonColor="#E53935" loading={isUpdating} onPress={() => handleOpenNg(convertidor)}>
+                            NG
+                          </Button>
+                        );
+                      } else if (estado === 'NG') {
+                        return (
+                          <Button mode="contained" style={styles.okButton} buttonColor="#2E7D32" loading={isUpdating} onPress={() => handleMarkOk(convertidor)}>
+                            Marcar OK
+                          </Button>
+                        );
+                      }
+                      return (
+                        <Button mode="contained" style={styles.ngButton} buttonColor="#E53935" icon="alert-circle" uppercase={false} contentStyle={styles.ngButtonContent} labelStyle={styles.ngButtonLabel} loading={isUpdating} onPress={() => handleOpenNg(convertidor)}>
+                          NG
+                        </Button>
+                      );
+                    })()}
                   </View>
                   {getConectorEstado(convertidor) === 'NG' && getConector(convertidor)?.comentario_ng ? (
                     <Paragraph style={styles.commentText}>
@@ -666,6 +679,9 @@ const styles = StyleSheet.create({
   statusChipNg: {
     backgroundColor: '#C62828',
   },
+  statusChipPending: {
+    backgroundColor: '#616161',
+  },
   itemText: {
     color: '#E0E0E0',
     fontSize: 14,
@@ -686,6 +702,9 @@ const styles = StyleSheet.create({
   },
   conectorChipNg: {
     backgroundColor: '#C62828',
+  },
+  conectorChipPending: {
+    backgroundColor: '#616161',
   },
   ngButton: {
     borderRadius: 8,

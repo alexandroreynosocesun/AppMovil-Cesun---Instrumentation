@@ -441,25 +441,36 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
                       )}
                     </View>
                     <Chip
-                      icon={getConectorEstado(item) === 'NG' ? 'alert-circle' : 'check-circle'}
+                      icon={getConectorEstado(item) === 'OK' ? 'check-circle' : getConectorEstado(item) === 'NG' ? 'alert-circle' : 'clock-outline'}
                       style={[
                         styles.statusChip,
-                        getConectorEstado(item) === 'NG' ? styles.statusChipNg : styles.statusChipOk
+                        getConectorEstado(item) === 'OK' ? styles.statusChipOk : getConectorEstado(item) === 'NG' ? styles.statusChipNg : styles.statusChipPending
                       ]}
                     >
-                      {getConectorEstado(item) === 'NG' ? 'NG' : item.estado}
+                      {getConectorEstado(item) === 'NG' ? 'NG' : getConectorEstado(item) === 'OK' ? 'OK' : 'PENDIENTE'}
                     </Chip>
                   </View>
                   <Paragraph style={styles.itemText}>QR: {item.codigo_qr}</Paragraph>
                   <View style={styles.conectorRow}>
                     <Chip
-                      icon={getConectorEstado(item) === 'NG' ? 'alert-circle' : 'check-circle'}
+                      icon={getConectorEstado(item) === 'OK' ? 'check-circle' : getConectorEstado(item) === 'NG' ? 'alert-circle' : 'clock-outline'}
                       style={[
                         styles.conectorChip,
-                        getConectorEstado(item) === 'NG' ? styles.conectorChipNg : styles.conectorChipOk
+                        getConectorEstado(item) === 'OK' ? styles.conectorChipOk : getConectorEstado(item) === 'NG' ? styles.conectorChipNg : styles.conectorChipPending
                       ]}
+                      onPress={getConectorEstado(item) === 'PENDIENTE' ? () => {
+                        Alert.alert(
+                          'Seleccionar estado',
+                          '¿Cuál es el estado de este conector?',
+                          [
+                            { text: 'Cancelar', style: 'cancel' },
+                            { text: 'OK', onPress: () => handleMarkOk(item) },
+                            { text: 'NG', style: 'destructive', onPress: () => handleOpenNg(item) }
+                          ]
+                        );
+                      } : undefined}
                     >
-                      {getConectorEstado(item) || 'SIN ESTADO'}
+                      {getConectorEstado(item) || 'PENDIENTE'}
                     </Chip>
                     <View style={styles.actionButtons}>
                       {getConectorEstado(item) === 'NG' ? (
@@ -767,6 +778,9 @@ const styles = StyleSheet.create({
   statusChipNg: {
     backgroundColor: '#C62828',
   },
+  statusChipPending: {
+    backgroundColor: '#616161',
+  },
   itemText: {
     color: '#E0E0E0',
     fontSize: 14,
@@ -792,6 +806,9 @@ const styles = StyleSheet.create({
   },
   conectorChipNg: {
     backgroundColor: '#C62828',
+  },
+  conectorChipPending: {
+    backgroundColor: '#616161',
   },
   ngButton: {
     borderRadius: 8,

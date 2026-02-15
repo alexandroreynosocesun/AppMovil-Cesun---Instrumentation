@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, Alert, Dimensions } from 'react-native';
+import { View, StyleSheet, Alert, Dimensions, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Button, Card, Title, Paragraph, ActivityIndicator } from 'react-native-paper';
+import { Button, Card, Title, Paragraph, ActivityIndicator, TextInput } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import { adaptadorService } from '../services/AdaptadorService';
 import { formatDateTime12Hour } from '../utils/dateUtils';
@@ -14,6 +14,8 @@ export default function QRScannerAdaptadores({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showManualInput, setShowManualInput] = useState(false);
+  const [manualCode, setManualCode] = useState('');
   const isProcessingRef = useRef(false);
 
   const hasPermission = permission?.granted;
@@ -64,8 +66,8 @@ export default function QRScannerAdaptadores({ navigation }) {
     return message;
   };
 
-  const handleBarCodeScanned = async ({ data }) => {
-    if (scanned || loading || isProcessingRef.current) return;
+  const processCode = async (data) => {
+    if (loading || isProcessingRef.current) return;
 
     isProcessingRef.current = true;
     setScanned(true);
@@ -78,7 +80,7 @@ export default function QRScannerAdaptadores({ navigation }) {
       if (result.success) {
         const infoMessage = getAdaptadorInfoMessage(result.data);
         Alert.alert(
-          '📋 Información del Adaptador',
+          'Información del Adaptador',
           infoMessage,
           [
             {
@@ -91,6 +93,7 @@ export default function QRScannerAdaptadores({ navigation }) {
             }
           ]
         );
+        return; // Don't reset in finally since Alert handles it
       } else if (result.error === 'NOT_FOUND') {
         // Escaneo directo: usar QR para agregar adaptador
         navigation.navigate('AddAdaptador', { codigo_qr: data });
@@ -105,12 +108,26 @@ export default function QRScannerAdaptadores({ navigation }) {
       logger.error('Error scanning QR:', error);
       Alert.alert('Error', 'Error al procesar QR');
     } finally {
-      if (!result?.success) {
-        isProcessingRef.current = false;
-        setScanned(false);
-        setLoading(false);
-      }
+      isProcessingRef.current = false;
+      setScanned(false);
+      setLoading(false);
     }
+  };
+
+  const handleBarCodeScanned = async ({ data }) => {
+    if (scanned || loading || isProcessingRef.current) return;
+    processCode(data);
+  };
+
+  const handleManualSubmit = () => {
+    const code = manualCode.trim();
+    if (!code) {
+      Alert.alert('Error', 'Ingresa un código.');
+      return;
+    }
+    setShowManualInput(false);
+    setManualCode('');
+    processCode(code);
   };
 
   if (!hasPermission) {
@@ -147,7 +164,12 @@ export default function QRScannerAdaptadores({ navigation }) {
         )}
       </View>
 
-      {/* Sin modal: el QR se usa para agregar adaptador */}
+      {/* Botón de agregar manualmente */}
+      <View style={styles.topBar}>
+        <TouchableOpacity style={styles.manualButton} onPress={() => navigation.navigate('AddAdaptador', {})}>
+          <Paragraph style={styles.manualButtonText}>Agregar manualmente</Paragraph>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -186,5 +208,45 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 20,
+  },
+  topBar: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    paddingTop: 50,
+  },
+  manualButton: {
+    backgroundColor: 'rgba(30, 30, 30, 0.9)',
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  manualButtonText: {
+    color: '#4CAF50',
+    fontWeight: '600',
+    fontSize: 15,
+  },
+  manualInputContainer: {
+    backgroundColor: 'rgba(30, 30, 30, 0.95)',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#4CAF50',
+  },
+  manualInput: {
+    backgroundColor: '#1E1E1E',
+    marginBottom: 12,
+  },
+  manualButtons: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+  },
+  manualBtn: {
+    borderRadius: 8,
   },
 });

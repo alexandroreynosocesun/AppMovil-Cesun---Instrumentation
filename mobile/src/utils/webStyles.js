@@ -17,9 +17,9 @@ export const webStyles = StyleSheet.create({
       maxWidth: isDesktop ? 1400 : '100%',
       alignSelf: 'center',
       width: '100%',
-      minHeight: '100vh',
+      minHeight: '100dvh',
       height: '100%',
-      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 16,
+      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 0,
       display: 'flex',
       flexDirection: 'column',
     }),
@@ -121,7 +121,7 @@ export const webStyles = StyleSheet.create({
   // ScrollView content responsive
   scrollContent: {
     ...(isWeb && {
-      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 16,
+      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 0,
       paddingVertical: isDesktop ? 32 : 24,
       minHeight: '100%',
       flexGrow: 1,
@@ -139,7 +139,7 @@ export const webStyles = StyleSheet.create({
   // List items responsive
   listItem: {
     ...(isWeb && {
-      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 16,
+      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 0,
     }),
   },
 
@@ -165,7 +165,7 @@ export const webStyles = StyleSheet.create({
       maxWidth: isDesktop ? 1400 : '100%',
       alignSelf: 'center',
       width: '100%',
-      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 16,
+      paddingHorizontal: isDesktop ? 24 : isTablet ? 20 : 0,
     }),
   },
 
@@ -225,7 +225,7 @@ export const getGridColumns = () => {
 export const getResponsivePadding = () => {
   if (isDesktop) return 24;
   if (isTablet) return 20;
-  return 16;
+  return 0;
 };
 
 /**

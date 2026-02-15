@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -60,6 +60,10 @@ export default function LoginScreen({ navigation }) {
   const [biometricType, setBiometricType] = useState('');
   const [hasSavedCredentials, setHasSavedCredentials] = useState(false);
   
+  // Refs para configurar atributos nativos en web (Keychain/autofill)
+  const usernameRef = useRef(null);
+  const passwordRef = useRef(null);
+
   // Estados para selector de idioma
   const [showLanguageModal, setShowLanguageModal] = useState(false);
   
@@ -97,6 +101,41 @@ export default function LoginScreen({ navigation }) {
     // Verificar autenticación biométrica
     checkBiometricAvailability();
     checkSavedCredentials();
+  }, []);
+
+  // Configurar atributos nativos HTML para Safari Keychain/Autofill
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const setInputAttrs = (ref, attrs) => {
+      try {
+        const node = ref?.current;
+        if (!node) return;
+        // React Native Web TextInput renders a <div> wrapping an <input>
+        const input = node.querySelector ? node.querySelector('input') : node;
+        if (input && input.setAttribute) {
+          Object.entries(attrs).forEach(([key, val]) => input.setAttribute(key, val));
+        }
+      } catch (e) {
+        // Ignore if DOM manipulation fails
+      }
+    };
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(() => {
+      setInputAttrs(usernameRef, {
+        name: 'username',
+        autocomplete: 'username',
+        type: 'text',
+      });
+      setInputAttrs(passwordRef, {
+        name: 'password',
+        autocomplete: 'current-password',
+        type: 'password',
+      });
+    }, 500);
+
+    return () => clearTimeout(timer);
   }, []);
   
   // Verificar preferencia de idioma
@@ -358,19 +397,16 @@ export default function LoginScreen({ navigation }) {
             <Surface style={[styles.card, isWeb && webStyles.authCard]} elevation={8}>
               <Card.Content style={styles.cardContent}>
                 <View style={styles.formContainer}>
-                  <TouchableOpacity 
-                    onPress={() => setShowUserModal(true)}
-                    activeOpacity={0.7}
-                  >
-                    <View pointerEvents="none">
+                  {Platform.OS === 'web' ? (
+                    <View ref={usernameRef}>
                       <TextInput
                         label={t('username')}
                         value={usuario}
+                        onChangeText={setUsuario}
                         mode="outlined"
                         style={[styles.input, { color: '#F5F5F5' }]}
                         autoCapitalize="none"
                         autoCorrect={false}
-                        editable={false}
                         textContentType="username"
                         autoComplete="username"
                         theme={{
@@ -386,38 +422,72 @@ export default function LoginScreen({ navigation }) {
                         outlineColor="#333333"
                         activeOutlineColor="#4A4A4A"
                         textColor="#F5F5F5"
-                        right={<TextInput.Icon icon="chevron-down" color="#888888" />}
+                        right={<TextInput.Icon icon="chevron-down" color="#888888" onPress={() => setShowUserModal(true)} />}
                       />
                     </View>
-                  </TouchableOpacity>
-                  
-                  <TextInput
-                    label={t('password')}
-                    value={password}
-                    onChangeText={setPassword}
-                    mode="outlined"
-                    style={[styles.input, { color: '#F5F5F5' }]}
-                    secureTextEntry={!showPassword}
-                    autoCapitalize="none"
-                    textContentType="password"
-                    autoComplete="password"
-                    passwordRules="required: upper; required: lower; required: digit; minlength: 6;"
-                    theme={{
-                      colors: {
-                        primary: '#4A4A4A',
-                        background: 'transparent',
-                        surface: '#0F0F0F',
-                        text: '#F5F5F5',
-                        placeholder: '#666666',
-                        onSurface: '#F5F5F5',
-                      }
-                    }}
-                    outlineColor="#333333"
-                    activeOutlineColor="#4A4A4A"
-                    textColor="#F5F5F5"
-                    right={<TextInput.Icon icon={showPassword ? "eye-off" : "eye"} color="#888888" onPress={() => setShowPassword(!showPassword)} />}
-                  />
-                  
+                  ) : (
+                    <TouchableOpacity
+                      onPress={() => setShowUserModal(true)}
+                      activeOpacity={0.7}
+                    >
+                      <View pointerEvents="none">
+                        <TextInput
+                          label={t('username')}
+                          value={usuario}
+                          mode="outlined"
+                          style={[styles.input, { color: '#F5F5F5' }]}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          editable={false}
+                          textContentType="username"
+                          autoComplete="username"
+                          theme={{
+                            colors: {
+                              primary: '#4A4A4A',
+                              background: 'transparent',
+                              surface: '#0F0F0F',
+                              text: '#F5F5F5',
+                              placeholder: '#666666',
+                              onSurface: '#F5F5F5',
+                            }
+                          }}
+                          outlineColor="#333333"
+                          activeOutlineColor="#4A4A4A"
+                          textColor="#F5F5F5"
+                          right={<TextInput.Icon icon="chevron-down" color="#888888" />}
+                        />
+                      </View>
+                    </TouchableOpacity>
+                  )}
+
+                  <View ref={Platform.OS === 'web' ? passwordRef : undefined}>
+                    <TextInput
+                      label={t('password')}
+                      value={password}
+                      onChangeText={setPassword}
+                      mode="outlined"
+                      style={[styles.input, { color: '#F5F5F5' }]}
+                      secureTextEntry={!showPassword}
+                      autoCapitalize="none"
+                      textContentType="password"
+                      autoComplete="current-password"
+                      theme={{
+                        colors: {
+                          primary: '#4A4A4A',
+                          background: 'transparent',
+                          surface: '#0F0F0F',
+                          text: '#F5F5F5',
+                          placeholder: '#666666',
+                          onSurface: '#F5F5F5',
+                        }
+                      }}
+                      outlineColor="#333333"
+                      activeOutlineColor="#4A4A4A"
+                      textColor="#F5F5F5"
+                      right={<TextInput.Icon icon={showPassword ? "eye-off" : "eye"} color="#888888" onPress={() => setShowPassword(!showPassword)} />}
+                    />
+                  </View>
+
                   <TouchableOpacity
                     style={styles.loginButton}
                     onPress={handleLogin}
@@ -641,7 +711,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     ...(Platform.OS === 'web' && {
-      minHeight: '100vh',
+      minHeight: '100dvh',
       height: '100%',
     }),
   },
@@ -661,7 +731,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 40,
     ...(Platform.OS === 'web' && {
-      minHeight: '100vh',
+      minHeight: '100dvh',
       height: '100%',
       display: 'flex',
       flexDirection: 'column',

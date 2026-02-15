@@ -24,119 +24,120 @@ import { adaptadorService } from '../services/AdaptadorService';
 import { useLanguage } from '../contexts/LanguageContext';
 import logger from '../utils/logger';
 
+// Modelos disponibles según tipo
+const modelosAdaptador = ['ADA20100_01', 'ADA20100_02', 'CSTH-100/ZH-S20'];
+const modelosConvertidor = ['11477', '11479'];
+
+const generarQR = (tipo, modelo, numero) => {
+  if (!numero) return '';
+  if (tipo === 'adaptador') {
+    switch (modelo) {
+      case 'ADA20100_01': return `250515_${numero}`;
+      case 'ADA20100_02': return `250515_${numero}`;
+      case 'CSTH-100/ZH-S20': return `MLA-MANY-NA-${numero}`;
+      default: return '';
+    }
+  } else if (tipo === 'convertidor') {
+    switch (modelo) {
+      case '11477': return `C-11477-NA-${numero}`;
+      case '11479': return `C-11479-NA-${numero}`;
+      default: return '';
+    }
+  }
+  return '';
+};
+
 export default function AddAdaptadorScreen({ navigation, route }) {
   const { t } = useLanguage();
+  const isManual = !route?.params?.codigo_qr;
   const [loading, setLoading] = useState(false);
   const [showTipoModal, setShowTipoModal] = useState(false);
   const [showModeloModal, setShowModeloModal] = useState(false);
-  
+  const [manualStep, setManualStep] = useState(isManual ? 1 : 0); // 0=scan, 1=tipo, 2=modelo, 3=numero
+
   const [formData, setFormData] = useState({
     codigo_qr: route?.params?.codigo_qr || '',
-    tipo: '', // 'adaptador' o 'convertidor'
+    tipo: '',
     modelo_adaptador: '',
-    numero_adaptador: '' // Se extrae del QR según el tipo
+    numero_adaptador: ''
   });
 
-  // Modelos disponibles según tipo
-  const modelosAdaptador = ['ADA20100_01', 'ADA20100_02', 'CSTH-100/ZH-S20'];
-  const modelosConvertidor = ['11477', '11479'];
-
-  // Obtener modelos según tipo seleccionado
   const modelosDisponibles = formData.tipo === 'adaptador' ? modelosAdaptador : modelosConvertidor;
 
   // Función para extraer número del adaptador desde QR
   const extraerNumeroAdaptador = (qr, tipo) => {
     if (!qr) return '';
-    
     if (tipo === 'adaptador') {
-      // Para adaptadores: últimos dígitos después del guion bajo (_)
       const partes = qr.split('_');
-      if (partes.length > 1) {
-        return partes[partes.length - 1];
-      }
-      // Si no hay guion bajo, intentar con guion medio como fallback
+      if (partes.length > 1) return partes[partes.length - 1];
       const partesGuion = qr.split('-');
-      if (partesGuion.length > 1) {
-        return partesGuion[partesGuion.length - 1];
-      }
+      if (partesGuion.length > 1) return partesGuion[partesGuion.length - 1];
     } else if (tipo === 'convertidor') {
-      // Para convertidores: últimos dígitos después del guion medio (-)
       const partes = qr.split('-');
-      if (partes.length > 1) {
-        return partes[partes.length - 1];
-      }
+      if (partes.length > 1) return partes[partes.length - 1];
     }
-    
     return '';
   };
 
-  // Auto-extraer número cuando cambie el QR o el tipo
+  // Para flujo QR: auto-extraer número
   useEffect(() => {
-    if (formData.codigo_qr && formData.tipo) {
+    if (!isManual && formData.codigo_qr && formData.tipo) {
       const numero = extraerNumeroAdaptador(formData.codigo_qr, formData.tipo);
-      setFormData(prev => ({
-        ...prev,
-        numero_adaptador: numero
-      }));
+      setFormData(prev => ({ ...prev, numero_adaptador: numero }));
     }
   }, [formData.codigo_qr, formData.tipo]);
 
-  // Resetear modelo cuando cambie el tipo
+  // Para flujo QR: resetear modelo cuando cambie el tipo
   useEffect(() => {
-    setFormData(prev => ({
-      ...prev,
-      modelo_adaptador: ''
-    }));
+    if (!isManual) {
+      setFormData(prev => ({ ...prev, modelo_adaptador: '' }));
+    }
   }, [formData.tipo]);
 
-  const handleInputChange = (field, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  // Para flujo manual: auto-generar QR cuando cambia número
+  useEffect(() => {
+    if (isManual && formData.tipo && formData.modelo_adaptador && formData.numero_adaptador) {
+      const qr = generarQR(formData.tipo, formData.modelo_adaptador, formData.numero_adaptador);
+      setFormData(prev => ({ ...prev, codigo_qr: qr }));
+    }
+  }, [formData.numero_adaptador, formData.modelo_adaptador, formData.tipo]);
 
-    // Si cambia codigo_qr y ya hay tipo, extraer número
-    if (field === 'codigo_qr' && formData.tipo) {
+  const handleInputChange = (field, value) => {
+    setFormData(prev => ({ ...prev, [field]: value }));
+    if (!isManual && field === 'codigo_qr' && formData.tipo) {
       const numero = extraerNumeroAdaptador(value, formData.tipo);
-      setFormData(prev => ({
-        ...prev,
-        numero_adaptador: numero
-      }));
+      setFormData(prev => ({ ...prev, numero_adaptador: numero }));
     }
   };
 
   const handleSelectTipo = (tipo) => {
     setShowTipoModal(false);
-    
-    // Actualizar tipo y extraer número en una sola actualización
-    setFormData(prev => {
-      const numero = prev.codigo_qr ? extraerNumeroAdaptador(prev.codigo_qr, tipo) : '';
-      return {
-        ...prev,
-        tipo: tipo,
-        modelo_adaptador: '', // Resetear modelo al cambiar tipo
-        numero_adaptador: numero
-      };
-    });
+    if (isManual) {
+      setFormData(prev => ({ ...prev, tipo, modelo_adaptador: '', numero_adaptador: '', codigo_qr: '' }));
+      setManualStep(2);
+    } else {
+      setFormData(prev => {
+        const numero = prev.codigo_qr ? extraerNumeroAdaptador(prev.codigo_qr, tipo) : '';
+        return { ...prev, tipo, modelo_adaptador: '', numero_adaptador: numero };
+      });
+    }
   };
 
   const handleSelectModelo = (modelo) => {
-    setFormData(prev => ({
-      ...prev,
-      modelo_adaptador: modelo
-    }));
+    setFormData(prev => ({ ...prev, modelo_adaptador: modelo }));
     setShowModeloModal(false);
+    if (isManual) {
+      setManualStep(3);
+    }
   };
 
   const handleSubmit = async () => {
-    // Validar campos requeridos
     if (!formData.codigo_qr || !formData.tipo || !formData.modelo_adaptador) {
       Alert.alert('Error', 'Por favor completa todos los campos requeridos');
       return;
     }
-
     if (!formData.numero_adaptador) {
-      Alert.alert('Error', 'No se pudo extraer el número del adaptador/convertidor del código QR. Verifica el formato.');
+      Alert.alert('Error', 'Ingresa el número del adaptador/convertidor.');
       return;
     }
 
@@ -149,10 +150,10 @@ export default function AddAdaptadorScreen({ navigation, route }) {
       };
 
       const result = await adaptadorService.createAdaptador(dataToSend);
-      
       if (result.success) {
-        // Navegar al home de adaptadores
-        navigation.navigate('AdaptadoresHome');
+        Alert.alert('Éxito', 'Registro creado correctamente.', [
+          { text: 'OK', onPress: () => navigation.goBack() }
+        ]);
       } else {
         Alert.alert('Error', result.error || 'Error al crear adaptador/convertidor');
       }
@@ -166,7 +167,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
 
   const darkTheme = {
     colors: {
-      primary: '#2196F3',
+      primary: '#4CAF50',
       background: '#121212',
       surface: '#1E1E1E',
       text: '#FFFFFF',
@@ -178,8 +179,147 @@ export default function AddAdaptadorScreen({ navigation, route }) {
     },
   };
 
+  // ===== FLUJO MANUAL: Paso 1 - Seleccionar tipo =====
+  if (isManual && manualStep === 1) {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title style={styles.title}>Selecciona tipo</Title>
+              <Paragraph style={styles.stepHint}>Paso 1 de 3</Paragraph>
+              <TouchableOpacity
+                style={styles.categoryCard}
+                onPress={() => handleSelectTipo('adaptador')}
+                activeOpacity={0.7}
+              >
+                <Paragraph style={styles.categoryLabel}>Adaptador</Paragraph>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.categoryCard}
+                onPress={() => handleSelectTipo('convertidor')}
+                activeOpacity={0.7}
+              >
+                <Paragraph style={styles.categoryLabel}>Convertidor</Paragraph>
+              </TouchableOpacity>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ===== FLUJO MANUAL: Paso 2 - Seleccionar modelo =====
+  if (isManual && manualStep === 2) {
+    return (
+      <View style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title style={styles.title}>Selecciona modelo</Title>
+              <Paragraph style={styles.stepHint}>
+                Paso 2 de 3 — {formData.tipo === 'adaptador' ? 'Adaptador' : 'Convertidor'}
+              </Paragraph>
+              {modelosDisponibles.map(modelo => (
+                <TouchableOpacity
+                  key={modelo}
+                  style={styles.categoryCard}
+                  onPress={() => handleSelectModelo(modelo)}
+                  activeOpacity={0.7}
+                >
+                  <Paragraph style={styles.categoryLabel}>{modelo}</Paragraph>
+                </TouchableOpacity>
+              ))}
+              <Button
+                mode="outlined"
+                onPress={() => {
+                  setManualStep(1);
+                  setFormData(prev => ({ ...prev, tipo: '', modelo_adaptador: '', numero_adaptador: '', codigo_qr: '' }));
+                }}
+                textColor="#B0B0B0"
+                style={styles.backBtn}
+              >
+                Cambiar tipo
+              </Button>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </View>
+    );
+  }
+
+  // ===== FLUJO MANUAL: Paso 3 - Ingresar número =====
+  if (isManual && manualStep === 3) {
+    return (
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Card style={styles.card}>
+            <Card.Content>
+              <Title style={styles.title}>Ingresa el número</Title>
+              <Paragraph style={styles.stepHint}>
+                Paso 3 de 3 — {formData.tipo === 'adaptador' ? 'Adaptador' : 'Convertidor'} / {formData.modelo_adaptador}
+              </Paragraph>
+
+              <TextInput
+                label="Número de etiqueta"
+                value={formData.numero_adaptador}
+                onChangeText={(value) => handleInputChange('numero_adaptador', value)}
+                mode="outlined"
+                style={styles.input}
+                placeholder="Ej: 001, 045..."
+                textColor="#FFFFFF"
+                placeholderTextColor="#808080"
+                outlineColor="#3A3A3A"
+                activeOutlineColor="#4CAF50"
+                autoFocus
+                theme={darkTheme}
+              />
+
+              {formData.codigo_qr ? (
+                <View style={styles.qrPreview}>
+                  <Paragraph style={styles.qrPreviewLabel}>QR generado:</Paragraph>
+                  <Paragraph style={styles.qrPreviewValue}>{formData.codigo_qr}</Paragraph>
+                </View>
+              ) : null}
+
+              <View style={styles.manualButtons}>
+                <Button
+                  mode="outlined"
+                  onPress={() => {
+                    setManualStep(2);
+                    setFormData(prev => ({ ...prev, modelo_adaptador: '', numero_adaptador: '', codigo_qr: '' }));
+                  }}
+                  textColor="#B0B0B0"
+                  style={styles.backBtn}
+                >
+                  Cambiar modelo
+                </Button>
+                <Button
+                  mode="contained"
+                  onPress={handleSubmit}
+                  buttonColor="#4CAF50"
+                  style={styles.saveBtn}
+                  contentStyle={styles.saveButtonContent}
+                  labelStyle={styles.saveButtonLabel}
+                  loading={loading}
+                  disabled={loading || !formData.numero_adaptador.trim()}
+                >
+                  Guardar
+                </Button>
+              </View>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  // ===== FLUJO QR (escaneado): formulario original =====
   return (
-    <KeyboardAvoidingView 
+    <KeyboardAvoidingView
       style={styles.container}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
@@ -187,7 +327,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
         <Card style={styles.card}>
           <Card.Content>
             <Title style={styles.title}>Agregar Adaptador/Convertidor</Title>
-            
+
             <TextInput
               label="Código QR *"
               value={formData.codigo_qr}
@@ -196,7 +336,6 @@ export default function AddAdaptadorScreen({ navigation, route }) {
               mode="outlined"
               textColor="#FFFFFF"
               placeholderTextColor="#B0B0B0"
-              labelStyle={styles.inputLabel}
               theme={darkTheme}
             />
 
@@ -208,13 +347,11 @@ export default function AddAdaptadorScreen({ navigation, route }) {
               mode="outlined"
               textColor="#FFFFFF"
               placeholderTextColor="#B0B0B0"
-              labelStyle={styles.inputLabel}
               theme={darkTheme}
-              helperText="Se extrae automáticamente del QR"
             />
-            
+
             <Divider style={styles.divider} />
-            
+
             <View style={styles.inputSection}>
               <Paragraph style={styles.inputLabel}>Tipo *</Paragraph>
               <TouchableOpacity
@@ -225,11 +362,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
                   <Paragraph style={[styles.selectorText, !formData.tipo && styles.selectorPlaceholder]}>
                     {formData.tipo === 'adaptador' ? 'Adaptador' : formData.tipo === 'convertidor' ? 'Convertidor' : 'Seleccionar tipo'}
                   </Paragraph>
-                  <IconButton
-                    icon="chevron-down"
-                    size={20}
-                    iconColor="#B0B0B0"
-                  />
+                  <IconButton icon="chevron-down" size={20} iconColor="#B0B0B0" />
                 </View>
               </TouchableOpacity>
             </View>
@@ -247,16 +380,12 @@ export default function AddAdaptadorScreen({ navigation, route }) {
                     <Paragraph style={[styles.selectorText, !formData.modelo_adaptador && styles.selectorPlaceholder]}>
                       {formData.modelo_adaptador || 'Seleccionar modelo'}
                     </Paragraph>
-                    <IconButton
-                      icon="chevron-down"
-                      size={20}
-                      iconColor="#B0B0B0"
-                    />
+                    <IconButton icon="chevron-down" size={20} iconColor="#B0B0B0" />
                   </View>
                 </TouchableOpacity>
               </View>
             )}
-            
+
             <Button
               mode="contained"
               onPress={handleSubmit}
@@ -268,13 +397,12 @@ export default function AddAdaptadorScreen({ navigation, route }) {
             >
               {loading ? 'Guardando...' : 'Guardar'}
             </Button>
-            
+
             <Button
               mode="outlined"
               onPress={() => navigation.goBack()}
               style={styles.button}
               textColor="#B0B0B0"
-              borderColor="#404040"
               disabled={loading}
             >
               Cancelar
@@ -296,11 +424,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
               <View style={styles.modalContent}>
                 <View style={styles.modalHeader}>
                   <Title style={styles.modalTitle}>Seleccionar Tipo</Title>
-                  <IconButton
-                    icon="close"
-                    size={24}
-                    onPress={() => setShowTipoModal(false)}
-                  />
+                  <IconButton icon="close" size={24} onPress={() => setShowTipoModal(false)} />
                 </View>
                 <Divider />
                 <ScrollView style={styles.modalList}>
@@ -311,13 +435,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
                     <Paragraph style={[styles.modalItemText, formData.tipo === 'adaptador' && styles.modalItemTextSelected]}>
                       Adaptador
                     </Paragraph>
-                    {formData.tipo === 'adaptador' && (
-                      <IconButton
-                        icon="check"
-                        size={20}
-                        iconColor="#4CAF50"
-                      />
-                    )}
+                    {formData.tipo === 'adaptador' && <IconButton icon="check" size={20} iconColor="#4CAF50" />}
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.modalItem, formData.tipo === 'convertidor' && styles.modalItemSelected]}
@@ -326,13 +444,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
                     <Paragraph style={[styles.modalItemText, formData.tipo === 'convertidor' && styles.modalItemTextSelected]}>
                       Convertidor
                     </Paragraph>
-                    {formData.tipo === 'convertidor' && (
-                      <IconButton
-                        icon="check"
-                        size={20}
-                        iconColor="#4CAF50"
-                      />
-                    )}
+                    {formData.tipo === 'convertidor' && <IconButton icon="check" size={20} iconColor="#4CAF50" />}
                   </TouchableOpacity>
                 </ScrollView>
               </View>
@@ -356,11 +468,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
                   <Title style={styles.modalTitle}>
                     Seleccionar Modelo {formData.tipo === 'adaptador' ? 'Adaptador' : 'Convertidor'}
                   </Title>
-                  <IconButton
-                    icon="close"
-                    size={24}
-                    onPress={() => setShowModeloModal(false)}
-                  />
+                  <IconButton icon="close" size={24} onPress={() => setShowModeloModal(false)} />
                 </View>
                 <Divider />
                 <ScrollView style={styles.modalList}>
@@ -373,13 +481,7 @@ export default function AddAdaptadorScreen({ navigation, route }) {
                       <Paragraph style={[styles.modalItemText, formData.modelo_adaptador === modelo && styles.modalItemTextSelected]}>
                         {modelo}
                       </Paragraph>
-                      {formData.modelo_adaptador === modelo && (
-                        <IconButton
-                          icon="check"
-                          size={20}
-                          iconColor="#4CAF50"
-                        />
-                      )}
+                      {formData.modelo_adaptador === modelo && <IconButton icon="check" size={20} iconColor="#4CAF50" />}
                     </TouchableOpacity>
                   ))}
                 </ScrollView>
@@ -395,42 +497,38 @@ export default function AddAdaptadorScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121212'
+    backgroundColor: '#0F0F0F',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
     padding: 20,
+    paddingTop: 30,
     paddingBottom: 40,
   },
   card: {
-    marginBottom: 20,
-    backgroundColor: '#1E1E1E',
-    borderWidth: 1,
-    borderColor: '#333333',
+    backgroundColor: '#1A1A1A',
     borderRadius: 16,
-    shadowColor: '#000000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   title: {
-    textAlign: 'center',
-    marginBottom: 24,
-    fontSize: 28,
-    fontWeight: '700',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    textAlign: 'center',
+    marginBottom: 8,
+    fontSize: 22,
+    fontWeight: '700',
+  },
+  stepHint: {
+    color: '#4CAF50',
+    textAlign: 'center',
+    marginBottom: 20,
+    fontSize: 14,
   },
   input: {
-    marginBottom: 20,
-    borderRadius: 12,
-    backgroundColor: '#2C2C2C',
+    marginBottom: 16,
+    backgroundColor: '#1E1E1E',
   },
   inputLabel: {
     color: '#E0E0E0',
@@ -440,6 +538,55 @@ const styles = StyleSheet.create({
   },
   inputSection: {
     marginBottom: 20,
+  },
+  categoryCard: {
+    backgroundColor: '#0F0F0F',
+    borderRadius: 12,
+    paddingVertical: 18,
+    marginBottom: 12,
+    borderWidth: 1.5,
+    borderColor: '#333',
+    alignItems: 'center',
+  },
+  categoryLabel: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  qrPreview: {
+    backgroundColor: '#0F0F0F',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#333',
+  },
+  qrPreviewLabel: {
+    color: '#888',
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  qrPreviewValue: {
+    color: '#4CAF50',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  manualButtons: {
+    gap: 10,
+  },
+  backBtn: {
+    borderColor: '#555',
+    borderRadius: 10,
+  },
+  saveBtn: {
+    borderRadius: 12,
+  },
+  saveButtonContent: {
+    paddingVertical: 12,
+  },
+  saveButtonLabel: {
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   selector: {
     borderWidth: 1,

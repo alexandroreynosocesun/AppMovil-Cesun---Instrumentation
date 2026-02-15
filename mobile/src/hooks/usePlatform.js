@@ -55,9 +55,9 @@ export const usePlatform = () => {
       useBlurEffect: isIOS,
       safeAreaInsets: isIOS,
       
-      // Web
-      maxWidth: isWeb ? 1400 : '100%',
-      containerPadding: isWeb ? 24 : 16,
+      // Web (responsive: no limitar ancho en móvil web/PWA)
+      maxWidth: isDesktop ? 1400 : '100%',
+      containerPadding: isDesktop ? 24 : isTablet ? 20 : 0,
       gridColumns: isDesktop ? 3 : isTablet ? 2 : 1,
       cardMaxWidth: isDesktop ? 400 : isTablet ? 350 : '100%',
       
