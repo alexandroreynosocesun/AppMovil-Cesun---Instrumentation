@@ -328,7 +328,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F0F0F',
     ...(Platform.OS === 'web' && {
       height: '100%',
-      minHeight: '100dvh',
       display: 'flex',
       flexDirection: 'column',
     }),
@@ -338,9 +337,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#0F0F0F',
-    ...(Platform.OS === 'web' && {
-      height: '100dvh',
-      minHeight: '100dvh',
-    }),
   },
 });
