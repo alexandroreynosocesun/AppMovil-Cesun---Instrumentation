@@ -3,10 +3,10 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   Dimensions,
   Platform
 } from 'react-native';
+import { showAlert, showConfirm } from '../utils/alertUtils';
 import {
   Card,
   Title,
@@ -140,17 +140,17 @@ export default function ReporteScreen({ navigation, route }) {
 
       // Validaciones
       if (isNaN(reportDataToSend.tecnico_id)) {
-        Alert.alert(t('error'), t('invalidTechnicianId'));
+        showAlert(t('error'), t('invalidTechnicianId'));
         return;
       }
 
       if (!reportDataToSend.validaciones || reportDataToSend.validaciones.length === 0) {
-        Alert.alert(t('error'), t('noValidValidations'));
+        showAlert(t('error'), t('noValidValidations'));
         return;
       }
 
       if (!reportDataToSend.modelo || reportDataToSend.modelo === 'N/A') {
-        Alert.alert(t('error'), t('selectModelForReport'));
+        showAlert(t('error'), t('selectModelForReport'));
         return;
       }
 
@@ -160,7 +160,7 @@ export default function ReporteScreen({ navigation, route }) {
       if (!result.success) {
         const errorMsg = result.error || 'Error generando el reporte';
         logger.error('❌ Error al generar reporte:', errorMsg);
-        Alert.alert(
+        showAlert(
           t('errorGeneratingReport'),
           errorMsg + '\n\n' + t('errorGeneratingReportDesc'),
           [{ text: t('ok') }]
@@ -188,7 +188,7 @@ export default function ReporteScreen({ navigation, route }) {
       logger.error('❌ Error inesperado generando reporte:', error);
       logger.error('Error completo:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
       const errorMsg = error.message || error.toString() || 'Error de conexión al generar el reporte';
-      Alert.alert(
+      showAlert(
         t('unexpectedError'),
         errorMsg + '\n\n' + t('unexpectedErrorDesc'),
         [{ text: t('ok') }]
@@ -230,7 +230,7 @@ export default function ReporteScreen({ navigation, route }) {
         logger.info('✅ Estado reseteado. Listo para empezar un nuevo reporte.');
         
         // Mostrar confirmación y navegar a Home
-        Alert.alert(
+        showAlert(
           `✅ ${t('savedToAudit')}`,
           t('savedToAuditMessage', { filename: savedFilename }),
           [
@@ -244,7 +244,7 @@ export default function ReporteScreen({ navigation, route }) {
         );
       } else {
         logger.warn('⚠️ No hay información del PDF disponible');
-        Alert.alert(
+        showAlert(
           t('warning'),
           t('pdfNotAvailable'),
           [{ text: t('ok') }]
@@ -252,7 +252,7 @@ export default function ReporteScreen({ navigation, route }) {
       }
     } catch (error) {
       logger.error('❌ Error guardando en auditoría:', error);
-      Alert.alert(
+      showAlert(
         t('error'),
         t('errorSavingAudit'),
         [{ text: t('ok') }]
@@ -270,7 +270,7 @@ export default function ReporteScreen({ navigation, route }) {
 
   // Limpiar validaciones
   const handleClearValidations = () => {
-        Alert.alert(
+        showAlert(
           t('clearValidations'),
           t('clearValidationsConfirm'),
           [
