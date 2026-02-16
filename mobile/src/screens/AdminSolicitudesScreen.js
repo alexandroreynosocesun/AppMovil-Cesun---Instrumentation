@@ -5,31 +5,14 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert as RNAlert,
   RefreshControl,
   ActivityIndicator,
   Modal,
   TextInput,
   ScrollView,
-  Image,
-  Platform
+  Image
 } from 'react-native';
-
-// Alert compatible con web
-const Alert = {
-  alert: (title, message, buttons) => {
-    if (Platform.OS === 'web') {
-      window.alert(`${title}\n${message || ''}`);
-      // Ejecutar el primer botón con onPress si existe
-      if (buttons && buttons.length > 0) {
-        const btn = buttons.find(b => b.onPress) || buttons[0];
-        if (btn && btn.onPress) btn.onPress();
-      }
-    } else {
-      RNAlert.alert(title, message, buttons);
-    }
-  }
-};
+import { showAlert } from '../utils/alertUtils';
 import { formatDate, formatTime12Hour } from '../utils/dateUtils';
 import { useFocusEffect } from '@react-navigation/native';
 import AdminService from '../services/AdminService';
@@ -73,12 +56,12 @@ const AdminSolicitudesScreen = ({ navigation }) => {
         setSolicitudes(solicitudesArray);
       } else {
         logger.error('❌ [AdminSolicitudesScreen] Error:', result.error);
-        Alert.alert('Error', result.error || 'Error al cargar solicitudes');
+        showAlert('Error', result.error || 'Error al cargar solicitudes');
       }
     } catch (error) {
       logger.error('❌ [AdminSolicitudesScreen] Error al cargar solicitudes:', error);
       logger.error('❌ [AdminSolicitudesScreen] Error completo:', JSON.stringify(error, null, 2));
-      Alert.alert('Error', 'Error de conexión. Verifica que el backend esté funcionando.');
+      showAlert('Error', 'Error de conexión. Verifica que el backend esté funcionando.');
     } finally {
       setLoading(false);
     }
@@ -108,7 +91,7 @@ const AdminSolicitudesScreen = ({ navigation }) => {
     if (!selectedSolicitud) return;
 
     if (actionType === 'rechazar' && !comentarios.trim()) {
-      Alert.alert('Error', 'Los comentarios son obligatorios para rechazar una solicitud');
+      showAlert('Error', 'Los comentarios son obligatorios para rechazar una solicitud');
       return;
     }
 
@@ -123,7 +106,7 @@ const AdminSolicitudesScreen = ({ navigation }) => {
       }
 
       if (result.success) {
-        Alert.alert(
+        showAlert(
           'Éxito',
           actionType === 'aprobar' 
             ? 'Solicitud aprobada correctamente' 
@@ -142,11 +125,11 @@ const AdminSolicitudesScreen = ({ navigation }) => {
           ]
         );
       } else {
-        Alert.alert('Error', result.error || 'Error procesando la solicitud');
+        showAlert('Error', result.error || 'Error procesando la solicitud');
       }
     } catch (error) {
       logger.error('Error al procesar solicitud:', error);
-      Alert.alert(
+      showAlert(
         'Error', 
         'Error de conexión. Verifica que el backend esté funcionando.',
         [
