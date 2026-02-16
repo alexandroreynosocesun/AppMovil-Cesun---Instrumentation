@@ -1,5 +1,6 @@
 import React from 'react';
-import { View, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, Text } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert, Platform, TouchableOpacity, Text } from 'react-native'
+import { showAlert } from '../utils/alertUtils';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Title, Paragraph, Button, IconButton } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -17,7 +18,7 @@ export default function VByOneHomeScreen({ navigation }) {
         logout();
       }
     } else {
-      Alert.alert(
+      showAlert(
         'Cerrar Sesión',
         '¿Estás seguro de que quieres cerrar sesión?',
         [

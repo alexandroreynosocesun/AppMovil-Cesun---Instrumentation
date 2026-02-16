@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -395,7 +396,7 @@ export default function ActiveValidationsScreen() {
   };
 
   const handleDeleteValidation = async (validationId) => {
-    Alert.alert(
+    showAlert(
       'Eliminar Validación',
       '¿Estás seguro de que quieres eliminar esta validación? Esta acción no se puede deshacer.',
       [
@@ -412,13 +413,13 @@ export default function ActiveValidationsScreen() {
               if (result.success) {
                 setAllValidations(prev => prev.filter(v => v.id !== validationId));
                 setFilteredValidations(prev => prev.filter(v => v.id !== validationId));
-                Alert.alert('Éxito', 'Validación eliminada correctamente');
+                showAlert('Éxito', 'Validación eliminada correctamente');
               } else {
-                Alert.alert('Error', result.error || 'Error al eliminar validación');
+                showAlert('Error', result.error || 'Error al eliminar validación');
               }
             } catch (error) {
               logger.error('Error eliminando validación:', error);
-              Alert.alert('Error', 'Error al eliminar validación');
+              showAlert('Error', 'Error al eliminar validación');
             }
           }
         }
@@ -429,10 +430,10 @@ export default function ActiveValidationsScreen() {
   const handleDeleteUnassignedValidations = async () => {
     const targets = allValidations.filter(v => !v.tecnico_asignado_id && !v.completada);
     if (!targets.length) {
-      Alert.alert('Sin cambios', 'No hay validaciones sin técnico para eliminar.');
+      showAlert('Sin cambios', 'No hay validaciones sin técnico para eliminar.');
       return;
     }
-    Alert.alert(
+    showAlert(
       'Eliminar validaciones',
       `Se eliminarán ${targets.length} validaciones sin técnico asignado. ¿Continuar?`,
       [
@@ -460,13 +461,13 @@ export default function ActiveValidationsScreen() {
                 setFilteredValidations(prev => prev.filter(v => !deletedIds.includes(v.id)));
               }
               if (failed) {
-                Alert.alert('Aviso', `Se eliminaron ${deletedIds.length}. Fallaron ${failed}.`);
+                showAlert('Aviso', `Se eliminaron ${deletedIds.length}. Fallaron ${failed}.`);
               } else {
-                Alert.alert('Éxito', 'Validaciones eliminadas correctamente');
+                showAlert('Éxito', 'Validaciones eliminadas correctamente');
               }
             } catch (error) {
               logger.error('Error eliminando validaciones sin técnico:', error);
-              Alert.alert('Error', 'Error al eliminar validaciones');
+              showAlert('Error', 'Error al eliminar validaciones');
             } finally {
               setLoading(false);
             }

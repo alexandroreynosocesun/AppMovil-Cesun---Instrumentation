@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -133,11 +134,11 @@ export default function AddAdaptadorScreen({ navigation, route }) {
 
   const handleSubmit = async () => {
     if (!formData.codigo_qr || !formData.tipo || !formData.modelo_adaptador) {
-      Alert.alert('Error', 'Por favor completa todos los campos requeridos');
+      showAlert('Error', 'Por favor completa todos los campos requeridos');
       return;
     }
     if (!formData.numero_adaptador) {
-      Alert.alert('Error', 'Ingresa el número del adaptador/convertidor.');
+      showAlert('Error', 'Ingresa el número del adaptador/convertidor.');
       return;
     }
 
@@ -151,15 +152,15 @@ export default function AddAdaptadorScreen({ navigation, route }) {
 
       const result = await adaptadorService.createAdaptador(dataToSend);
       if (result.success) {
-        Alert.alert('Éxito', 'Registro creado correctamente.', [
+        showAlert('Éxito', 'Registro creado correctamente.', [
           { text: 'OK', onPress: () => navigation.goBack() }
         ]);
       } else {
-        Alert.alert('Error', result.error || 'Error al crear adaptador/convertidor');
+        showAlert('Error', result.error || 'Error al crear adaptador/convertidor');
       }
     } catch (error) {
       logger.error('Error creando adaptador:', error);
-      Alert.alert('Error', 'Error de conexión');
+      showAlert('Error', 'Error de conexión');
     } finally {
       setLoading(false);
     }

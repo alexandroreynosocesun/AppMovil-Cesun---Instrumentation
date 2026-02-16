@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, Alert, Dimensions, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, Alert, Dimensions, TouchableOpacity } from 'react-native'
+import { showAlert } from '../utils/alertUtils';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Button, Card, Title, Paragraph, ActivityIndicator, TextInput } from 'react-native-paper';
@@ -79,7 +80,7 @@ export default function QRScannerAdaptadores({ navigation }) {
 
       if (result.success) {
         const infoMessage = getAdaptadorInfoMessage(result.data);
-        Alert.alert(
+        showAlert(
           'Información del Adaptador',
           infoMessage,
           [
@@ -98,15 +99,15 @@ export default function QRScannerAdaptadores({ navigation }) {
         // Escaneo directo: usar QR para agregar adaptador
         navigation.navigate('AddAdaptador', { codigo_qr: data });
       } else if (result.error === 'UNAUTHORIZED') {
-        Alert.alert('Sesión expirada', 'Vuelve a iniciar sesión e intenta de nuevo.');
+        showAlert('Sesión expirada', 'Vuelve a iniciar sesión e intenta de nuevo.');
       } else if (result.error === 'NETWORK_ERROR') {
-        Alert.alert('Sin conexión', 'No hay conexión. Intenta de nuevo.');
+        showAlert('Sin conexión', 'No hay conexión. Intenta de nuevo.');
       } else {
-        Alert.alert('Error', result.message || 'No se pudo validar el QR.');
+        showAlert('Error', result.message || 'No se pudo validar el QR.');
       }
     } catch (error) {
       logger.error('Error scanning QR:', error);
-      Alert.alert('Error', 'Error al procesar QR');
+      showAlert('Error', 'Error al procesar QR');
     } finally {
       isProcessingRef.current = false;
       setScanned(false);
@@ -122,7 +123,7 @@ export default function QRScannerAdaptadores({ navigation }) {
   const handleManualSubmit = () => {
     const code = manualCode.trim();
     if (!code) {
-      Alert.alert('Error', 'Ingresa un código.');
+      showAlert('Error', 'Ingresa un código.');
       return;
     }
     setShowManualInput(false);

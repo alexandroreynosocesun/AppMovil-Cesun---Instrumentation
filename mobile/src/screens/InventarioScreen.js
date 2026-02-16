@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -46,11 +47,11 @@ export default function InventarioScreen({ navigation }) {
         setInventario(result.data);
         logger.info('Resumen de inventario cargado:', result.data);
       } else {
-        Alert.alert('Error', result.error || 'Error cargando inventario');
+        showAlert('Error', result.error || 'Error cargando inventario');
       }
     } catch (error) {
       logger.error('Error cargando resumen:', error);
-      Alert.alert('Error', 'No se pudo cargar el inventario');
+      showAlert('Error', 'No se pudo cargar el inventario');
     } finally {
       setLoading(false);
     }
@@ -73,7 +74,7 @@ export default function InventarioScreen({ navigation }) {
           link.click();
           document.body.removeChild(link);
           window.URL.revokeObjectURL(url);
-          Alert.alert('Éxito', 'PDF descargado correctamente');
+          showAlert('Éxito', 'PDF descargado correctamente');
         } else {
           // En mobile, ya tenemos el URI del archivo descargado
           const fileUri = result.data;
@@ -84,15 +85,15 @@ export default function InventarioScreen({ navigation }) {
               dialogTitle: 'Compartir Inventario PDF',
             });
           } else {
-            Alert.alert('PDF guardado', 'Archivo guardado correctamente');
+            showAlert('PDF guardado', 'Archivo guardado correctamente');
           }
         }
       } else {
-        Alert.alert('Error', result.error || 'Error generando PDF');
+        showAlert('Error', result.error || 'Error generando PDF');
       }
     } catch (error) {
       logger.error('Error generando PDF:', error);
-      Alert.alert('Error', 'No se pudo generar el PDF');
+      showAlert('Error', 'No se pudo generar el PDF');
     } finally {
       setLoadingPDF(false);
     }

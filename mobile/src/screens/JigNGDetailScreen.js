@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   Text,
@@ -53,12 +54,12 @@ export default function JigNGDetailScreen({ route, navigation }) {
       if (result.success) {
         setJig(result.data);
       } else {
-        Alert.alert(t('error'), result.message || t('errorLoadingDetails'));
+        showAlert(t('error'), result.message || t('errorLoadingDetails'));
         navigation.goBack();
       }
     } catch (error) {
       logger.error('❌ Error al cargar jig NG:', error);
-      Alert.alert(t('error'), t('unexpectedErrorLoading'));
+      showAlert(t('error'), t('unexpectedErrorLoading'));
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -98,20 +99,20 @@ export default function JigNGDetailScreen({ route, navigation }) {
           const mensaje = newStatus === 'reparado' 
             ? t('jigNGMarkedAsRepaired')
             : t('jigNGMarkedAsFalseDefect');
-          Alert.alert(
+          showAlert(
             t('success'), 
             mensaje,
             [{ text: t('save'), onPress: () => navigation.goBack() }]
           );
         } else {
-          Alert.alert(t('success'), t('statusUpdated'));
+          showAlert(t('success'), t('statusUpdated'));
         }
       } else {
-        Alert.alert(t('error'), result.message || t('errorUpdatingStatus'));
+        showAlert(t('error'), result.message || t('errorUpdatingStatus'));
       }
     } catch (error) {
       logger.error('❌ Error al actualizar estado:', error);
-      Alert.alert(t('error'), t('unexpectedErrorUpdating'));
+      showAlert(t('error'), t('unexpectedErrorUpdating'));
     } finally {
       setUpdating(false);
     }
@@ -137,13 +138,13 @@ export default function JigNGDetailScreen({ route, navigation }) {
         // Marcar que el comentario fue guardado
         setCommentSaved(true);
         
-        Alert.alert(t('success'), t('commentSaved'));
+        showAlert(t('success'), t('commentSaved'));
       } else {
-        Alert.alert(t('error'), result.message || t('errorSavingComment'));
+        showAlert(t('error'), result.message || t('errorSavingComment'));
       }
     } catch (error) {
       logger.error('❌ Error al guardar comentario:', error);
-      Alert.alert(t('error'), t('unexpectedErrorSavingComment'));
+      showAlert(t('error'), t('unexpectedErrorSavingComment'));
     } finally {
       setUpdating(false);
     }
@@ -167,7 +168,7 @@ export default function JigNGDetailScreen({ route, navigation }) {
   };
 
   const handleDelete = () => {
-    Alert.alert(
+    showAlert(
       t('deleteJigNG'),
       t('deleteJigNGConfirm'),
       [
@@ -179,17 +180,17 @@ export default function JigNGDetailScreen({ route, navigation }) {
             try {
               const result = await jigNGService.deleteJigNG(jigId);
               if (result.success) {
-                Alert.alert(
+                showAlert(
                   t('success'),
                   t('jigNGDeleted'),
                   [{ text: t('save'), onPress: () => navigation.goBack() }]
                 );
               } else {
-                Alert.alert(t('error'), result.message || t('errorDeletingJigNG'));
+                showAlert(t('error'), result.message || t('errorDeletingJigNG'));
               }
             } catch (error) {
               logger.error('❌ Error al eliminar jig NG:', error);
-              Alert.alert(t('error'), t('unexpectedErrorDeleting'));
+              showAlert(t('error'), t('unexpectedErrorDeleting'));
             }
           }
         }

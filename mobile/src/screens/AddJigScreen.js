@@ -92,18 +92,18 @@ export default function AddJigScreen({ navigation, route }) {
   const handleSubmit = async () => {
     // Validar formato de QR
     if (!isManualEntry && !qrValidation.isValid) {
-      Alert.alert(t('error'), t('invalidQRFormat'));
+      showAlert(t('error'), t('invalidQRFormat'));
       return;
     }
 
     // Validar campos requeridos
     if (isManualEntry) {
       if (!formData.numero_jig || !formData.modelo_actual || !manualVersion) {
-        Alert.alert(t('error'), t('completeRequiredFields'));
+        showAlert(t('error'), t('completeRequiredFields'));
         return;
       }
     } else if (!formData.numero_jig || !formData.codigo_qr) {
-      Alert.alert(t('error'), t('completeRequiredFields'));
+      showAlert(t('error'), t('completeRequiredFields'));
       return;
     }
 
@@ -129,10 +129,10 @@ export default function AddJigScreen({ navigation, route }) {
           ]
         );
       } else {
-        Alert.alert(t('error'), result.error || t('errorCreatingJig'));
+        showAlert(t('error'), result.error || t('errorCreatingJig'));
       }
     } catch (error) {
-      Alert.alert(t('error'), t('connectionError'));
+      showAlert(t('error'), t('connectionError'));
     } finally {
       setLoading(false);
     }

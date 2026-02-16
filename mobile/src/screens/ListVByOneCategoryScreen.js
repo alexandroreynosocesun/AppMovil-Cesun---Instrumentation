@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -167,7 +168,7 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
   const handleOpenNg = (item) => {
     const conector = getConector(item);
     if (!conector?.id) {
-      Alert.alert('Sin conector', 'No se encontró el conector del componente.');
+      showAlert('Sin conector', 'No se encontró el conector del componente.');
       return;
     }
     setPendingItem(item);
@@ -185,7 +186,7 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
 
     const trimmedComment = ngComment.trim();
     if (!trimmedComment) {
-      Alert.alert('Falta comentario', 'Escribe la falla antes de marcar NG.');
+      showAlert('Falta comentario', 'Escribe la falla antes de marcar NG.');
       return;
     }
 
@@ -202,7 +203,7 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
       setShowNgModal(false);
       setPendingItem(null);
     } else {
-      Alert.alert('Error', 'No se pudo marcar como NG.');
+      showAlert('Error', 'No se pudo marcar como NG.');
     }
     setUpdatingIds(prev => {
       const next = { ...prev };
@@ -214,11 +215,11 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
   const handleMarkOk = (item) => {
     const conector = getConector(item);
     if (!conector?.id) {
-      Alert.alert('Sin conector', 'No se encontró el conector del componente.');
+      showAlert('Sin conector', 'No se encontró el conector del componente.');
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Confirmar OK',
       '¿Marcar este componente como OK?',
       [
@@ -237,7 +238,7 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
                 return { ...entry, conectores };
               }));
             } else {
-              Alert.alert('Error', 'No se pudo marcar como OK.');
+              showAlert('Error', 'No se pudo marcar como OK.');
             }
             setUpdatingIds(prev => {
               const next = { ...prev };
@@ -271,11 +272,11 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
           entry.id === item.id ? { ...entry, es_dual_conector: result.data.es_dual_conector } : entry
         ));
       } else {
-        Alert.alert('Error', 'No se pudo actualizar el estado 51+41');
+        showAlert('Error', 'No se pudo actualizar el estado 51+41');
       }
     } catch (error) {
       logger.error('Error toggling dual:', error);
-      Alert.alert('Error', 'No se pudo actualizar');
+      showAlert('Error', 'No se pudo actualizar');
     } finally {
       setTogglingDualIds(prev => {
         const next = { ...prev };
@@ -459,7 +460,7 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
                         getConectorEstado(item) === 'OK' ? styles.conectorChipOk : getConectorEstado(item) === 'NG' ? styles.conectorChipNg : styles.conectorChipPending
                       ]}
                       onPress={getConectorEstado(item) === 'PENDIENTE' ? () => {
-                        Alert.alert(
+                        showAlert(
                           'Seleccionar estado',
                           '¿Cuál es el estado de este conector?',
                           [

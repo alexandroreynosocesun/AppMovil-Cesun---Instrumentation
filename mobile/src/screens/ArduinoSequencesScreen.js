@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -64,7 +65,7 @@ export default function ArduinoSequencesScreen() {
         setItems(Array.isArray(data) ? data : []);
         setSelectedInterno(null);
       } else {
-        Alert.alert('Error', result.error || 'Error cargando secuencias');
+        showAlert('Error', result.error || 'Error cargando secuencias');
         setItems([]);
       }
     } catch (error) {
@@ -87,7 +88,7 @@ export default function ArduinoSequencesScreen() {
 
   const handleSave = async () => {
     if (!formData.modelo || !formData.modelo_interno || !formData.destino || !formData.comando) {
-      Alert.alert('Error', 'Completa modelo, modelo interno, destino y comando.');
+      showAlert('Error', 'Completa modelo, modelo interno, destino y comando.');
       return;
     }
     const payload = {
@@ -103,12 +104,12 @@ export default function ArduinoSequencesScreen() {
       setFormData({ comando: '', destino: '', pais: '', modelo: '', modelo_interno: '' });
       loadSequences();
     } else {
-      Alert.alert('Error', result.error || 'No se pudo guardar');
+      showAlert('Error', result.error || 'No se pudo guardar');
     }
   };
 
   const handleDelete = async (sequenceId) => {
-    Alert.alert(
+    showAlert(
       'Eliminar registro',
       '¿Seguro que quieres eliminar esta secuencia?',
       [
@@ -123,7 +124,7 @@ export default function ArduinoSequencesScreen() {
                 loadSequences();
               }
             } else {
-              Alert.alert('Error', result.error || 'No se pudo eliminar');
+              showAlert('Error', result.error || 'No se pudo eliminar');
             }
           }
         }

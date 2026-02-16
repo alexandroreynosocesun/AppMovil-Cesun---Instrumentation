@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -43,11 +44,11 @@ export default function RepairJigScreen({ navigation, route }) {
       if (result.success) {
         setJigInfo(result.data);
       } else {
-        Alert.alert('Error', 'No se pudo cargar la información del jig');
+        showAlert('Error', 'No se pudo cargar la información del jig');
         logger.error('Error cargando jig:', result.error);
       }
     } catch (error) {
-      Alert.alert('Error', 'Error cargando información del jig');
+      showAlert('Error', 'Error cargando información del jig');
       logger.error('Error cargando jig:', error);
     } finally {
       setLoadingJig(false);
@@ -77,7 +78,7 @@ export default function RepairJigScreen({ navigation, route }) {
   // Función formatDate ahora importada desde dateUtils
 
   const handleUpdateEstado = (nuevoEstado) => {
-    Alert.alert(
+    showAlert(
       'Confirmar Cambio',
       `¿Estás seguro de cambiar el estado a "${nuevoEstado.replace('_', ' ').toUpperCase()}"?`,
       [
@@ -98,7 +99,7 @@ export default function RepairJigScreen({ navigation, route }) {
         if (updateData.estado === 'reparado') {
           if (fromValidation) {
             // Si viene del flujo de validación, regresar a validación
-            Alert.alert(
+            showAlert(
               'Jig Reparado',
               'El jig ha sido reparado exitosamente. Ahora puedes continuar con la validación.',
               [
@@ -110,7 +111,7 @@ export default function RepairJigScreen({ navigation, route }) {
             );
           } else {
             // Si viene del flujo de Jigs NG, regresar a Jigs NG
-            Alert.alert(
+            showAlert(
               'Jig Reparado',
               'El jig ha sido marcado como reparado exitosamente.',
               [
@@ -124,13 +125,13 @@ export default function RepairJigScreen({ navigation, route }) {
         } else {
           // Si solo se actualizaron observaciones, no navegar
           setObservacionesGuardadas(true);
-          Alert.alert('Éxito', 'Observaciones guardadas correctamente. Ahora puedes marcar el jig como reparado.');
+          showAlert('Éxito', 'Observaciones guardadas correctamente. Ahora puedes marcar el jig como reparado.');
         }
       } else {
-        Alert.alert('Error', result.error);
+        showAlert('Error', result.error);
       }
     } catch (error) {
-      Alert.alert('Error', 'Error actualizando jig NG');
+      showAlert('Error', 'Error actualizando jig NG');
     } finally {
       setLoading(false);
     }
@@ -183,7 +184,7 @@ export default function RepairJigScreen({ navigation, route }) {
       });
       
       if (result.success) {
-        Alert.alert(
+        showAlert(
           'Falso Defecto Confirmado',
           'El jig ha sido marcado como falso defecto.',
           [
@@ -194,10 +195,10 @@ export default function RepairJigScreen({ navigation, route }) {
           ]
         );
       } else {
-        Alert.alert('Error', result.error);
+        showAlert('Error', result.error);
       }
     } catch (error) {
-      Alert.alert('Error', 'Error marcando como falso defecto');
+      showAlert('Error', 'Error marcando como falso defecto');
     } finally {
       setLoading(false);
     }
