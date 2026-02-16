@@ -1237,6 +1237,7 @@ const styles = StyleSheet.create({
         borderTopRightRadius: 16,
         backgroundColor: '#2C2C2C',
         paddingHorizontal: 8,
+        paddingBottom: 4,
         overflow: 'visible',
       },
       default: {},
