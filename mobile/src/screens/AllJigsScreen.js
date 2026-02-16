@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   Text,
@@ -298,7 +299,7 @@ export default function AllJigsScreen({ navigation, route }) {
           logger.info('✅ Jigs cargados (array directo):', jigsArray.length);
         } else {
           logger.error('❌ result.data no tiene formato válido:', result.data);
-          Alert.alert('Error', 'Formato de datos inválido del servidor');
+          showAlert('Error', 'Formato de datos inválido del servidor');
           return;
         }
         
@@ -330,7 +331,7 @@ export default function AllJigsScreen({ navigation, route }) {
         
         // Manejar diferentes tipos de errores
         if (result.error === 'UNAUTHORIZED') {
-          Alert.alert(
+          showAlert(
             'Sesión Expirada',
             result.message,
             [
@@ -347,16 +348,16 @@ export default function AllJigsScreen({ navigation, route }) {
             ]
           );
         } else if (result.error === 'NETWORK_ERROR') {
-          Alert.alert('Sin Conexión', result.message);
+          showAlert('Sin Conexión', result.message);
         } else if (result.error === 'SERVER_ERROR') {
-          Alert.alert('Error del Servidor', result.message);
+          showAlert('Error del Servidor', result.message);
         } else {
-          Alert.alert('Error', result.message || 'No se pudieron cargar los jigs. Intenta nuevamente.');
+          showAlert('Error', result.message || 'No se pudieron cargar los jigs. Intenta nuevamente.');
         }
       }
     } catch (error) {
       logger.error('❌ Error en loadJigs:', error);
-      Alert.alert('Error', 'Error de conexión. Verifica tu internet.');
+      showAlert('Error', 'Error de conexión. Verifica tu internet.');
     } finally {
       setLoading(false);
     }
@@ -374,7 +375,7 @@ export default function AllJigsScreen({ navigation, route }) {
 
   // Función para eliminar jig
   const handleDeleteAllJigs = async () => {
-    Alert.alert(
+    showAlert(
       '⚠️ ELIMINAR TODOS LOS JIGS',
       `¿Estás seguro de que quieres eliminar TODOS los jigs?\n\nEsta acción NO se puede deshacer.\n\nTotal de jigs: ${jigs.length}`,
       [
@@ -394,7 +395,7 @@ export default function AllJigsScreen({ navigation, route }) {
               
               if (result.success) {
                 logger.info('✅ Todos los jigs eliminados');
-                Alert.alert(
+                showAlert(
                   '✅ Éxito',
                   `Se eliminaron ${result.data?.deleted_count || 0} jigs correctamente.`,
                   [
@@ -408,12 +409,12 @@ export default function AllJigsScreen({ navigation, route }) {
                   ]
                 );
               } else {
-                Alert.alert('Error', result.message || result.error || 'Error al eliminar todos los jigs');
+                showAlert('Error', result.message || result.error || 'Error al eliminar todos los jigs');
               }
             } catch (error) {
               logger.error('❌ Error eliminando todos los jigs:', error);
               const errorMessage = error?.message || 'Error inesperado al eliminar todos los jigs';
-              Alert.alert('Error', errorMessage);
+              showAlert('Error', errorMessage);
             } finally {
               setLoading(false);
             }
@@ -434,7 +435,7 @@ export default function AllJigsScreen({ navigation, route }) {
         const updatedJigs = jigs.filter(jig => jig.id !== jigToDelete.id);
         setJigs(updatedJigs);
         filterJigs(searchQuery, selectedType);
-        Alert.alert('Éxito', 'Jig mock eliminado');
+        showAlert('Éxito', 'Jig mock eliminado');
         setShowDeleteModal(false);
         setJigToDelete(null);
         return;
@@ -478,7 +479,7 @@ export default function AllJigsScreen({ navigation, route }) {
           setModelGroups(grouped);
         }
         
-        Alert.alert('Éxito', 'Jig eliminado correctamente');
+        showAlert('Éxito', 'Jig eliminado correctamente');
       } else {
         logger.error('❌ Error al eliminar jig:', result.error);
         
@@ -500,11 +501,11 @@ export default function AllJigsScreen({ navigation, route }) {
             errorMessage = result.error;
         }
         
-        Alert.alert('Error', errorMessage);
+        showAlert('Error', errorMessage);
       }
     } catch (error) {
       logger.error('❌ Error inesperado al eliminar jig:', error);
-      Alert.alert('Error', 'Error inesperado al eliminar el jig');
+      showAlert('Error', 'Error inesperado al eliminar el jig');
     } finally {
       setShowDeleteModal(false);
       setJigToDelete(null);
@@ -526,7 +527,7 @@ export default function AllJigsScreen({ navigation, route }) {
     }
 
     if (trimmed.length < 4) {
-      Alert.alert('Buscar', 'Escribe al menos 4 caracteres para buscar.');
+      showAlert('Buscar', 'Escribe al menos 4 caracteres para buscar.');
       return;
     }
 
@@ -550,7 +551,7 @@ export default function AllJigsScreen({ navigation, route }) {
       return;
     }
 
-    Alert.alert('Error', result.message || result.error || 'No se pudieron buscar los jigs.');
+    showAlert('Error', result.message || result.error || 'No se pudieron buscar los jigs.');
   };
 
 
@@ -827,7 +828,7 @@ export default function AllJigsScreen({ navigation, route }) {
   const handleSubmitManualValidation = (comment) => {
     if (!selectedJig) return;
     if (!selectedLine) {
-      Alert.alert('Línea requerida', 'Selecciona la línea antes de continuar.');
+      showAlert('Línea requerida', 'Selecciona la línea antes de continuar.');
       return;
     }
 
@@ -836,7 +837,7 @@ export default function AllJigsScreen({ navigation, route }) {
     );
 
     if (jigYaAgregado) {
-      Alert.alert(
+      showAlert(
         'Jig ya agregado',
         `El jig ${selectedJig.numero_jig} ya fue agregado a este modelo.`
       );
@@ -859,7 +860,7 @@ export default function AllJigsScreen({ navigation, route }) {
     setShowValidationModal(false);
 
     const modelValidations = getValidationsByModel(selectedJig?.modelo_actual);
-    Alert.alert(
+    showAlert(
       '✅ Agregado',
       `Jig ${selectedJig?.numero_jig} agregado con éxito.\n\nTotal: ${modelValidations.length + 1} jigs agregados.`
     );

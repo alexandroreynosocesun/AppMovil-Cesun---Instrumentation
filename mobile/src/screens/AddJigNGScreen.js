@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   Text,
@@ -173,7 +174,7 @@ export default function AddJigNGScreen({ navigation, route }) {
   const handleManualLookup = async () => {
     const modelValue = (manualModel || manualModelQuery).trim();
     if (!modelValue || !manualNumber.trim()) {
-      Alert.alert(t('error'), 'Completa modelo y número de jig.');
+      showAlert(t('error'), 'Completa modelo y número de jig.');
       return;
     }
     const qrCode = buildManualQrCode(modelValue, manualNumber.trim(), manualType);
@@ -184,7 +185,7 @@ export default function AddJigNGScreen({ navigation, route }) {
   const handleManualLoadJig = async () => {
     const modelValue = (manualModel || manualModelQuery).trim();
     if (!modelValue || !manualNumber.trim()) {
-      Alert.alert(t('error'), 'Completa modelo y número de jig.');
+      showAlert(t('error'), 'Completa modelo y número de jig.');
       return;
     }
     setSearchingJig(true);
@@ -207,10 +208,10 @@ export default function AddJigNGScreen({ navigation, route }) {
         }));
         return;
       }
-      Alert.alert(t('error'), t('noJigInfoAvailable'));
+      showAlert(t('error'), t('noJigInfoAvailable'));
     } catch (error) {
       logger.error('❌ Error buscando jig manual:', error);
-      Alert.alert(t('error'), t('unexpectedErrorCreatingNG'));
+      showAlert(t('error'), t('unexpectedErrorCreatingNG'));
     } finally {
       setSearchingJig(false);
     }
@@ -291,7 +292,7 @@ export default function AddJigNGScreen({ navigation, route }) {
       // Solicitar permisos
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           t('cameraPermissionRequired'),
           t('cameraPermissionDesc')
         );
@@ -316,7 +317,7 @@ export default function AddJigNGScreen({ navigation, route }) {
       }
     } catch (error) {
       logger.error('Error tomando foto:', error);
-      Alert.alert(t('error'), t('photoError'));
+      showAlert(t('error'), t('photoError'));
     }
   };
 
@@ -330,15 +331,15 @@ export default function AddJigNGScreen({ navigation, route }) {
 
   const validateForm = () => {
     if (!formData.jig_id || formData.jig_id <= 0) {
-      Alert.alert(t('error'), t('validQRRequired'));
+      showAlert(t('error'), t('validQRRequired'));
       return false;
     }
     if (!formData.usuario_reporte.trim()) {
-      Alert.alert(t('error'), t('userInfoError'));
+      showAlert(t('error'), t('userInfoError'));
       return false;
     }
     if (!formData.motivo.trim()) {
-      Alert.alert(t('error'), t('problemDescriptionRequired'));
+      showAlert(t('error'), t('problemDescriptionRequired'));
       return false;
     }
     return true;
@@ -352,7 +353,7 @@ export default function AddJigNGScreen({ navigation, route }) {
       const result = await jigNGService.createJigNG(formData);
       
       if (result.success) {
-        Alert.alert(
+        showAlert(
           `✅ ${t('success')}`,
           t('jigNGReportedSuccess'),
           [
@@ -369,11 +370,11 @@ export default function AddJigNGScreen({ navigation, route }) {
           ]
         );
       } else {
-        Alert.alert(t('error'), result.message || t('errorCreatingNG'));
+        showAlert(t('error'), result.message || t('errorCreatingNG'));
       }
     } catch (error) {
       logger.error('❌ Error al crear jig NG:', error);
-      Alert.alert(t('error'), t('unexpectedErrorCreatingNG'));
+      showAlert(t('error'), t('unexpectedErrorCreatingNG'));
     } finally {
       setLoading(false);
     }

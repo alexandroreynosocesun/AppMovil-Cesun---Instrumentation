@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -109,7 +110,7 @@ export default function DamagedLabelScreen({ navigation }) {
       // Solicitar permisos
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== 'granted') {
-        Alert.alert(
+        showAlert(
           'Permisos requeridos',
           'Necesitamos acceso a la cámara para tomar la foto del jig.'
         );
@@ -134,7 +135,7 @@ export default function DamagedLabelScreen({ navigation }) {
       }
     } catch (error) {
       logger.error('Error tomando foto:', error);
-      Alert.alert('Error', 'No se pudo tomar la foto. Intenta nuevamente.');
+      showAlert('Error', 'No se pudo tomar la foto. Intenta nuevamente.');
     }
   };
 
@@ -147,15 +148,15 @@ export default function DamagedLabelScreen({ navigation }) {
 
   const validateForm = () => {
     if (!formData.modelo.trim()) {
-      Alert.alert('Error', 'Por favor ingresa el modelo del jig');
+      showAlert('Error', 'Por favor ingresa el modelo del jig');
       return false;
     }
     if (!formData.tipo_jig) {
-      Alert.alert('Error', 'Por favor selecciona el tipo de jig');
+      showAlert('Error', 'Por favor selecciona el tipo de jig');
       return false;
     }
     if (!formData.foto) {
-      Alert.alert('Error', 'Por favor toma una foto del jig');
+      showAlert('Error', 'Por favor toma una foto del jig');
       return false;
     }
     return true;
@@ -188,7 +189,7 @@ export default function DamagedLabelScreen({ navigation }) {
       });
 
       if (result.success) {
-        Alert.alert(
+        showAlert(
           'Éxito',
           'El reporte de etiqueta NG ha sido enviado correctamente.',
           [
@@ -210,7 +211,7 @@ export default function DamagedLabelScreen({ navigation }) {
       } else {
         const errorMessage = result.error || result.message || 'No se pudo enviar el reporte';
         logger.error('❌ Error del servidor:', errorMessage);
-        Alert.alert(
+        showAlert(
           'Error al enviar reporte',
           errorMessage,
           [{ text: 'OK' }]
@@ -220,7 +221,7 @@ export default function DamagedLabelScreen({ navigation }) {
       logger.error('❌ Error enviando reporte:', error);
       logger.error('❌ Error completo:', JSON.stringify(error, null, 2));
       const errorMessage = error.message || 'Ocurrió un error al enviar el reporte. Verifica tu conexión e intenta nuevamente.';
-      Alert.alert(
+      showAlert(
         'Error',
         errorMessage,
         [{ text: 'OK' }]

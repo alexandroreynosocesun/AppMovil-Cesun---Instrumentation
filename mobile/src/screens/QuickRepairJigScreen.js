@@ -98,13 +98,13 @@ export default function QuickRepairJigScreen({ route, navigation }) {
   const handleSubmit = async () => {
     // Validar campos requeridos
     if (!formData.comentarioReparacion || formData.comentarioReparacion.trim() === '') {
-      Alert.alert('Error', 'Por favor ingresa un comentario de reparación');
+      showAlert('Error', 'Por favor ingresa un comentario de reparación');
       return;
     }
 
     // Validar que se haya seleccionado una línea
     if (!formData.linea || formData.linea.trim() === '') {
-      Alert.alert(
+      showAlert(
         'Línea Requerida',
         'Debes seleccionar una línea antes de continuar.\n\nPor favor, selecciona la línea de producción.',
         [
@@ -123,7 +123,7 @@ export default function QuickRepairJigScreen({ route, navigation }) {
 
     const jigToUse = jig || jigData;
     if (!jigToUse) {
-      Alert.alert('Error', 'No se encontró información del jig');
+      showAlert('Error', 'No se encontró información del jig');
       return;
     }
 
@@ -134,7 +134,7 @@ export default function QuickRepairJigScreen({ route, navigation }) {
       );
       
       if (jigYaAgregado) {
-        Alert.alert(
+        showAlert(
           'Jig Ya Agregado',
           `El jig ${jigToUse?.numero_jig} ya ha sido agregado a las validaciones de este modelo.\n\nNo se puede agregar el mismo jig dos veces.`,
           [

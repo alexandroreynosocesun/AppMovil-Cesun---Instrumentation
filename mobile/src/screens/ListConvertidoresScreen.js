@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -107,7 +108,7 @@ export default function ListConvertidoresScreen({ navigation }) {
   };
 
   const handlePendientePress = (convertidor) => {
-    Alert.alert('Seleccionar estado', '¿Cuál es el estado de este convertidor?', [
+    showAlert('Seleccionar estado', '¿Cuál es el estado de este convertidor?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'OK', onPress: () => handleMarkOk(convertidor) },
       { text: 'NG', style: 'destructive', onPress: () => handleOpenNg(convertidor) }
@@ -117,7 +118,7 @@ export default function ListConvertidoresScreen({ navigation }) {
   const handleOpenNg = (convertidor) => {
     const conector = convertidor?.conectores?.[0];
     if (!conector?.id) {
-      Alert.alert('Sin conector', 'No se encontró el conector del convertidor.');
+      showAlert('Sin conector', 'No se encontró el conector del convertidor.');
       return;
     }
     setPendingConvertidor(convertidor);
@@ -135,7 +136,7 @@ export default function ListConvertidoresScreen({ navigation }) {
 
     const trimmedComment = ngComment.trim();
     if (!trimmedComment) {
-      Alert.alert('Falta comentario', 'Escribe la falla antes de marcar NG.');
+      showAlert('Falta comentario', 'Escribe la falla antes de marcar NG.');
       return;
     }
 
@@ -152,7 +153,7 @@ export default function ListConvertidoresScreen({ navigation }) {
       setShowNgModal(false);
       setPendingConvertidor(null);
     } else {
-      Alert.alert('Error', 'No se pudo marcar el convertidor como NG.');
+      showAlert('Error', 'No se pudo marcar el convertidor como NG.');
     }
     setUpdatingIds(prev => {
       const next = { ...prev };
@@ -164,11 +165,11 @@ export default function ListConvertidoresScreen({ navigation }) {
   const handleMarkOk = (convertidor) => {
     const conector = getConector(convertidor);
     if (!conector?.id) {
-      Alert.alert('Sin conector', 'No se encontró el conector del convertidor.');
+      showAlert('Sin conector', 'No se encontró el conector del convertidor.');
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Confirmar OK',
       '¿Marcar este convertidor como OK?',
       [
@@ -187,7 +188,7 @@ export default function ListConvertidoresScreen({ navigation }) {
                 return { ...item, conectores };
               }));
             } else {
-              Alert.alert('Error', 'No se pudo marcar el convertidor como OK.');
+              showAlert('Error', 'No se pudo marcar el convertidor como OK.');
             }
             setUpdatingIds(prev => {
               const next = { ...prev };

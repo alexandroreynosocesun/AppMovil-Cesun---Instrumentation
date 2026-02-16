@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native'
+import { showAlert } from '../utils/alertUtils';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, Title, Paragraph, Button, Chip, ActivityIndicator, TextInput } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -75,10 +76,10 @@ export default function ListAdaptadoresScreen({ navigation }) {
   const handleMarkOk = (adaptador) => {
     const conector = getConector(adaptador);
     if (!conector?.id) {
-      Alert.alert('Sin conector', 'No se encontró el conector.');
+      showAlert('Sin conector', 'No se encontró el conector.');
       return;
     }
-    Alert.alert('Confirmar OK', '¿Marcar este adaptador como OK?', [
+    showAlert('Confirmar OK', '¿Marcar este adaptador como OK?', [
       { text: 'Cancelar', style: 'cancel' },
       {
         text: 'Marcar OK',
@@ -88,7 +89,7 @@ export default function ListAdaptadoresScreen({ navigation }) {
           if (result.success) {
             loadAdaptadores();
           } else {
-            Alert.alert('Error', 'No se pudo marcar como OK.');
+            showAlert('Error', 'No se pudo marcar como OK.');
           }
           setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
         }
@@ -99,7 +100,7 @@ export default function ListAdaptadoresScreen({ navigation }) {
   const handleOpenNg = (adaptador) => {
     const conector = getConector(adaptador);
     if (!conector?.id) {
-      Alert.alert('Sin conector', 'No se encontró el conector.');
+      showAlert('Sin conector', 'No se encontró el conector.');
       return;
     }
     Alert.prompt
@@ -114,7 +115,7 @@ export default function ListAdaptadoresScreen({ navigation }) {
               if (result.success) {
                 loadAdaptadores();
               } else {
-                Alert.alert('Error', 'No se pudo marcar como NG.');
+                showAlert('Error', 'No se pudo marcar como NG.');
               }
               setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
             }
@@ -126,14 +127,14 @@ export default function ListAdaptadoresScreen({ navigation }) {
           if (result.success) {
             loadAdaptadores();
           } else {
-            Alert.alert('Error', 'No se pudo marcar como NG.');
+            showAlert('Error', 'No se pudo marcar como NG.');
           }
           setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
         })();
   };
 
   const handlePendientePress = (adaptador) => {
-    Alert.alert('Seleccionar estado', '¿Cuál es el estado de este adaptador?', [
+    showAlert('Seleccionar estado', '¿Cuál es el estado de este adaptador?', [
       { text: 'Cancelar', style: 'cancel' },
       { text: 'OK', onPress: () => handleMarkOk(adaptador) },
       { text: 'NG', style: 'destructive', onPress: () => handleOpenNg(adaptador) }
@@ -182,7 +183,7 @@ export default function ListAdaptadoresScreen({ navigation }) {
   const handleBulkMarkAsOK = () => {
     const count = Object.keys(selectedIds).length;
     if (count === 0) {
-      Alert.alert('Sin selección', 'No hay adaptadores seleccionados.');
+      showAlert('Sin selección', 'No hay adaptadores seleccionados.');
       return;
     }
 

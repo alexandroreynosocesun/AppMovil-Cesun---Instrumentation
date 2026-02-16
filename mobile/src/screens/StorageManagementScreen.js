@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -39,7 +40,7 @@ export default function StorageManagementScreen({ navigation }) {
     if (isAdminAlex) {
       loadStorageData();
     } else {
-      Alert.alert('Acceso Denegado', 'Solo el administrador puede acceder a esta pantalla');
+      showAlert('Acceso Denegado', 'Solo el administrador puede acceder a esta pantalla');
       navigation.goBack();
     }
   }, [isAdminAlex]);
@@ -61,7 +62,7 @@ export default function StorageManagementScreen({ navigation }) {
       }
     } catch (error) {
       logger.error('Error cargando datos de almacenamiento:', error);
-      Alert.alert('Error', 'No se pudieron cargar los datos de almacenamiento');
+      showAlert('Error', 'No se pudieron cargar los datos de almacenamiento');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -69,7 +70,7 @@ export default function StorageManagementScreen({ navigation }) {
   };
 
   const handleCleanup = async (days = 365) => {
-    Alert.alert(
+    showAlert(
       'Limpiar PDFs Antiguos',
       `¿Deseas eliminar PDFs más antiguos de ${days} días?\n\nEsta acción no se puede deshacer.`,
       [
@@ -82,17 +83,17 @@ export default function StorageManagementScreen({ navigation }) {
               setCleaning(true);
               const result = await auditoriaService.cleanupPDFs(days);
               if (result.success) {
-                Alert.alert(
+                showAlert(
                   'Limpieza Completada',
                   result.data.message || 'PDFs eliminados exitosamente'
                 );
                 loadStorageData(); // Recargar datos
               } else {
-                Alert.alert('Error', result.message || 'Error al limpiar PDFs');
+                showAlert('Error', result.message || 'Error al limpiar PDFs');
               }
             } catch (error) {
               logger.error('Error limpiando PDFs:', error);
-              Alert.alert('Error', 'Error al limpiar PDFs');
+              showAlert('Error', 'Error al limpiar PDFs');
             } finally {
               setCleaning(false);
             }
@@ -103,7 +104,7 @@ export default function StorageManagementScreen({ navigation }) {
   };
 
   const handleCompress = async (days = 180) => {
-    Alert.alert(
+    showAlert(
       'Comprimir PDFs Antiguos',
       `¿Deseas comprimir PDFs más antiguos de ${days} días?\n\nLos PDFs se comprimirán en archivos ZIP para ahorrar espacio.`,
       [
@@ -115,17 +116,17 @@ export default function StorageManagementScreen({ navigation }) {
               setCompressing(true);
               const result = await auditoriaService.compressPDFs(days);
               if (result.success) {
-                Alert.alert(
+                showAlert(
                   'Compresión Completada',
                   result.data.message || 'PDFs comprimidos exitosamente'
                 );
                 loadStorageData(); // Recargar datos
               } else {
-                Alert.alert('Error', result.message || 'Error al comprimir PDFs');
+                showAlert('Error', result.message || 'Error al comprimir PDFs');
               }
             } catch (error) {
               logger.error('Error comprimiendo PDFs:', error);
-              Alert.alert('Error', 'Error al comprimir PDFs');
+              showAlert('Error', 'Error al comprimir PDFs');
             } finally {
               setCompressing(false);
             }

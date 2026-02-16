@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -111,15 +112,15 @@ export default function AddVByOneScreen({ navigation, route }) {
 
   const handleSave = async () => {
     if (!formData.codigo_qr.trim()) {
-      Alert.alert('Falta QR', 'Escanea o escribe el código QR.');
+      showAlert('Falta QR', 'Escanea o escribe el código QR.');
       return;
     }
     if (!formData.categoria) {
-      Alert.alert('Falta categoría', 'Selecciona una categoría.');
+      showAlert('Falta categoría', 'Selecciona una categoría.');
       return;
     }
     if (!formData.numero_adaptador.trim()) {
-      Alert.alert('Número inválido', 'Ingresa el número del adaptador.');
+      showAlert('Número inválido', 'Ingresa el número del adaptador.');
       return;
     }
 
@@ -134,18 +135,18 @@ export default function AddVByOneScreen({ navigation, route }) {
 
       const result = await adaptadorService.createAdaptador(payload);
       if (result.success) {
-        Alert.alert('Éxito', 'Registro creado correctamente.', [
+        showAlert('Éxito', 'Registro creado correctamente.', [
           {
             text: 'OK',
             onPress: () => navigation.goBack()
           }
         ]);
       } else {
-        Alert.alert('Error', result.error || 'No se pudo crear el registro.');
+        showAlert('Error', result.error || 'No se pudo crear el registro.');
       }
     } catch (error) {
       logger.error('Error creando registro:', error);
-      Alert.alert('Error', 'Error al crear el registro.');
+      showAlert('Error', 'Error al crear el registro.');
     } finally {
       setLoading(false);
     }

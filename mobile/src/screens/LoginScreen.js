@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -220,7 +221,7 @@ export default function LoginScreen({ navigation }) {
       const authResult = await authenticateWithBiometrics();
       if (!authResult.success) {
         if (authResult.error !== 'Autenticación cancelada') {
-          Alert.alert('Error', authResult.error);
+          showAlert('Error', authResult.error);
         }
         return;
       }
@@ -228,7 +229,7 @@ export default function LoginScreen({ navigation }) {
       // Obtener credenciales guardadas
       const credentials = await getBiometricCredentials();
       if (!credentials) {
-        Alert.alert('Error', 'No hay credenciales guardadas');
+        showAlert('Error', 'No hay credenciales guardadas');
         return;
       }
 
@@ -241,11 +242,11 @@ export default function LoginScreen({ navigation }) {
           navigation.navigate('ModuleSelection');
         }, 100);
       } else {
-        Alert.alert('Error', result.error || 'Error al iniciar sesión');
+        showAlert('Error', result.error || 'Error al iniciar sesión');
       }
     } catch (error) {
       logger.error('Error en login biométrico:', error);
-      Alert.alert('Error', 'Error en autenticación biométrica');
+      showAlert('Error', 'Error en autenticación biométrica');
     } finally {
       setLoading(false);
     }
@@ -253,7 +254,7 @@ export default function LoginScreen({ navigation }) {
 
   // Función para guardar credenciales después del login exitoso
   const handleSaveBiometricCredentials = async () => {
-    Alert.alert(
+    showAlert(
       'Guardar credenciales',
       `¿Deseas guardar tus credenciales para usar ${biometricType} en futuros inicios de sesión?`,
       [
@@ -267,9 +268,9 @@ export default function LoginScreen({ navigation }) {
             const saved = await saveBiometricCredentials(usuario, password);
             if (saved) {
               setHasSavedCredentials(true);
-              Alert.alert('Éxito', 'Credenciales guardadas. Podrás usar autenticación biométrica en futuros inicios de sesión.');
+              showAlert('Éxito', 'Credenciales guardadas. Podrás usar autenticación biométrica en futuros inicios de sesión.');
             } else {
-              Alert.alert('Error', 'No se pudieron guardar las credenciales');
+              showAlert('Error', 'No se pudieron guardar las credenciales');
             }
           }
         }
@@ -279,7 +280,7 @@ export default function LoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     if (!usuario.trim() || !password.trim()) {
-      Alert.alert('Error', 'Por favor completa todos los campos');
+      showAlert('Error', 'Por favor completa todos los campos');
       return;
     }
 
@@ -290,7 +291,7 @@ export default function LoginScreen({ navigation }) {
       if (result.success) {
         // Si no hay credenciales guardadas y la biometría está disponible, ofrecer guardar
         if (!hasSavedCredentials && biometricAvailable) {
-          Alert.alert(
+          showAlert(
             t('saveCredentials') || 'Guardar credenciales',
             `¿Deseas guardar tus credenciales para usar ${biometricType} en futuros inicios de sesión?`,
             [
@@ -320,10 +321,10 @@ export default function LoginScreen({ navigation }) {
           }, 100);
         }
       } else {
-        Alert.alert('Error', result.error || 'Error al iniciar sesión');
+        showAlert('Error', result.error || 'Error al iniciar sesión');
       }
     } catch (error) {
-      Alert.alert('Error', 'Error de conexión');
+      showAlert('Error', 'Error de conexión');
     } finally {
       setLoading(false);
     }
@@ -535,7 +536,7 @@ export default function LoginScreen({ navigation }) {
                   {hasSavedCredentials && (
                     <TouchableOpacity
                       onPress={async () => {
-                        Alert.alert(
+                        showAlert(
                           'Eliminar credenciales',
                           '¿Deseas eliminar las credenciales guardadas?',
                           [
@@ -546,7 +547,7 @@ export default function LoginScreen({ navigation }) {
                               onPress: async () => {
                                 await removeBiometricCredentials();
                                 setHasSavedCredentials(false);
-                                Alert.alert('Éxito', 'Credenciales eliminadas');
+                                showAlert('Éxito', 'Credenciales eliminadas');
                               }
                             }
                           ]

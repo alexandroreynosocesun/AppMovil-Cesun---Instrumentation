@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -68,19 +69,19 @@ export default function ProfileScreen({ navigation }) {
 
   const validateForm = () => {
     if (!formData.nombre.trim()) {
-      Alert.alert('Error', 'El nombre es requerido');
+      showAlert('Error', 'El nombre es requerido');
       return false;
     }
     if (!formData.numero_empleado.trim()) {
-      Alert.alert('Error', 'El número de empleado es requerido');
+      showAlert('Error', 'El número de empleado es requerido');
       return false;
     }
     if (formData.password && formData.password.length < 6) {
-      Alert.alert('Error', 'La contraseña debe tener al menos 6 caracteres');
+      showAlert('Error', 'La contraseña debe tener al menos 6 caracteres');
       return false;
     }
     if (formData.password && formData.password !== formData.confirmPassword) {
-      Alert.alert('Error', 'Las contraseñas no coinciden');
+      showAlert('Error', 'Las contraseñas no coinciden');
       return false;
     }
     return true;
@@ -110,7 +111,7 @@ export default function ProfileScreen({ navigation }) {
       const result = await updateProfile(updateData);
       
       if (result.success) {
-        Alert.alert('Éxito', 'Perfil actualizado correctamente');
+        showAlert('Éxito', 'Perfil actualizado correctamente');
         setEditing(false);
         // Resetear formulario con los datos actualizados del contexto
         setFormData({
@@ -121,10 +122,10 @@ export default function ProfileScreen({ navigation }) {
           turno_actual: user?.turno_actual || 'A'
         });
       } else {
-        Alert.alert('Error', result.error || 'Error al actualizar el perfil');
+        showAlert('Error', result.error || 'Error al actualizar el perfil');
       }
     } catch (error) {
-      Alert.alert('Error', 'Error de conexión');
+      showAlert('Error', 'Error de conexión');
     } finally {
       setLoading(false);
     }
@@ -142,7 +143,7 @@ export default function ProfileScreen({ navigation }) {
   };
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       'Cerrar Sesión',
       '¿Estás seguro de que quieres cerrar sesión?',
       [

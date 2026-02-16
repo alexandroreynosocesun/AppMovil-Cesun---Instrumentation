@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -53,7 +54,7 @@ export default function SearchMainboardScreen({ navigation }) {
 
   const handleSaveArduino = async () => {
     if (!arduinoForm.modelo_interno || !arduinoForm.destino || !arduinoForm.comando) {
-      Alert.alert('Error', 'Completa modelo interno, destino y comando.');
+      showAlert('Error', 'Completa modelo interno, destino y comando.');
       return;
     }
     const payload = {
@@ -72,12 +73,12 @@ export default function SearchMainboardScreen({ navigation }) {
         handleSelectModel(selectedModel.modelo_mainboard);
       }
     } else {
-      Alert.alert('Error', result.error || 'No se pudo guardar');
+      showAlert('Error', result.error || 'No se pudo guardar');
     }
   };
 
   const handleDeleteArduino = (sequenceId) => {
-    Alert.alert(
+    showAlert(
       'Eliminar secuencia',
       '¿Seguro que quieres eliminar esta secuencia Arduino?',
       [
@@ -92,7 +93,7 @@ export default function SearchMainboardScreen({ navigation }) {
                 handleSelectModel(selectedModel.modelo_mainboard);
               }
             } else {
-              Alert.alert('Error', result.error || 'No se pudo eliminar');
+              showAlert('Error', result.error || 'No se pudo eliminar');
             }
           }
         }

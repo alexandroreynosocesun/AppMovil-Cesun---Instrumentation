@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableWithoutFeedback } from 'react-native';
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableWithoutFeedback } from 'react-native'
+import { showAlert } from '../utils/alertUtils';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, Title, Paragraph, Chip, ActivityIndicator, Divider, TextInput, Button } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -34,12 +35,12 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
         setAdaptador(result.data);
       } else {
         logger.error('Error cargando adaptador:', result.error);
-        Alert.alert('Error', 'No se pudo cargar la información del adaptador');
+        showAlert('Error', 'No se pudo cargar la información del adaptador');
         navigation.goBack();
       }
     } catch (error) {
       logger.error('Error cargando adaptador:', error);
-      Alert.alert('Error', 'Error al cargar la información');
+      showAlert('Error', 'Error al cargar la información');
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -125,7 +126,7 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
 
       const failed = results.find(r => !r.success);
       if (failed) {
-        Alert.alert('Error', failed.error || 'No se pudo actualizar el conector.');
+        showAlert('Error', failed.error || 'No se pudo actualizar el conector.');
         return false;
       }
 
@@ -133,7 +134,7 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
       return true;
     } catch (error) {
       logger.error('Error actualizando conector:', error);
-      Alert.alert('Error', 'No se pudo actualizar el conector.');
+      showAlert('Error', 'No se pudo actualizar el conector.');
       return false;
     } finally {
       setUpdatingIds(prev => {
@@ -155,7 +156,7 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Confirmar OK',
       '¿Confirmas que este conector queda en OK?',
       [
@@ -176,7 +177,7 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
 
     const trimmedComment = ngComment.trim();
     if (!trimmedComment) {
-      Alert.alert('Falta comentario', 'Escribe la falla antes de marcar NG.');
+      showAlert('Falta comentario', 'Escribe la falla antes de marcar NG.');
       return;
     }
 
