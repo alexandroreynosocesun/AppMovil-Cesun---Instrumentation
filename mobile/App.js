@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
-import { Provider as PaperProvider } from 'react-native-paper';
+import { Provider as PaperProvider, MD3LightTheme } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
 
@@ -288,17 +288,17 @@ export default function App() {
 
   return (
     <LanguageProvider>
-      <PaperProvider>
+      <PaperProvider theme={MD3LightTheme}>
         <AuthProvider>
           <ValidationProvider>
             <NavigationContainer theme={{
               ...DefaultTheme,
               colors: {
                 ...DefaultTheme.colors,
-                background: '#0F0F0F',
-                card: '#1A1A1A',
-                text: '#FFFFFF',
-                border: '#333333',
+                background: '#F8FAFC',
+                card: '#FFFFFF',
+                text: '#1E293B',
+                border: '#E2E8F0',
               },
             }}>
               <View style={styles.appContainer}>
