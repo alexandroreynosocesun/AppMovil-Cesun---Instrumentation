@@ -139,7 +139,7 @@ export default function App() {
           padding: 0;
           width: 100%;
           height: 100%;
-          background-color: #0F0F0F;
+          background-color: #2C2C2C;
         }
         body {
           margin: 0;
@@ -151,7 +151,7 @@ export default function App() {
             sans-serif;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
-          background-color: #0F0F0F;
+          background-color: #2C2C2C;
         }
         #root {
           margin: 0;
@@ -160,7 +160,7 @@ export default function App() {
           height: 100dvh;
           display: flex;
           flex-direction: column;
-          background-color: #0F0F0F;
+          background-color: #2C2C2C;
           position: relative;
           overflow: auto;
         }
