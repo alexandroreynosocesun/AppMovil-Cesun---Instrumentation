@@ -1200,9 +1200,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     ...Platform.select({
       web: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: 65,
+        height: 65,
+        borderRadius: 33,
       },
     }),
   },
@@ -1235,7 +1235,8 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 16,
         borderTopRightRadius: 16,
         backgroundColor: '#2C2C2C',
-        paddingHorizontal: 10,
+        paddingHorizontal: 8,
+        overflow: 'visible',
       },
       default: {},
     }),
@@ -1252,6 +1253,7 @@ const styles = StyleSheet.create({
         alignSelf: 'center',
         width: '100%',
         justifyContent: 'space-evenly',
+        overflow: 'visible',
       },
     }),
   },
@@ -1261,7 +1263,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     ...Platform.select({
       web: {
-        minWidth: 50,
+        minWidth: 0,
         maxWidth: 150,
         cursor: 'pointer',
         transition: 'opacity 0.2s',
