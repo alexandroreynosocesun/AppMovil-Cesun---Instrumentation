@@ -4,7 +4,7 @@
   "description": "Sistema de validación de Jigs - Hisense",
   "start_url": "/",
   "scope": "/",
-  "display": "standalone",
+  "display": "fullscreen",
   "orientation": "portrait",
   "background_color": "#0F0F0F",
   "theme_color": "#0F0F0F",
