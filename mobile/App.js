@@ -258,9 +258,14 @@ export default function App() {
         document.head.appendChild(manifestLink);
       }
 
-      // Registrar Service Worker
+      // Registrar Service Worker y forzar actualización
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+        navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
+          .then((registration) => {
+            // Buscar actualizaciones inmediatamente
+            registration.update();
+          })
+          .catch(() => {});
       }
 
       // Agregar favicon link para evitar errores 404/500
