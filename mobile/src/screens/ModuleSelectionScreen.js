@@ -145,12 +145,18 @@ const styles = StyleSheet.create({
   },
   safeArea: {
     flex: 1,
+    ...(Platform.OS === 'web' && {
+      overflow: 'auto',
+    }),
   },
   scrollContent: {
     flexGrow: 1,
     padding: 20,
     paddingTop: 40,
     paddingBottom: 40,
+    ...(Platform.OS === 'web' && {
+      flexGrow: 0,
+    }),
   },
   header: {
     marginBottom: 40,

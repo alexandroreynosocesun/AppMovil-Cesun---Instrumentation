@@ -168,6 +168,14 @@ export default function App() {
           position: relative;
           overflow: auto;
         }
+        /* Forzar que los contenedores flex permitan scroll */
+        #root > div {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          overflow: auto;
+          -webkit-overflow-scrolling: touch;
+        }
         /* Mejorar scrollbar en web */
         ::-webkit-scrollbar {
           width: 10px;
