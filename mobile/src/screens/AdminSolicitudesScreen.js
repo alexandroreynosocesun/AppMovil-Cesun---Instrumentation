@@ -5,14 +5,31 @@ import {
   StyleSheet,
   FlatList,
   TouchableOpacity,
-  Alert,
+  Alert as RNAlert,
   RefreshControl,
   ActivityIndicator,
   Modal,
   TextInput,
   ScrollView,
-  Image
+  Image,
+  Platform
 } from 'react-native';
+
+// Alert compatible con web
+const Alert = {
+  alert: (title, message, buttons) => {
+    if (Platform.OS === 'web') {
+      window.alert(`${title}\n${message || ''}`);
+      // Ejecutar el primer botón con onPress si existe
+      if (buttons && buttons.length > 0) {
+        const btn = buttons.find(b => b.onPress) || buttons[0];
+        if (btn && btn.onPress) btn.onPress();
+      }
+    } else {
+      RNAlert.alert(title, message, buttons);
+    }
+  }
+};
 import { formatDate, formatTime12Hour } from '../utils/dateUtils';
 import { useFocusEffect } from '@react-navigation/native';
 import AdminService from '../services/AdminService';
