@@ -740,31 +740,31 @@ export default function HomeScreen({ navigation }) {
       >
         <View style={styles.bottomButtons}>
           {/* Botón de Todos los Jigs */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.bottomButtonTouchable}
             onPress={handleViewAllJigs}
           >
             <View style={styles.bottomButtonContent}>
-              <IconButton icon="package-variant" size={24} iconColor="#FFFFFF" />
+              <IconButton icon="package-variant" size={22} iconColor="#FFFFFF" style={styles.bottomIcon} />
               <Text style={styles.bottomButtonLabel}>{t('allJigs')}</Text>
             </View>
           </TouchableOpacity>
 
           {/* Botón de Jigs NG */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.bottomButtonTouchable}
             onPress={() => navigation.navigate('JigNG')}
           >
             <View style={styles.bottomButtonContent}>
-              <IconButton icon="alert-circle" size={24} iconColor="#FF9800" />
+              <IconButton icon="alert-circle" size={22} iconColor="#FF9800" style={styles.bottomIcon} />
               <Text style={styles.bottomButtonLabel}>{t('jigsNG')}</Text>
             </View>
           </TouchableOpacity>
 
           {/* Botón central de Escanear QR */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.centerBottomButtonTouchable}
-              onPress={handleScanQR}
+            onPress={handleScanQR}
           >
             <LinearGradient
               colors={['#2196F3', '#1976D2', '#0D47A1']}
@@ -772,29 +772,29 @@ export default function HomeScreen({ navigation }) {
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
             >
-              <IconButton icon="qrcode-scan" size={28} iconColor="#FFFFFF" />
+              <IconButton icon="qrcode-scan" size={24} iconColor="#FFFFFF" style={styles.bottomIcon} />
               <Text style={styles.centerBottomButtonText}>{t('scan')}</Text>
             </LinearGradient>
           </TouchableOpacity>
 
           {/* Botón de Auditoría */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.bottomButtonTouchable}
             onPress={() => navigation.navigate('Auditoria')}
           >
             <View style={styles.bottomButtonContent}>
-              <IconButton icon="file-document-multiple" size={24} iconColor="#9C27B0" />
+              <IconButton icon="file-document-multiple" size={22} iconColor="#9C27B0" style={styles.bottomIcon} />
               <Text style={styles.bottomButtonLabel}>{t('audit')}</Text>
             </View>
           </TouchableOpacity>
 
           {/* Botón de Perfil */}
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.bottomButtonTouchable}
-              onPress={handleViewProfile}
+            onPress={handleViewProfile}
           >
             <View style={styles.bottomButtonContent}>
-              <IconButton icon="account" size={24} iconColor="#2196F3" />
+              <IconButton icon="account" size={22} iconColor="#2196F3" style={styles.bottomIcon} />
               <Text style={styles.bottomButtonLabel}>{t('profile')}</Text>
             </View>
           </TouchableOpacity>
@@ -1223,9 +1223,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: -4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
-    paddingTop: 20,
-    paddingBottom: 25,
-    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 16,
+    paddingHorizontal: 16,
     zIndex: 9999,
     backgroundColor: '#2C2C2C',
     ...Platform.select({
@@ -1246,8 +1246,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    marginBottom: 20,
-    gap: 4,
+    marginBottom: 10,
+    gap: 2,
     ...Platform.select({
       web: {
         maxWidth: 1200,
@@ -1271,9 +1271,15 @@ const styles = StyleSheet.create({
       },
     }),
   },
+  bottomIcon: {
+    margin: 0,
+    padding: 0,
+    width: 28,
+    height: 28,
+  },
   bottomButtonContent: {
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 4,
   },
   bottomButtonLabel: {
     fontSize: 12,
