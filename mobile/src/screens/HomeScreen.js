@@ -1235,6 +1235,7 @@ const styles = StyleSheet.create({
         borderTopLeftRadius: 16,
         borderTopRightRadius: 16,
         backgroundColor: '#2C2C2C',
+        paddingHorizontal: 10,
       },
       default: {},
     }),
@@ -1244,7 +1245,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     alignItems: 'center',
     marginBottom: 20,
-    gap: 8,
+    gap: 4,
     ...Platform.select({
       web: {
         maxWidth: 1200,
@@ -1256,11 +1257,11 @@ const styles = StyleSheet.create({
   },
   bottomButtonTouchable: {
     flex: 1,
-    marginHorizontal: 5,
+    marginHorizontal: 2,
     alignItems: 'center',
     ...Platform.select({
       web: {
-        minWidth: 80,
+        minWidth: 50,
         maxWidth: 150,
         cursor: 'pointer',
         transition: 'opacity 0.2s',
