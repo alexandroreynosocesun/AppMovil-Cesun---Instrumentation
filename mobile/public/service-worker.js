@@ -1,4 +1,4 @@
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 const STATIC_CACHE = 'checkapp-static-v' + CACHE_VERSION;
 const RUNTIME_CACHE = 'checkapp-runtime-v' + CACHE_VERSION;
 
