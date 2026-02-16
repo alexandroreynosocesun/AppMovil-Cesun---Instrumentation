@@ -139,7 +139,6 @@ export default function App() {
           padding: 0;
           width: 100%;
           height: 100%;
-          overflow: hidden;
           background-color: #0F0F0F;
         }
         body {
@@ -151,18 +150,12 @@ export default function App() {
           padding-right: env(safe-area-inset-right);
           width: 100%;
           height: 100%;
-          overflow: hidden;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
             'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
             sans-serif;
           -webkit-font-smoothing: antialiased;
           -moz-osx-font-smoothing: grayscale;
           background-color: #0F0F0F;
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
         }
         #root {
           margin: 0;
@@ -173,6 +166,7 @@ export default function App() {
           flex-direction: column;
           background-color: #0F0F0F;
           position: relative;
+          overflow: auto;
         }
         /* Mejorar scrollbar en web */
         ::-webkit-scrollbar {
