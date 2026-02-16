@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import { View, StyleSheet, ScrollView, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Alert } from 'react-native'
+import { showAlert } from '../utils/alertUtils';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Button, Card, Chip, Paragraph, TextInput, Title } from 'react-native-paper';
@@ -120,7 +121,7 @@ export default function UpdateAdaptadorConectoresScreen({ route, navigation }) {
     const selectedIds = getSelectedConectores();
 
     if (selectedIds.length === 0) {
-      Alert.alert('Sin selección', 'Selecciona al menos un tipo de conector.');
+      showAlert('Sin selección', 'Selecciona al menos un tipo de conector.');
       return;
     }
 
@@ -128,19 +129,19 @@ export default function UpdateAdaptadorConectoresScreen({ route, navigation }) {
     const trimmedTurno = String(turno || '').trim().toUpperCase();
 
     if (!trimmedLinea) {
-      Alert.alert('Falta línea', 'Ingresa la línea de salida.');
+      showAlert('Falta línea', 'Ingresa la línea de salida.');
       return;
     }
 
     // Validar que la línea sea un número del 1 al 6
     const lineaNum = parseInt(trimmedLinea, 10);
     if (isNaN(lineaNum) || lineaNum < 1 || lineaNum > 6) {
-      Alert.alert('Línea inválida', 'La línea debe ser un número del 1 al 6.');
+      showAlert('Línea inválida', 'La línea debe ser un número del 1 al 6.');
       return;
     }
 
     if (!trimmedTurno) {
-      Alert.alert('Falta turno', 'Selecciona el turno.');
+      showAlert('Falta turno', 'Selecciona el turno.');
       return;
     }
 
@@ -172,10 +173,10 @@ export default function UpdateAdaptadorConectoresScreen({ route, navigation }) {
     setSaving(false);
 
     if (result.success) {
-      Alert.alert('Actualizado', `Se actualizaron ${selectedIds.length} conectores.`);
+      showAlert('Actualizado', `Se actualizaron ${selectedIds.length} conectores.`);
       navigation.goBack();
     } else {
-      Alert.alert('Error', 'No se pudo actualizar la información.');
+      showAlert('Error', 'No se pudo actualizar la información.');
     }
   };
 

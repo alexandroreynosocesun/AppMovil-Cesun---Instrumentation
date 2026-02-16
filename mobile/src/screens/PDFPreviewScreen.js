@@ -25,7 +25,8 @@ import logger from '../utils/logger';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
-import { Linking } from 'react-native';
+import { Linking } from 'react-native'
+import { showAlert } from '../utils/alertUtils';;
 import { getAuthToken } from '../utils/authUtils';
 import { API_BASE_URL } from '../utils/apiClient';
 
@@ -71,14 +72,14 @@ export default function PDFPreviewScreen({ navigation, route }) {
       await new Promise(resolve => setTimeout(resolve, 1000));
       
       setSaved(true);
-      Alert.alert(
+      showAlert(
         '✅ Guardado en Auditoría',
         'El reporte ha sido guardado exitosamente en el sistema de auditoría.',
         [{ text: 'OK' }]
       );
     } catch (error) {
       logger.error('Error guardando en auditoría:', error);
-      Alert.alert('Error', 'No se pudo guardar el reporte en auditoría');
+      showAlert('Error', 'No se pudo guardar el reporte en auditoría');
     } finally {
       setSaving(false);
     }
@@ -126,14 +127,14 @@ export default function PDFPreviewScreen({ navigation, route }) {
             logger.info('✅ PDF compartido exitosamente');
           } catch (shareError) {
             logger.error('❌ Error compartiendo PDF:', shareError);
-            Alert.alert(
+            showAlert(
               'PDF Descargado',
               `El PDF se ha descargado pero no se pudo abrir automáticamente.\n\nUbicación: ${downloadResult.uri}`,
               [{ text: 'OK' }]
             );
           }
         } else {
-          Alert.alert(
+          showAlert(
             'PDF Descargado',
             `El PDF se ha descargado en: ${downloadResult.uri}`,
             [{ text: 'OK' }]
@@ -152,7 +153,7 @@ export default function PDFPreviewScreen({ navigation, route }) {
       } else if (error.message.includes('404')) {
         errorMessage = 'El archivo PDF no se encontró en el servidor.';
       }
-      Alert.alert('Error de Descarga', errorMessage);
+      showAlert('Error de Descarga', errorMessage);
     } finally {
       setDownloadingPDF(false);
     }
@@ -167,7 +168,7 @@ export default function PDFPreviewScreen({ navigation, route }) {
     
     // Verificar si estamos en web
     if (Platform.OS === 'web') {
-      Alert.alert(
+      showAlert(
         'Información',
         'En la versión web, por favor use el botón "Descargar PDF" para descargar el archivo.',
         [{ text: 'OK' }]
@@ -239,7 +240,7 @@ export default function PDFPreviewScreen({ navigation, route }) {
           } catch (shareError) {
             logger.error('❌ Error compartiendo PDF:', shareError);
             logger.error('❌ Detalles del error:', JSON.stringify(shareError, null, 2));
-            Alert.alert(
+            showAlert(
               'Error',
               `No se pudo abrir el selector de aplicaciones.\n\nError: ${shareError.message || 'Error desconocido'}\n\nEl PDF se descargó correctamente.`,
               [{ text: 'OK' }]
@@ -254,7 +255,7 @@ export default function PDFPreviewScreen({ navigation, route }) {
             await Linking.openURL(downloadResult.uri);
             logger.info('✅ PDF abierto con Linking');
           } else {
-            Alert.alert(
+            showAlert(
               'PDF Descargado',
               `El PDF se ha descargado pero no se pudo abrir automáticamente.\n\nUbicación: ${downloadResult.uri}`,
               [{ text: 'OK' }]
@@ -277,7 +278,7 @@ export default function PDFPreviewScreen({ navigation, route }) {
       } else {
         errorMessage = `Error: ${error.message || 'Error desconocido'}`;
       }
-      Alert.alert('Error', errorMessage);
+      showAlert('Error', errorMessage);
     } finally {
       setDownloadingPDF(false);
       logger.info('🏁 Descarga finalizada');

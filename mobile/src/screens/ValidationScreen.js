@@ -126,7 +126,7 @@ export default function ValidationScreen({ route, navigation }) {
       if (result.success) {
         setJigNG(result.jigNG);
         if (result.hasActiveNG) {
-          Alert.alert(
+          showAlert(
             t('jigWithNGActive'),
             t('jigWithNGActiveDesc'),
             [
@@ -175,13 +175,13 @@ export default function ValidationScreen({ route, navigation }) {
   const handleSubmitValidation = () => {
     // Validar campos requeridos
     if (!formData.turno || !formData.estado || !formData.comentario) {
-      Alert.alert(t('error'), t('completeRequiredFields'));
+      showAlert(t('error'), t('completeRequiredFields'));
       return;
     }
 
     // Validar que se haya seleccionado una línea
     if (!formData.linea || formData.linea.trim() === '') {
-      Alert.alert(
+      showAlert(
         t('lineRequired'),
         t('lineRequiredDesc'),
         [
@@ -201,7 +201,7 @@ export default function ValidationScreen({ route, navigation }) {
     // Validar cantidad
     const cantidad = parseInt(formData.cantidad);
     if (isNaN(cantidad) || cantidad <= 0) {
-      Alert.alert(t('error'), t('quantityMustBePositive'));
+      showAlert(t('error'), t('quantityMustBePositive'));
       return;
     }
 
@@ -212,7 +212,7 @@ export default function ValidationScreen({ route, navigation }) {
       );
       
       if (jigYaAgregado) {
-        Alert.alert(
+        showAlert(
           t('jigAlreadyAdded'),
           t('jigAlreadyAddedDesc', { number: jig?.numero_jig }),
           [

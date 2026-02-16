@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -230,7 +231,7 @@ export default function AssignedValidationsScreen({ navigation }) {
         
         // Manejar error 401 (sesión expirada)
         if (result.error === 'UNAUTHORIZED' || result.error === 401) {
-          Alert.alert(
+          showAlert(
             '🔐 Sesión Expirada',
             result.message || 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
             [
@@ -249,7 +250,7 @@ export default function AssignedValidationsScreen({ navigation }) {
       
       // Manejar error 401 en el catch también
       if (error.response?.status === 401) {
-        Alert.alert(
+        showAlert(
           '🔐 Sesión Expirada',
           'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
           [
@@ -305,7 +306,7 @@ export default function AssignedValidationsScreen({ navigation }) {
   };
 
   const handleMarcarCompletada = async (validationId) => {
-    Alert.alert(
+    showAlert(
       'Marcar como Completada',
       '¿Estás seguro de que quieres marcar esta validación como completada?',
       [
@@ -343,7 +344,7 @@ export default function AssignedValidationsScreen({ navigation }) {
                 if (pendingValidations.length === 0) {
                   // No hay más validaciones pendientes, regresar a Home
                   logger.info('✅ [AssignedValidationsScreen] No hay más validaciones pendientes, regresando a Home');
-                  Alert.alert(
+                  showAlert(
                     '✅ Completada',
                     'La validación ha sido marcada como completada exitosamente.\n\nNo hay más validaciones pendientes.',
                     [
@@ -357,20 +358,20 @@ export default function AssignedValidationsScreen({ navigation }) {
                   );
                 } else {
                   // Aún hay validaciones pendientes
-                  Alert.alert(
+                  showAlert(
                     '✅ Completada',
                     'La validación ha sido marcada como completada exitosamente.'
                   );
                 }
               } else {
-                Alert.alert(
+                showAlert(
                   'Error',
                   result.error || 'No se pudo marcar la validación como completada. Intenta nuevamente.'
                 );
               }
             } catch (error) {
               logger.error('Error marcando validación como completada:', error);
-              Alert.alert(
+              showAlert(
                 'Error',
                 'Ocurrió un error al marcar la validación como completada. Intenta nuevamente.'
               );

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -137,7 +138,7 @@ export default function QRScannerScreen({ navigation, route }) {
           
           if (ngStatus.success && ngStatus.hasActiveNG) {
             // El jig ya tiene un NG activo, mostrar mensaje y ir a detalles
-            Alert.alert(
+            showAlert(
               `⚠️ ${t('jigAlreadyDeactivated')}`,
               t('jigAlreadyDeactivatedDesc', { status: ngStatus.jigNG.estado }),
               [
@@ -176,7 +177,7 @@ export default function QRScannerScreen({ navigation, route }) {
 
           setShowingLastValidationAlert(true);
           alertLockRef.current = true;
-          Alert.alert(
+          showAlert(
             '📋 Información del Jig',
             jigInfoMessage,
             [
@@ -205,7 +206,7 @@ export default function QRScannerScreen({ navigation, route }) {
           setPendingQRCode(data);
           setShowNotFoundModal(true);
         } else if (result.error === 'UNAUTHORIZED') {
-          Alert.alert(
+          showAlert(
             `🔐 ${t('sessionExpired')}`,
             result.message,
             [
@@ -221,7 +222,7 @@ export default function QRScannerScreen({ navigation, route }) {
             ]
           );
         } else if (result.error === 'NETWORK_ERROR') {
-          Alert.alert(
+          showAlert(
             `📡 ${t('noConnection')}`,
             result.message,
             [
@@ -242,7 +243,7 @@ export default function QRScannerScreen({ navigation, route }) {
             ]
           );
         } else {
-          Alert.alert(
+          showAlert(
             `❌ ${t('error')}`,
             result.message || t('qrProcessingError'),
             [
@@ -265,7 +266,7 @@ export default function QRScannerScreen({ navigation, route }) {
         }
       }
     } catch (error) {
-      Alert.alert(t('error'), t('qrProcessingError'));
+      showAlert(t('error'), t('qrProcessingError'));
       setScanned(false);
       setCameraActive(true);
     } finally {
@@ -376,7 +377,7 @@ export default function QRScannerScreen({ navigation, route }) {
         setCameraActive(true);
         setLastScannedQR(null);
         // Opcional: mostrar mensaje de éxito
-        Alert.alert(t('success'), t('jigCreatedSuccess'));
+        showAlert(t('success'), t('jigCreatedSuccess'));
       }
     });
   };

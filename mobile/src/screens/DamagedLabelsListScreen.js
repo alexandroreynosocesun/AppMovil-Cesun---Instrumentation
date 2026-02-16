@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -73,13 +74,13 @@ export default function DamagedLabelsListScreen({ navigation }) {
       } else {
         logger.error('❌ [DamagedLabelsListScreen] Error en respuesta. result:', result);
         if (result && result.error === 'UNAUTHORIZED') {
-          Alert.alert(
+          showAlert(
             'Sesión Expirada',
             'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
             [{ text: 'OK', onPress: logout }]
           );
         } else {
-          Alert.alert('Error', (result && result.error) || 'No se pudieron cargar los reportes');
+          showAlert('Error', (result && result.error) || 'No se pudieron cargar los reportes');
         }
         setDamagedLabels([]);
       }
@@ -87,7 +88,7 @@ export default function DamagedLabelsListScreen({ navigation }) {
       logger.error('❌ [DamagedLabelsListScreen] Error cargando reportes:', error);
       logger.error('❌ [DamagedLabelsListScreen] Error stack:', error.stack);
       logger.error('❌ [DamagedLabelsListScreen] Error completo:', JSON.stringify(error, Object.getOwnPropertyNames(error), 2));
-      Alert.alert('Error', 'Error de conexión');
+      showAlert('Error', 'Error de conexión');
       setDamagedLabels([]);
     } finally {
       setLoading(false);
@@ -116,18 +117,18 @@ export default function DamagedLabelsListScreen({ navigation }) {
         if (newStatus === 'resuelto') {
           // Si se marca como resuelto, eliminar inmediatamente de la lista
           setDamagedLabels(prevLabels => prevLabels.filter(label => label.id !== id));
-          Alert.alert('Éxito', 'Etiqueta restaurada. La foto ha sido eliminada y la tarjeta removida.');
+          showAlert('Éxito', 'Etiqueta restaurada. La foto ha sido eliminada y la tarjeta removida.');
         } else {
           // Para otros estados, recargar la lista
           await loadDamagedLabels();
-          Alert.alert('Éxito', 'Estado actualizado correctamente');
+          showAlert('Éxito', 'Estado actualizado correctamente');
         }
       } else {
-        Alert.alert('Error', result.error || 'No se pudo actualizar el estado');
+        showAlert('Error', result.error || 'No se pudo actualizar el estado');
       }
     } catch (error) {
       logger.error('Error actualizando estado:', error);
-      Alert.alert('Error', 'Error al actualizar el estado');
+      showAlert('Error', 'Error al actualizar el estado');
     }
   };
 

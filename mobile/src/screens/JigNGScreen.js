@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   Text,
@@ -95,7 +96,7 @@ export default function JigNGScreen({ navigation }) {
           setFilteredJigsNG([]);
           setModelGroups({});
           setTotalToRepair(0);
-          Alert.alert(t('error'), t('invalidDataFormat'));
+          showAlert(t('error'), t('invalidDataFormat'));
           return;
         }
         
@@ -124,7 +125,7 @@ export default function JigNGScreen({ navigation }) {
         setFilteredJigsNG([]);
         setModelGroups({});
         setTotalToRepair(0);
-        Alert.alert(t('error'), result.error || result.message || t('errorLoadingJigsNG'));
+        showAlert(t('error'), result.error || result.message || t('errorLoadingJigsNG'));
       }
     } catch (error) {
       logger.error('❌ Error inesperado:', error);
@@ -132,7 +133,7 @@ export default function JigNGScreen({ navigation }) {
       setFilteredJigsNG([]);
       setModelGroups({});
       setTotalToRepair(0);
-      Alert.alert(t('error'), t('unexpectedErrorLoading'));
+      showAlert(t('error'), t('unexpectedErrorLoading'));
     } finally {
       setLoading(false);
     }

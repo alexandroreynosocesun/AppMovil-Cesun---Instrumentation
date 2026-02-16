@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   Text,
@@ -80,7 +81,7 @@ export default function AuditoriaScreen({ navigation }) {
         logger.info(`✅ ${pdfsData.length} PDFs cargados con los filtros aplicados`);
       } else {
         if (result.error === 'UNAUTHORIZED') {
-          Alert.alert(
+          showAlert(
             'Sesión Expirada',
             result.message || 'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
             [
@@ -96,13 +97,13 @@ export default function AuditoriaScreen({ navigation }) {
             ]
           );
         } else {
-          Alert.alert('Error', result.message || 'Error al cargar PDFs de auditoría');
+          showAlert('Error', result.message || 'Error al cargar PDFs de auditoría');
         }
       }
     } catch (error) {
       logger.error('Error cargando PDFs:', error);
       if (error.response?.status === 401) {
-        Alert.alert(
+        showAlert(
           'Sesión Expirada',
           'Tu sesión ha expirado. Por favor, inicia sesión nuevamente.',
           [
@@ -118,7 +119,7 @@ export default function AuditoriaScreen({ navigation }) {
           ]
         );
       } else {
-        Alert.alert('Error', 'Error inesperado al cargar PDFs');
+        showAlert('Error', 'Error inesperado al cargar PDFs');
       }
     } finally {
       setLoading(false);
@@ -285,11 +286,11 @@ export default function AuditoriaScreen({ navigation }) {
   // Eliminar PDF (solo adminAlex)
   const handleDeletePDF = async (pdf) => {
     if (!isAdminAlex) {
-      Alert.alert('Acceso Denegado', 'Solo el administrador puede eliminar PDFs');
+      showAlert('Acceso Denegado', 'Solo el administrador puede eliminar PDFs');
       return;
     }
 
-    Alert.alert(
+    showAlert(
       'Eliminar PDF',
       `¿Estás seguro de que deseas eliminar el PDF: ${pdf.nombre_archivo}?\n\nEsta acción no se puede deshacer.`,
       [
@@ -326,13 +327,13 @@ export default function AuditoriaScreen({ navigation }) {
                   }
                 }
                 
-                Alert.alert('Éxito', 'PDF eliminado correctamente');
+                showAlert('Éxito', 'PDF eliminado correctamente');
               } else {
-                Alert.alert('Error', result.message || 'Error al eliminar PDF');
+                showAlert('Error', result.message || 'Error al eliminar PDF');
               }
             } catch (error) {
               logger.error('Error eliminando PDF:', error);
-              Alert.alert('Error', 'Error al eliminar PDF');
+              showAlert('Error', 'Error al eliminar PDF');
             }
           }
         }
@@ -346,7 +347,7 @@ export default function AuditoriaScreen({ navigation }) {
       const isAdmin = user?.tipo_usuario === 'admin' || user?.usuario === 'admin' || user?.usuario === 'adminAlex' || user?.usuario === 'superadmin';
       
       if (!isAdmin) {
-        Alert.alert('Acceso Denegado', 'Solo administradores pueden eliminar todos los PDFs');
+        showAlert('Acceso Denegado', 'Solo administradores pueden eliminar todos los PDFs');
         return;
       }
 
@@ -355,7 +356,7 @@ export default function AuditoriaScreen({ navigation }) {
 
       // Si no hay PDFs, no permitir borrar
       if (totalPDFs === 0) {
-        Alert.alert(
+        showAlert(
           'Sin PDFs',
           'No hay PDFs de auditoría para eliminar.',
           [{ text: 'OK' }]
@@ -363,7 +364,7 @@ export default function AuditoriaScreen({ navigation }) {
         return;
       }
 
-      Alert.alert(
+      showAlert(
         'ELIMINAR TODOS LOS PDFs',
         `¿Estás seguro de que quieres eliminar TODOS los PDFs de auditoría?\n\nEsta acción NO se puede deshacer.\n\nTotal de PDFs: ${totalPDFs}`,
         [
@@ -423,13 +424,13 @@ export default function AuditoriaScreen({ navigation }) {
                   
                   // Mostrar alerta solo si se eliminaron PDFs
                   if (deletedCount > 0) {
-                    Alert.alert(
+                    showAlert(
                       'Éxito',
                       `Se eliminaron ${deletedCount} PDFs correctamente.\n\nNota: Los nuevos reportes generados después de esta eliminación aparecerán normalmente.`,
                       [{ text: 'OK' }]
                     );
                   } else {
-                    Alert.alert(
+                    showAlert(
                       'Sin cambios',
                       'No había PDFs para eliminar.',
                       [{ text: 'OK' }]
@@ -440,7 +441,7 @@ export default function AuditoriaScreen({ navigation }) {
                   
                   // Si es timeout, mostrar mensaje especial
                   if (result?.error === 'TIMEOUT') {
-                    Alert.alert(
+                    showAlert(
                       'Operación en progreso',
                       'La eliminación está tomando más tiempo del esperado. Los PDFs pueden estar eliminándose en segundo plano. Por favor, espera unos momentos y recarga la pantalla.',
                       [
@@ -459,7 +460,7 @@ export default function AuditoriaScreen({ navigation }) {
                       ]
                     );
                   } else {
-                    Alert.alert('Error', errorMsg);
+                    showAlert('Error', errorMsg);
                   }
                 }
               } catch (error) {
@@ -467,7 +468,7 @@ export default function AuditoriaScreen({ navigation }) {
                 
                 // Si es timeout, limpiar estado y mostrar mensaje
                 if (error?.message === 'TIMEOUT' || error?.code === 'ECONNABORTED') {
-                  Alert.alert(
+                  showAlert(
                     'Tiempo de espera agotado',
                     'La operación está tomando más tiempo del esperado. Los PDFs pueden estar eliminándose en segundo plano. Por favor, espera unos momentos y recarga la pantalla.',
                     [
@@ -487,7 +488,7 @@ export default function AuditoriaScreen({ navigation }) {
                   );
                 } else {
                   const errorMessage = error?.message || 'Error inesperado al eliminar todos los PDFs';
-                  Alert.alert('Error', errorMessage);
+                  showAlert('Error', errorMessage);
                 }
               } finally {
                 setLoading(false);
@@ -498,7 +499,7 @@ export default function AuditoriaScreen({ navigation }) {
       );
     } catch (error) {
       logger.error('Error en handleDeleteAllPDFs:', error);
-      Alert.alert('Error', 'Error inesperado al intentar eliminar PDFs');
+      showAlert('Error', 'Error inesperado al intentar eliminar PDFs');
     }
   }, [user, stats, loadStats, loadTecnicos]);
 
@@ -565,14 +566,14 @@ export default function AuditoriaScreen({ navigation }) {
               
               logger.info('✅ PDF abierto en nueva pestaña');
             } else {
-              Alert.alert('Error', result.message || 'Error al obtener el PDF');
+              showAlert('Error', result.message || 'Error al obtener el PDF');
             }
           } catch (error) {
             logger.error('Error obteniendo PDF para ver:', error);
-            Alert.alert('Error', 'Error al obtener el PDF');
+            showAlert('Error', 'Error al obtener el PDF');
           }
         } else {
-          Alert.alert('Error', 'No se pudo obtener el ID del PDF');
+          showAlert('Error', 'No se pudo obtener el ID del PDF');
         }
         return;
       }
@@ -589,12 +590,12 @@ export default function AuditoriaScreen({ navigation }) {
         if (canOpen) {
           await Linking.openURL(fileUri);
         } else {
-          Alert.alert('Error', 'No se pudo abrir el PDF. El archivo está guardado en: ' + fileUri);
+          showAlert('Error', 'No se pudo abrir el PDF. El archivo está guardado en: ' + fileUri);
         }
       }
     } catch (error) {
       logger.error('Error abriendo PDF:', error);
-      Alert.alert('Error', 'No se pudo abrir el PDF');
+      showAlert('Error', 'No se pudo abrir el PDF');
     }
   };
 
@@ -628,18 +629,18 @@ export default function AuditoriaScreen({ navigation }) {
               
               logger.info('✅ PDF descargado exitosamente en web:', pdf.nombre_archivo);
             } else {
-              Alert.alert('Error', result.message || 'Error al descargar PDF');
+              showAlert('Error', result.message || 'Error al descargar PDF');
             }
           } catch (error) {
             logger.error('Error descargando PDF:', error);
-            Alert.alert('Error', 'Error al descargar PDF');
+            showAlert('Error', 'Error al descargar PDF');
           }
         }
         return;
       }
       
       // En móvil, usar Alert.alert
-      Alert.alert(
+      showAlert(
         'Descargar PDF',
         `¿Deseas descargar el PDF: ${pdf.nombre_archivo}?`,
         [
@@ -657,7 +658,7 @@ export default function AuditoriaScreen({ navigation }) {
                       
                       // Verificar que FileSystem esté disponible
                       if (!FileSystem || !FileSystem.documentDirectory) {
-                        Alert.alert('Error', 'FileSystem no disponible');
+                        showAlert('Error', 'FileSystem no disponible');
                         return;
                       }
                       
@@ -680,7 +681,7 @@ export default function AuditoriaScreen({ navigation }) {
                       setDownloadedPDFs(prev => new Set([...prev, pdf.id]));
                       
                       // Mostrar alert con opción de ver PDF
-                      Alert.alert(
+                      showAlert(
                         'PDF Descargado',
                         `PDF guardado exitosamente: ${pdf.nombre_archivo}`,
                         [
@@ -693,16 +694,16 @@ export default function AuditoriaScreen({ navigation }) {
                       );
                     } catch (fsError) {
                       logger.error('Error guardando archivo:', fsError);
-                      Alert.alert('Error', 'Error al guardar el PDF');
+                      showAlert('Error', 'Error al guardar el PDF');
                     }
                   };
                   reader.readAsDataURL(result.data);
                 } else {
-                  Alert.alert('Error', result.message || 'Error al descargar PDF');
+                  showAlert('Error', result.message || 'Error al descargar PDF');
                 }
               } catch (error) {
                 logger.error('Error descargando PDF:', error);
-                Alert.alert('Error', 'Error al descargar PDF');
+                showAlert('Error', 'Error al descargar PDF');
               }
             }
           }
@@ -710,7 +711,7 @@ export default function AuditoriaScreen({ navigation }) {
       );
     } catch (error) {
       logger.error('Error:', error);
-      Alert.alert('Error', 'Error inesperado');
+      showAlert('Error', 'Error inesperado');
     }
   };
 
@@ -791,7 +792,7 @@ export default function AuditoriaScreen({ navigation }) {
                 
                 // En móvil, verificar que FileSystem esté disponible
                 if (!FileSystem || !FileSystem.documentDirectory) {
-                  Alert.alert('Error', 'FileSystem no disponible');
+                  showAlert('Error', 'FileSystem no disponible');
                   return;
                 }
                 
@@ -808,11 +809,11 @@ export default function AuditoriaScreen({ navigation }) {
                       newSet.delete(pdf.id);
                       return newSet;
                     });
-                    Alert.alert('PDF no encontrado', 'El PDF no está descargado. Por favor, descárgalo primero.');
+                    showAlert('PDF no encontrado', 'El PDF no está descargado. Por favor, descárgalo primero.');
                   }
                 } catch (error) {
                   logger.error('Error verificando archivo:', error);
-                  Alert.alert('Error', 'Error al verificar el archivo');
+                  showAlert('Error', 'Error al verificar el archivo');
                 }
               }}
               style={styles.viewButton}
@@ -1344,7 +1345,7 @@ export default function AuditoriaScreen({ navigation }) {
               handleDeleteAllPDFs();
             } catch (error) {
               logger.error('Error al presionar botón eliminar todos:', error);
-              Alert.alert('Error', 'Error inesperado al intentar eliminar PDFs');
+              showAlert('Error', 'Error inesperado al intentar eliminar PDFs');
             }
           }}
           label="Borrar Todos"

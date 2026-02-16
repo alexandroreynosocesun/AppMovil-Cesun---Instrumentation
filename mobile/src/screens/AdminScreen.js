@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   StyleSheet,
@@ -85,7 +86,7 @@ export default function AdminScreen({ navigation }) {
       }
     } catch (error) {
       logger.error('Error cargando datos:', error);
-      Alert.alert('Error', 'Error cargando datos');
+      showAlert('Error', 'Error cargando datos');
       // Asegurar que users sea un array vacío en caso de error
       setUsers([]);
     } finally {
@@ -125,12 +126,12 @@ export default function AdminScreen({ navigation }) {
 
   const handleSaveUser = async () => {
     if (!userForm.usuario || !userForm.nombre || !userForm.numero_empleado) {
-      Alert.alert('Error', 'Por favor completa todos los campos requeridos');
+      showAlert('Error', 'Por favor completa todos los campos requeridos');
       return;
     }
 
     if (!editingUser && !userForm.password) {
-      Alert.alert('Error', 'La contraseña es requerida para nuevos usuarios');
+      showAlert('Error', 'La contraseña es requerida para nuevos usuarios');
       return;
     }
 
@@ -143,7 +144,7 @@ export default function AdminScreen({ navigation }) {
       }
 
       if (result.success) {
-        Alert.alert(
+        showAlert(
           'Éxito', 
           editingUser ? 'Usuario actualizado correctamente' : 'Usuario creado correctamente',
           [{ text: 'OK', onPress: () => {
@@ -155,16 +156,16 @@ export default function AdminScreen({ navigation }) {
         // Recargar datos inmediatamente
         loadData();
       } else {
-        Alert.alert('Error', result.error || 'Error guardando usuario');
+        showAlert('Error', result.error || 'Error guardando usuario');
       }
     } catch (error) {
       logger.error('Error guardando usuario:', error);
-      Alert.alert('Error', error?.response?.data?.detail || error?.message || 'Error guardando usuario');
+      showAlert('Error', error?.response?.data?.detail || error?.message || 'Error guardando usuario');
     }
   };
 
   const handleDeleteUser = (user) => {
-    Alert.alert(
+    showAlert(
       'Confirmar Eliminación',
       `¿Estás seguro de que quieres eliminar al usuario "${user.nombre}"?`,
       [
@@ -176,7 +177,7 @@ export default function AdminScreen({ navigation }) {
             try {
               const result = await AdminService.deleteUser(user.id);
               if (result.success) {
-                Alert.alert(
+                showAlert(
                   'Éxito', 
                   'Usuario eliminado correctamente',
                   [{ text: 'OK', onPress: () => loadData() }]
@@ -184,12 +185,12 @@ export default function AdminScreen({ navigation }) {
                 // Recargar datos inmediatamente
                 loadData();
               } else {
-                Alert.alert('Error', result.error || 'Error eliminando usuario');
+                showAlert('Error', result.error || 'Error eliminando usuario');
               }
             } catch (error) {
               logger.error('Error eliminando usuario:', error);
               const errorMessage = error?.response?.data?.detail || error?.message || 'Error eliminando usuario';
-              Alert.alert('Error', errorMessage);
+              showAlert('Error', errorMessage);
             }
           }
         }

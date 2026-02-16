@@ -128,12 +128,12 @@ export default function AssignValidationScreen({ navigation, route }) {
           setModelos(fallbackResult.data || []);
           logger.warn('⚠️ Usando método antiguo de carga de modelos (sin tipos)');
         } else {
-          Alert.alert('Error', `No se pudieron cargar los modelos: ${result.error}`);
+          showAlert('Error', `No se pudieron cargar los modelos: ${result.error}`);
         }
       }
     } catch (error) {
       logger.error('❌ Excepción cargando modelos:', error);
-      Alert.alert('Error', 'Error al cargar los modelos disponibles');
+      showAlert('Error', 'Error al cargar los modelos disponibles');
     } finally {
       setLoadingModelos(false);
     }
@@ -238,7 +238,7 @@ export default function AssignValidationScreen({ navigation, route }) {
         
         if (tecnicosFiltrados.length === 0) {
           logger.warn('⚠️ [loadData] No hay técnicos disponibles con rol "tecnico" o "validacion"');
-          Alert.alert(
+          showAlert(
             'Información',
             'No hay técnicos disponibles con rol "tecnico" o "validacion" en la base de datos.\n\nSolo se muestran usuarios con estos roles para asignar validaciones.'
           );
@@ -246,7 +246,7 @@ export default function AssignValidationScreen({ navigation, route }) {
       } else {
         logger.error('❌ [loadData] Error cargando técnicos:', tecnicosResult.error);
         logger.error('❌ [loadData] Detalles del error:', JSON.stringify(tecnicosResult, null, 2));
-        Alert.alert(
+        showAlert(
           'Error', 
           `No se pudieron cargar los técnicos.\n\nError: ${tecnicosResult.error}\n\nVerifica que tengas permisos de "asignaciones" y que el servidor esté funcionando.`
         );
@@ -255,7 +255,7 @@ export default function AssignValidationScreen({ navigation, route }) {
       logger.error('❌ [loadData] Excepción al cargar técnicos:', error);
       logger.error('❌ [loadData] Error message:', error.message);
       logger.error('❌ [loadData] Error stack:', error.stack);
-      Alert.alert(
+      showAlert(
         'Error', 
         `Error al cargar técnicos: ${error.message || 'Error desconocido'}\n\nVerifica tu conexión y que el servidor esté funcionando.`
       );
@@ -358,21 +358,21 @@ export default function AssignValidationScreen({ navigation, route }) {
 
   const validateForm = () => {
     if (!formData.tecnico_id) {
-      Alert.alert('Error', 'Selecciona un técnico');
+      showAlert('Error', 'Selecciona un técnico');
       return false;
     }
     if (!formData.modelo.trim()) {
-      Alert.alert('Error', 'Ingresa el modelo');
+      showAlert('Error', 'Ingresa el modelo');
       return false;
     }
     // Validar tipo - siempre es requerido ahora porque se selecciona junto con el modelo
     const tipos = modelosConTipos[formData.modelo] || [];
     if (tipos.length > 0 && !formData.tipo_jig) {
-      Alert.alert('Error', 'Selecciona el tipo de jig');
+      showAlert('Error', 'Selecciona el tipo de jig');
       return false;
     }
     if (!formData.linea.trim()) {
-      Alert.alert('Error', 'Ingresa la línea');
+      showAlert('Error', 'Ingresa la línea');
       return false;
     }
     return true;
@@ -498,10 +498,10 @@ export default function AssignValidationScreen({ navigation, route }) {
           `Validación asignada correctamente al técnico ${selectedTecnico?.nombre}`
         );
       } else {
-        Alert.alert('Error', result.error || 'Error creando validación');
+        showAlert('Error', result.error || 'Error creando validación');
       }
     } catch (error) {
-      Alert.alert('Error', 'Error creando validación');
+      showAlert('Error', 'Error creando validación');
     } finally {
       setCreating(false);
     }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View,
@@ -269,7 +270,7 @@ export default function HomeScreen({ navigation }) {
       }
     } else {
       // En móvil usar Alert.alert
-      Alert.alert(
+      showAlert(
         'Cerrar Sesión',
         '¿Estás seguro de que quieres cerrar sesión?',
         [

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { showAlert } from '../utils/alertUtils';
 import {
   View,
   Text,
@@ -37,11 +38,11 @@ const SolicitudStatusScreen = () => {
       if (result.success) {
         setSolicitud(result.data);
       } else {
-        Alert.alert('Error', result.error);
+        showAlert('Error', result.error);
       }
     } catch (error) {
       logger.error('Error al cargar estado de solicitud:', error);
-      Alert.alert(t('error'), t('connectionError'));
+      showAlert(t('error'), t('connectionError'));
     } finally {
       setLoading(false);
     }
@@ -190,7 +191,7 @@ const SolicitudStatusScreen = () => {
             style={styles.contactButton}
             onPress={() => {
               // Aquí podrías agregar funcionalidad para contactar al admin
-              Alert.alert(t('contactAdmin'), t('contactAdminMessage'));
+              showAlert(t('contactAdmin'), t('contactAdminMessage'));
             }}
           >
             <Text style={styles.contactButtonText}>{t('contactAdmin')}</Text>
