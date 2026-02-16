@@ -93,7 +93,8 @@ if (!html.includes('apple-mobile-web-app-capable')) {
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function() {
-          navigator.serviceWorker.register('/service-worker.js');
+          navigator.serviceWorker.register('/service-worker.js', { updateViaCache: 'none' })
+            .then(function(reg) { reg.update(); });
         });
       }
     </script>`;

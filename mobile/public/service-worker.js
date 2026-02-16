@@ -1,4 +1,4 @@
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 const STATIC_CACHE = 'checkapp-static-v' + CACHE_VERSION;
 const RUNTIME_CACHE = 'checkapp-runtime-v' + CACHE_VERSION;
 
@@ -21,9 +21,9 @@ const NEVER_CACHE = [
   'hot-update',
 ];
 
-// Cache-first for these (static assets that rarely change)
+// Cache-first for these (static assets that rarely change - NO js/css, those use network-first)
 const CACHE_FIRST_PATTERNS = [
-  /\.(?:js|css|woff2?|ttf|otf|eot)$/,
+  /\.(?:woff2?|ttf|otf|eot)$/,
   /\/icon-\d+x\d+\.png$/,
   /\/splash-\d+x\d+\.png$/,
   /\/apple-touch-icon\.png$/,
