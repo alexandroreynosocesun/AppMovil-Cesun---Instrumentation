@@ -3,13 +3,13 @@ import {
   View,
   StyleSheet,
   ScrollView,
-  Alert,
   Dimensions,
   Animated,
   TouchableOpacity,
   Text,
   Modal
 } from 'react-native';
+import { showAlert } from '../utils/alertUtils';
 import {
   Card,
   Title,
@@ -108,27 +108,27 @@ export default function RegisterScreen({ navigation }) {
 
   const validateForm = () => {
     if (!formData.nombre.trim()) {
-      Alert.alert(t('error'), t('firstNameRequired'));
+      showAlert(t('error'), t('firstNameRequired'));
       return false;
     }
     if (!formData.apellido.trim()) {
-      Alert.alert(t('error'), t('lastNameRequired'));
+      showAlert(t('error'), t('lastNameRequired'));
       return false;
     }
     if (!formData.numero_empleado.trim()) {
-      Alert.alert(t('error'), t('employeeNumberRequired'));
+      showAlert(t('error'), t('employeeNumberRequired'));
       return false;
     }
     if (!formData.turno_actual) {
-      Alert.alert(t('error'), t('shiftRequired'));
+      showAlert(t('error'), t('shiftRequired'));
       return false;
     }
     if (formData.password.length < 6) {
-      Alert.alert(t('error'), t('passwordMinLength'));
+      showAlert(t('error'), t('passwordMinLength'));
       return false;
     }
     if (formData.password !== formData.confirmPassword) {
-      Alert.alert(t('error'), t('passwordsDontMatch'));
+      showAlert(t('error'), t('passwordsDontMatch'));
       return false;
     }
     return true;
@@ -152,7 +152,7 @@ export default function RegisterScreen({ navigation }) {
       const result = await authService.register(registerData);
       
       if (result.success) {
-        Alert.alert(
+        showAlert(
           t('requestSent'),
           t('requestSentMessage'),
           [
@@ -163,10 +163,10 @@ export default function RegisterScreen({ navigation }) {
           ]
         );
       } else {
-        Alert.alert(t('error'), result.error);
+        showAlert(t('error'), result.error);
       }
     } catch (error) {
-      Alert.alert(t('error'), t('requestError'));
+      showAlert(t('error'), t('requestError'));
     } finally {
       setLoading(false);
     }
