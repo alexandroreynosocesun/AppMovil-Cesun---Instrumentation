@@ -248,11 +248,22 @@ class ModeloMainboardConector(Base):
 
 class ArduinoSequence(Base):
     __tablename__ = "arduino_sequences"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     comando = Column(String(50), nullable=False)
     destino = Column(String(150), nullable=False)
     pais = Column(String(50), nullable=True, index=True)  # COL, MEX, GUA, US (puede ser lista)
     modelo = Column(String(50), nullable=False, index=True)
     modelo_interno = Column(String(100), nullable=False, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ModeloObservacion(Base):
+    __tablename__ = "modelo_observaciones"
+
+    id = Column(Integer, primary_key=True, index=True)
+    modelo_mainboard = Column(String(100), nullable=False, index=True)
+    texto = Column(Text, nullable=False)
+    tecnico_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
+    tecnico = relationship("Tecnico")
     created_at = Column(DateTime, default=datetime.utcnow)
