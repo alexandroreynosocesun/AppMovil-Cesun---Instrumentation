@@ -9,7 +9,7 @@ import uvicorn
 
 from app.database import get_db, engine
 from app.models import models
-from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage, adaptadores, arduino_sequences, inventario, seed
+from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage, adaptadores, arduino_sequences, inventario, seed, modelo_observaciones
 from app.config import CORS_ORIGINS, IS_PRODUCTION, FORCE_HTTPS, API_HOST, API_PORT
 from app.utils.logger import get_logger
 from app.services.monitoring_service import init_monitoring
@@ -111,6 +111,7 @@ app.include_router(adaptadores.router, prefix="/api/adaptadores", tags=["adaptad
 app.include_router(arduino_sequences.router, prefix="/api/arduino-sequences", tags=["arduino-sequences"])
 app.include_router(inventario.router, prefix="/api/inventario", tags=["inventario"])
 app.include_router(seed.router, prefix="/api/seed", tags=["seed"])
+app.include_router(modelo_observaciones.router, prefix="/api/modelo-observaciones", tags=["modelo-observaciones"])
 
 # Montar directorio de uploads para servir imágenes
 uploads_dir = Path(__file__).parent / "uploads"

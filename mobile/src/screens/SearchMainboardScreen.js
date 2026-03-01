@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   FlatList,
-  Alert,
   Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -31,24 +30,8 @@ import { webStyles } from '../utils/webStyles';
 import { useAuth } from '../contexts/AuthContext';
 import { adaptadorService } from '../services/AdaptadorService';
 import { arduinoSequenceService } from '../services/ArduinoSequenceService';
+import { modeloObservacionService } from '../services/ModeloObservacionService';
 import logger from '../utils/logger';
-
-const getConectorLabel = (nombre) => {
-  if (!nombre) return '';
-  // ZH-MINI codes from Converter column (e.g. "ZH-MINI-HD-3" → "HD-3")
-  if (nombre.toUpperCase().startsWith('ZH-MINI-')) {
-    return nombre.substring(8);
-  }
-  // Fallback: pattern match on raw pin description (legacy data)
-  const lower = nombre.toLowerCase();
-  if (lower.includes('mini') && lower.includes('lvds') && lower.includes('68')) return 'FHD-68';
-  if (lower.includes('mini') && lower.includes('lvds') && lower.includes('60')) return 'HD';
-  if (lower.includes('mini') && lower.includes('lvds')) return 'HD';
-  if (lower.includes('lvds') && lower.includes('68')) return 'FHD-68';
-  if (lower.includes('lvds') && lower.includes('60')) return 'FHD-60';
-  if (lower.includes('lvds') && lower.includes('51')) return 'FHD-51';
-  return '';
-};
 
 export default function SearchMainboardScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
@@ -60,14 +43,90 @@ export default function SearchMainboardScreen({ navigation }) {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
   const searchInputRef = useRef(null);
+
+  // Shared filter (applies to connectors + arduino)
+  const [selectedModeloInterno, setSelectedModeloInterno] = useState(null);
+  const [showFilterModal, setShowFilterModal] = useState(false);
+
+  // Arduino dialog
   const [showArduinoDialog, setShowArduinoDialog] = useState(false);
-  const [selectedArduinoInterno, setSelectedArduinoInterno] = useState(null);
-  const [showArduinoFilterModal, setShowArduinoFilterModal] = useState(false);
   const [arduinoForm, setArduinoForm] = useState({
     comando: '', destino: '', pais: '', modelo: '', modelo_interno: ''
   });
 
+  // Historial
+  const [observaciones, setObservaciones] = useState([]);
+  const [loadingObs, setLoadingObs] = useState(false);
+  const [newObsText, setNewObsText] = useState('');
+  const [showObsDialog, setShowObsDialog] = useState(false);
+  const [savingObs, setSavingObs] = useState(false);
+
   const canEditArduino = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
+  const canDeleteObs = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
+
+  // All unique modelo_interno values (union from connectors + arduino)
+  const allModelosInternos = selectedModel ? [...new Set([
+    ...(selectedModel.conectores || []).flatMap(c => c.modelos_internos || []),
+    ...(selectedModel.arduino_sequences || []).map(s => s.modelo_interno).filter(Boolean),
+  ])].sort() : [];
+
+  // Filtered data based on shared filter
+  const filteredConectores = selectedModel?.conectores
+    ? (selectedModeloInterno
+        ? selectedModel.conectores.filter(c => c.modelos_internos?.includes(selectedModeloInterno))
+        : selectedModel.conectores)
+    : [];
+
+  const filteredArduino = selectedModel?.arduino_sequences
+    ? (selectedModeloInterno
+        ? selectedModel.arduino_sequences.filter(s => s.modelo_interno === selectedModeloInterno)
+        : selectedModel.arduino_sequences)
+    : [];
+
+  const loadObservaciones = async (modelo_mainboard) => {
+    setLoadingObs(true);
+    try {
+      const result = await modeloObservacionService.getObservaciones(modelo_mainboard);
+      if (result.success) setObservaciones(result.data || []);
+    } catch (e) {
+      logger.error('Error cargando observaciones:', e);
+    } finally {
+      setLoadingObs(false);
+    }
+  };
+
+  const handleSaveObs = async () => {
+    if (!newObsText.trim()) return;
+    setSavingObs(true);
+    const result = await modeloObservacionService.createObservacion(
+      selectedModel.modelo_mainboard, newObsText.trim()
+    );
+    setSavingObs(false);
+    if (result.success) {
+      setObservaciones(prev => [result.data, ...prev]);
+      setNewObsText('');
+      setShowObsDialog(false);
+    } else {
+      showAlert('Error', result.error || 'No se pudo guardar');
+    }
+  };
+
+  const handleDeleteObs = (obsId) => {
+    showAlert('Eliminar observación', '¿Seguro que quieres eliminar esta observación?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          const result = await modeloObservacionService.deleteObservacion(obsId);
+          if (result.success) {
+            setObservaciones(prev => prev.filter(o => o.id !== obsId));
+          } else {
+            showAlert('Error', result.error || 'No se pudo eliminar');
+          }
+        }
+      }
+    ]);
+  };
 
   const handleSaveArduino = async () => {
     if (!arduinoForm.modelo_interno || !arduinoForm.destino || !arduinoForm.comando) {
@@ -85,71 +144,47 @@ export default function SearchMainboardScreen({ navigation }) {
     if (result.success) {
       setShowArduinoDialog(false);
       setArduinoForm({ comando: '', destino: '', pais: '', modelo: '', modelo_interno: '' });
-      // Recargar detalles para ver la nueva secuencia
-      if (selectedModel?.modelo_mainboard) {
-        handleSelectModel(selectedModel.modelo_mainboard);
-      }
+      if (selectedModel?.modelo_mainboard) handleSelectModel(selectedModel.modelo_mainboard);
     } else {
       showAlert('Error', result.error || 'No se pudo guardar');
     }
   };
 
   const handleDeleteArduino = (sequenceId) => {
-    showAlert(
-      'Eliminar secuencia',
-      '¿Seguro que quieres eliminar esta secuencia Arduino?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar',
-          style: 'destructive',
-          onPress: async () => {
-            const result = await arduinoSequenceService.deleteSequence(sequenceId);
-            if (result.success) {
-              if (selectedModel?.modelo_mainboard) {
-                handleSelectModel(selectedModel.modelo_mainboard);
-              }
-            } else {
-              showAlert('Error', result.error || 'No se pudo eliminar');
-            }
+    showAlert('Eliminar secuencia', '¿Seguro que quieres eliminar esta secuencia Arduino?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          const result = await arduinoSequenceService.deleteSequence(sequenceId);
+          if (result.success) {
+            if (selectedModel?.modelo_mainboard) handleSelectModel(selectedModel.modelo_mainboard);
+          } else {
+            showAlert('Error', result.error || 'No se pudo eliminar');
           }
         }
-      ]
-    );
+      }
+    ]);
   };
 
   useEffect(() => {
-    // Limpiar timeout anterior cuando cambia el query
-    if (searchTimeout) {
-      clearTimeout(searchTimeout);
-    }
-
+    if (searchTimeout) clearTimeout(searchTimeout);
     let timeout = null;
     if (searchQuery.trim().length >= 1) {
-      // Esperar 300ms antes de buscar para evitar demasiadas llamadas
-      timeout = setTimeout(() => {
-        loadSuggestions(searchQuery);
-      }, 300);
+      timeout = setTimeout(() => { loadSuggestions(searchQuery); }, 300);
       setSearchTimeout(timeout);
     } else {
       setSuggestions([]);
     }
-
-    return () => {
-      if (timeout) clearTimeout(timeout);
-    };
+    return () => { if (timeout) clearTimeout(timeout); };
   }, [searchQuery]);
 
   const loadSuggestions = async (query) => {
     try {
       setLoading(true);
       const result = await adaptadorService.searchMainboardModels(query);
-      if (result.success) {
-        setSuggestions(result.data || []);
-      } else {
-        logger.error('Error cargando sugerencias:', result.error);
-        setSuggestions([]);
-      }
+      if (result.success) setSuggestions(result.data || []);
+      else { logger.error('Error cargando sugerencias:', result.error); setSuggestions([]); }
     } catch (error) {
       logger.error('Error en loadSuggestions:', error);
       setSuggestions([]);
@@ -162,13 +197,14 @@ export default function SearchMainboardScreen({ navigation }) {
     setSearchQuery(modeloMainboard);
     setSuggestions([]);
     setSelectedModel(null);
-    setSelectedArduinoInterno(null);
+    setSelectedModeloInterno(null);
+    setObservaciones([]);
     setLoadingDetails(true);
-
     try {
       const result = await adaptadorService.getMainboardDetails(modeloMainboard);
       if (result.success) {
         setSelectedModel(result.data);
+        loadObservaciones(modeloMainboard);
       } else {
         logger.error('Error cargando detalles:', result.error);
       }
@@ -179,11 +215,14 @@ export default function SearchMainboardScreen({ navigation }) {
     }
   };
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '';
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+  };
+
   const renderSuggestion = ({ item }) => (
-    <TouchableOpacity
-      onPress={() => handleSelectModel(item)}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity onPress={() => handleSelectModel(item)} activeOpacity={0.7}>
       <Card style={styles.suggestionCard}>
         <Card.Content>
           <Paragraph style={styles.suggestionText}>{item}</Paragraph>
@@ -200,7 +239,7 @@ export default function SearchMainboardScreen({ navigation }) {
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
       />
-      
+
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -215,9 +254,9 @@ export default function SearchMainboardScreen({ navigation }) {
             keyboardShouldPersistTaps="handled"
           >
             <View style={styles.header}>
-              <Title style={styles.mainTitle}>Buscar Modelo Mainboard</Title>
+              <Title style={styles.mainTitle}>Cambio de Modelo</Title>
               <Paragraph style={styles.subtitle}>
-                Escribe el modelo de mainboard para buscar información
+                Busca el modelo de mainboard para ver conectores, secuencias e historial
               </Paragraph>
             </View>
 
@@ -275,7 +314,7 @@ export default function SearchMainboardScreen({ navigation }) {
               </View>
             )}
 
-            {/* Detalles del modelo seleccionado */}
+            {/* Detalles del modelo */}
             {loadingDetails ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color="#2196F3" />
@@ -285,27 +324,52 @@ export default function SearchMainboardScreen({ navigation }) {
               <View style={styles.detailsContainer}>
                 <Card style={styles.detailsCard}>
                   <Card.Content>
+
+                    {/* Header: mainboard chip + filtro compartido */}
                     <View style={styles.mainboardHeader}>
                       <Chip icon="developer-board" style={styles.mainboardChip} textStyle={styles.mainboardChipText}>
                         {selectedModel.modelo_mainboard}
                       </Chip>
+                      {allModelosInternos.length > 0 && (
+                        <Button
+                          mode="outlined"
+                          compact
+                          icon="filter-variant"
+                          onPress={() => setShowFilterModal(true)}
+                          textColor="#B0B0B0"
+                          style={styles.filterButton}
+                        >
+                          {selectedModeloInterno || 'Filtrar'}
+                        </Button>
+                      )}
                     </View>
+
+                    {/* Chip de filtro activo */}
+                    {selectedModeloInterno && (
+                      <View style={styles.activeFilterRow}>
+                        <Chip
+                          icon="close-circle"
+                          style={styles.activeFilterChip}
+                          textStyle={styles.activeFilterChipText}
+                          onPress={() => setSelectedModeloInterno(null)}
+                        >
+                          {selectedModeloInterno}
+                        </Chip>
+                      </View>
+                    )}
+
                     <Divider style={styles.divider} />
 
-                    {selectedModel.conectores && selectedModel.conectores.length > 0 ? (
-                      selectedModel.conectores.map((conector, index) => (
+                    {/* Conectores */}
+                    {filteredConectores.length > 0 ? (
+                      filteredConectores.map((conector, index) => (
                         <View key={index} style={styles.conectorSection}>
                           <View style={styles.conectorHeader}>
-                            <Chip
-                              icon="cable-data"
-                              style={styles.conectorChip}
-                              textStyle={styles.chipText}
-                            >
+                            <Chip icon="cable-data" style={styles.conectorChip} textStyle={styles.chipText}>
                               {conector.nombre_conector}
                             </Chip>
                           </View>
 
-                          {/* Modelos internos - PRIMERO */}
                           {conector.modelos_internos && conector.modelos_internos.length > 0 ? (
                             <View style={styles.infoSection}>
                               <Paragraph style={styles.infoLabel}>
@@ -313,21 +377,16 @@ export default function SearchMainboardScreen({ navigation }) {
                               </Paragraph>
                               <View style={styles.modelosInternosContainer}>
                                 {conector.modelos_internos.map((modelo, i) => (
-                                  <Paragraph key={i} style={styles.modeloInterno}>
-                                    • {modelo}
-                                  </Paragraph>
+                                  <Paragraph key={i} style={styles.modeloInterno}>• {modelo}</Paragraph>
                                 ))}
                               </View>
                             </View>
                           ) : (
                             <View style={styles.infoSection}>
-                              <Paragraph style={styles.emptyInfoText}>
-                                No hay modelos internos registrados
-                              </Paragraph>
+                              <Paragraph style={styles.emptyInfoText}>No hay modelos internos registrados</Paragraph>
                             </View>
                           )}
 
-                          {/* Modelos de adaptador */}
                           {conector.modelos_adaptador && conector.modelos_adaptador.filter(m => m !== 'MODELO_1' && m !== 'MODELO_2').length > 0 && (
                             <View style={styles.infoSection}>
                               <Paragraph style={styles.infoLabel}>Modelo de Adaptador:</Paragraph>
@@ -339,8 +398,8 @@ export default function SearchMainboardScreen({ navigation }) {
                                       key={i}
                                       style={[
                                         styles.modeloChip,
-                                        (modelo === 'ADA20100_01' || modelo === 'ADA20100_02') 
-                                          ? styles.adaptadorChip 
+                                        (modelo === 'ADA20100_01' || modelo === 'ADA20100_02')
+                                          ? styles.adaptadorChip
                                           : styles.convertidorChip
                                       ]}
                                       textStyle={styles.chipText}
@@ -352,7 +411,6 @@ export default function SearchMainboardScreen({ navigation }) {
                             </View>
                           )}
 
-                          {/* Tool SW */}
                           {conector.tool_sw && conector.tool_sw.length > 0 && (
                             <View style={styles.infoSection}>
                               <Paragraph style={styles.infoLabel}>
@@ -360,26 +418,22 @@ export default function SearchMainboardScreen({ navigation }) {
                               </Paragraph>
                               <View style={styles.chipsContainer}>
                                 {conector.tool_sw.map((tool, i) => (
-                                  <Chip
-                                    key={i}
-                                    style={styles.toolChip}
-                                    textStyle={styles.chipText}
-                                  >
-                                    {tool}
-                                  </Chip>
+                                  <Chip key={i} style={styles.toolChip} textStyle={styles.chipText}>{tool}</Chip>
                                 ))}
                               </View>
                             </View>
                           )}
 
-                          {index < selectedModel.conectores.length - 1 && (
+                          {index < filteredConectores.length - 1 && (
                             <Divider style={styles.conectorDivider} />
                           )}
                         </View>
                       ))
                     ) : (
                       <Paragraph style={styles.emptyText}>
-                        No se encontró información para este modelo de mainboard.
+                        {selectedModeloInterno
+                          ? `No hay conectores para "${selectedModeloInterno}"`
+                          : 'No se encontró información para este modelo de mainboard.'}
                       </Paragraph>
                     )}
 
@@ -390,53 +444,24 @@ export default function SearchMainboardScreen({ navigation }) {
                         <Chip icon="memory" style={styles.arduinoChip} textStyle={styles.chipText}>
                           Arduino
                         </Chip>
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          {selectedModel.arduino_sequences && selectedModel.arduino_sequences.length > 0 && (
-                            <Button
-                              mode="outlined"
-                              compact
-                              icon="filter-variant"
-                              onPress={() => setShowArduinoFilterModal(true)}
-                              textColor="#B0B0B0"
-                              style={styles.arduinoFilterButton}
-                            >
-                              {selectedArduinoInterno || 'Filtrar'}
-                            </Button>
-                          )}
-                          {canEditArduino && (
-                            <Button
-                              mode="contained"
-                              compact
-                              onPress={() => {
-                                setArduinoForm(prev => ({ ...prev, modelo: selectedModel?.modelo_mainboard || '' }));
-                                setShowArduinoDialog(true);
-                              }}
-                              buttonColor="#37474F"
-                              textColor="#FFFFFF"
-                              style={styles.addArduinoButton}
-                            >
-                              Agregar
-                            </Button>
-                          )}
-                        </View>
-                      </View>
-                      {selectedArduinoInterno && (
-                        <TouchableOpacity onPress={() => setSelectedArduinoInterno(null)} style={styles.activeFilterRow}>
-                          <Chip
-                            icon="close-circle"
-                            style={styles.activeFilterChip}
-                            textStyle={styles.activeFilterChipText}
-                            onPress={() => setSelectedArduinoInterno(null)}
+                        {canEditArduino && (
+                          <Button
+                            mode="contained"
+                            compact
+                            onPress={() => {
+                              setArduinoForm(prev => ({ ...prev, modelo: selectedModel?.modelo_mainboard || '' }));
+                              setShowArduinoDialog(true);
+                            }}
+                            buttonColor="#37474F"
+                            textColor="#FFFFFF"
+                            style={styles.addArduinoButton}
                           >
-                            {selectedArduinoInterno}
-                          </Chip>
-                        </TouchableOpacity>
-                      )}
-                      {selectedModel.arduino_sequences && selectedModel.arduino_sequences.length > 0 ? (
-                        (selectedArduinoInterno
-                          ? selectedModel.arduino_sequences.filter(s => s.modelo_interno === selectedArduinoInterno)
-                          : selectedModel.arduino_sequences
-                        ).map((seq, i, arr) => (
+                            Agregar
+                          </Button>
+                        )}
+                      </View>
+                      {filteredArduino.length > 0 ? (
+                        filteredArduino.map((seq, i, arr) => (
                           <View key={seq.id || i} style={styles.arduinoItem}>
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <View style={{ flex: 1 }}>
@@ -463,21 +488,68 @@ export default function SearchMainboardScreen({ navigation }) {
                             {seq.pais ? (
                               <View style={styles.chipsContainer}>
                                 {seq.pais.split(',').map((p, j) => (
-                                  <Chip key={j} style={styles.paisChip} textStyle={styles.paisChipText}>
-                                    {p.trim()}
-                                  </Chip>
+                                  <Chip key={j} style={styles.paisChip} textStyle={styles.paisChipText}>{p.trim()}</Chip>
                                 ))}
                               </View>
                             ) : null}
-                            {i < arr.length - 1 && (
-                              <Divider style={styles.arduinoDivider} />
-                            )}
+                            {i < arr.length - 1 && <Divider style={styles.arduinoDivider} />}
                           </View>
                         ))
                       ) : (
                         <Paragraph style={styles.arduinoNA}>N/A</Paragraph>
                       )}
                     </View>
+
+                    {/* Seccion Historial */}
+                    <Divider style={styles.divider} />
+                    <View style={styles.historialSection}>
+                      <View style={styles.historialHeader}>
+                        <Chip icon="history" style={styles.historialChip} textStyle={styles.chipText}>
+                          Historial
+                        </Chip>
+                        <Button
+                          mode="contained"
+                          compact
+                          onPress={() => setShowObsDialog(true)}
+                          buttonColor="#37474F"
+                          textColor="#FFFFFF"
+                          style={styles.addObsButton}
+                        >
+                          + Agregar
+                        </Button>
+                      </View>
+                      {loadingObs ? (
+                        <ActivityIndicator size="small" color="#2196F3" style={{ marginTop: 8 }} />
+                      ) : observaciones.length > 0 ? (
+                        observaciones.map((obs, i, arr) => (
+                          <View key={obs.id} style={styles.obsItem}>
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                              <View style={{ flex: 1 }}>
+                                <Paragraph style={styles.obsTexto}>{obs.texto}</Paragraph>
+                                <View style={styles.obsMetaRow}>
+                                  <Paragraph style={styles.obsMeta}>{obs.tecnico_nombre || 'Usuario'}</Paragraph>
+                                  <Paragraph style={styles.obsMetaDot}> · </Paragraph>
+                                  <Paragraph style={styles.obsMeta}>{formatDate(obs.created_at)}</Paragraph>
+                                </View>
+                              </View>
+                              {canDeleteObs && (
+                                <IconButton
+                                  icon="delete-outline"
+                                  iconColor="#EF5350"
+                                  size={18}
+                                  onPress={() => handleDeleteObs(obs.id)}
+                                  style={{ margin: -4 }}
+                                />
+                              )}
+                            </View>
+                            {i < arr.length - 1 && <Divider style={styles.arduinoDivider} />}
+                          </View>
+                        ))
+                      ) : (
+                        <Paragraph style={styles.arduinoNA}>Sin observaciones registradas</Paragraph>
+                      )}
+                    </View>
+
                   </Card.Content>
                 </Card>
               </View>
@@ -576,46 +648,93 @@ export default function SearchMainboardScreen({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Portal>
+      {/* Modal Agregar Observación */}
+      <Modal
+        visible={showObsDialog}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowObsDialog(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowObsDialog(false)}
+          />
+          <View style={styles.modalContent}>
+            <Title style={styles.modalTitle}>Agregar Observación</Title>
+            <TextInput
+              label="Observación"
+              value={newObsText}
+              onChangeText={setNewObsText}
+              mode="outlined"
+              multiline
+              numberOfLines={4}
+              style={[styles.dialogInput, { minHeight: 100 }]}
+              textColor="#F5F5F5"
+              outlineColor="#333333"
+              activeOutlineColor="#2196F3"
+              placeholder="Ej: Necesita resistencia 80 ohms, Mini LVDS config diferente..."
+            />
+            <View style={styles.modalActions}>
+              <Button
+                onPress={() => { setShowObsDialog(false); setNewObsText(''); }}
+                textColor="#B0B0B0"
+                style={{ flex: 1 }}
+              >
+                Cancelar
+              </Button>
+              <Button
+                mode="contained"
+                onPress={handleSaveObs}
+                buttonColor="#2196F3"
+                loading={savingObs}
+                disabled={!newObsText.trim() || savingObs}
+                style={{ flex: 1 }}
+              >
+                Guardar
+              </Button>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
-        {/* Modal de filtro de modelo interno Arduino */}
+      <Portal>
+        {/* Modal de filtro compartido */}
         <Dialog
-          visible={showArduinoFilterModal}
-          onDismiss={() => setShowArduinoFilterModal(false)}
+          visible={showFilterModal}
+          onDismiss={() => setShowFilterModal(false)}
           style={styles.dialog}
         >
-          <Dialog.Title style={styles.dialogTitle}>Seleccionar Modelo Interno</Dialog.Title>
+          <Dialog.Title style={styles.dialogTitle}>Filtrar por Modelo Interno</Dialog.Title>
           <Dialog.Content>
             <ScrollView style={{ maxHeight: 300 }}>
               <TouchableOpacity
-                style={[styles.filterModalItem, !selectedArduinoInterno && styles.filterModalItemActive]}
-                onPress={() => { setSelectedArduinoInterno(null); setShowArduinoFilterModal(false); }}
+                style={[styles.filterModalItem, !selectedModeloInterno && styles.filterModalItemActive]}
+                onPress={() => { setSelectedModeloInterno(null); setShowFilterModal(false); }}
               >
-                <Paragraph style={[styles.filterModalItemText, !selectedArduinoInterno && styles.filterModalItemTextActive]}>
+                <Paragraph style={[styles.filterModalItemText, !selectedModeloInterno && styles.filterModalItemTextActive]}>
                   Todos
                 </Paragraph>
-                <Paragraph style={styles.filterModalItemCount}>
-                  {selectedModel?.arduino_sequences?.length || 0}
-                </Paragraph>
               </TouchableOpacity>
-              {selectedModel?.arduino_sequences && [...new Set(selectedModel.arduino_sequences.map(s => s.modelo_interno).filter(Boolean))].sort().map(interno => (
+              {allModelosInternos.map(interno => (
                 <TouchableOpacity
                   key={interno}
-                  style={[styles.filterModalItem, selectedArduinoInterno === interno && styles.filterModalItemActive]}
-                  onPress={() => { setSelectedArduinoInterno(interno); setShowArduinoFilterModal(false); }}
+                  style={[styles.filterModalItem, selectedModeloInterno === interno && styles.filterModalItemActive]}
+                  onPress={() => { setSelectedModeloInterno(interno); setShowFilterModal(false); }}
                 >
-                  <Paragraph style={[styles.filterModalItemText, selectedArduinoInterno === interno && styles.filterModalItemTextActive]}>
+                  <Paragraph style={[styles.filterModalItemText, selectedModeloInterno === interno && styles.filterModalItemTextActive]}>
                     {interno}
-                  </Paragraph>
-                  <Paragraph style={styles.filterModalItemCount}>
-                    {selectedModel.arduino_sequences.filter(s => s.modelo_interno === interno).length}
                   </Paragraph>
                 </TouchableOpacity>
               ))}
             </ScrollView>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowArduinoFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
+            <Button onPress={() => setShowFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -701,15 +820,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#2A2A2A',
     borderRadius: 12,
   },
-  detailsTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
   mainboardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 8,
-    alignItems: 'flex-start',
   },
   mainboardChip: {
     backgroundColor: '#37474F',
@@ -718,6 +833,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '700',
+  },
+  filterButton: {
+    borderColor: '#555555',
+    borderRadius: 8,
+  },
+  activeFilterRow: {
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  activeFilterChip: {
+    backgroundColor: '#37474F',
+  },
+  activeFilterChipText: {
+    color: '#E0E0E0',
+    fontSize: 13,
   },
   divider: {
     backgroundColor: '#444444',
@@ -819,21 +949,6 @@ const styles = StyleSheet.create({
   addArduinoButton: {
     borderRadius: 8,
   },
-  arduinoFilterButton: {
-    borderColor: '#555555',
-    borderRadius: 8,
-  },
-  activeFilterRow: {
-    marginBottom: 12,
-    alignItems: 'flex-start',
-  },
-  activeFilterChip: {
-    backgroundColor: '#37474F',
-  },
-  activeFilterChipText: {
-    color: '#E0E0E0',
-    fontSize: 13,
-  },
   filterModalItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -898,6 +1013,46 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
   },
+  // Historial
+  historialSection: {
+    marginTop: 8,
+  },
+  historialHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  historialChip: {
+    backgroundColor: '#37474F',
+    alignSelf: 'flex-start',
+  },
+  addObsButton: {
+    borderRadius: 8,
+  },
+  obsItem: {
+    marginBottom: 12,
+    paddingLeft: 8,
+  },
+  obsTexto: {
+    color: '#E0E0E0',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 4,
+  },
+  obsMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  obsMeta: {
+    color: '#888888',
+    fontSize: 12,
+  },
+  obsMetaDot: {
+    color: '#888888',
+    fontSize: 12,
+  },
+  // Modals
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
