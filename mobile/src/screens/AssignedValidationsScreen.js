@@ -305,6 +305,42 @@ export default function AssignedValidationsScreen({ navigation }) {
     }
   };
 
+  const parseComentario = (comentario) => {
+    if (!comentario) return {};
+    const parts = comentario.split('|').map(p => p.trim());
+    const result = {};
+    parts.forEach(part => {
+      const colonIdx = part.indexOf(':');
+      if (colonIdx === -1) return;
+      const key = part.substring(0, colonIdx).trim().toLowerCase();
+      const value = part.substring(colonIdx + 1).trim();
+      if (key === 'modelo') result.modeloCompleto = value;
+      else if (key === 'línea' || key === 'linea') result.linea = value;
+      else if (key === 'emulador de panel') result.emuladorPanel = value;
+      else if (key === 'convertidores') result.convertidores = value;
+    });
+    if (result.modeloCompleto) {
+      const match = result.modeloCompleto.match(/^(.+?)\s*\((.+?)\)$/);
+      if (match) { result.modelo = match[1].trim(); result.tipoLabel = match[2].trim(); }
+      else { result.modelo = result.modeloCompleto; result.tipoLabel = ''; }
+    }
+    return result;
+  };
+
+  const tipoLabelToType = (tipoLabel) => {
+    const lower = tipoLabel?.toLowerCase() || '';
+    if (lower.includes('new semi') || lower.includes('nuevo semi')) return 'new semiautomatic';
+    if (lower.includes('semi')) return 'semiautomatic';
+    return 'manual';
+  };
+
+  const handleValidar = (v) => {
+    const parsed = parseComentario(v.comentario);
+    const modelName = parsed.modelo || v.modelo_actual;
+    const tipoType = tipoLabelToType(parsed.tipoLabel || v.tipo_jig);
+    navigation.navigate('AllJigs', { model: modelName, type: tipoType, validationModeReturn: true });
+  };
+
   const handleMarcarCompletada = async (validationId) => {
     showAlert(
       'Marcar como Completada',
@@ -503,103 +539,89 @@ export default function AssignedValidationsScreen({ navigation }) {
               <Divider style={styles.divider} />
 
               {filteredValidations.map((v) => {
+                const parsed = parseComentario(v.comentario);
                 const fechaTexto = v.fecha ? new Date(v.fecha).toLocaleString('es-MX') : 'Sin fecha';
-
-                // Obtener modelo desde modelo_actual o comentario
-                let modeloTexto = v.modelo_actual;
-                if (!modeloTexto && v.comentario) {
-                  try {
-                    const parts = v.comentario.split('|').map(p => p.trim());
-                    const modeloPart = parts.find(p => p.toLowerCase().startsWith('modelo:'));
-                    if (modeloPart) {
-                      modeloTexto = modeloPart.split(':')[1].trim();
-                    }
-                  } catch (e) {
-                    // ignorar error de parseo
-                  }
-                }
-
-                // Extraer línea (si está en el comentario)
-                let lineaTexto = '';
-                if (v.comentario) {
-                  try {
-                    const parts = v.comentario.split('|').map(p => p.trim());
-                    const lineaPart = parts.find(p => p.toLowerCase().startsWith('línea:') || p.toLowerCase().startsWith('linea:'));
-                    if (lineaPart) {
-                      lineaTexto = lineaPart.split(':')[1].trim();
-                    }
-                  } catch (e) {
-                    // ignorar
-                  }
-                }
+                const modeloNombre = parsed.modelo || v.modelo_actual || 'Sin modelo';
+                const tipoLabel = parsed.tipoLabel || '';
+                const linea = parsed.linea || '';
+                const emulador = parsed.emuladorPanel || '';
+                const convertidores = parsed.convertidores || '';
 
                 return (
-                  <View key={v.id} style={styles.itemContainer}>
-                    {/* Fila superior: fecha izquierda, estado derecha */}
+                  <View key={v.id} style={[styles.itemContainer, v.completada && styles.itemContainerCompleted]}>
+
+                    {/* Header: fecha + chip estado */}
                     <View style={styles.itemTopRow}>
-                      <Text style={styles.itemDateMain}>{fechaTexto}</Text>
+                      <Text style={styles.itemDate}>{fechaTexto}</Text>
                       {v.completada ? (
-                        <Chip
-                          mode="flat"
-                          style={styles.statusChipCompleted}
-                          textStyle={{
-                            color: '#FFFFFF',
-                            fontWeight: 'bold',
-                          }}
-                        >
+                        <Chip mode="flat" style={styles.statusChipCompleted} textStyle={styles.statusChipCompletedText}>
                           Completada
                         </Chip>
                       ) : (
-                        <TouchableOpacity
-                          onPress={() => handleMarcarCompletada(v.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Chip
-                            mode="outlined"
-                            style={styles.statusChip}
-                            textStyle={{
-                              color: '#FFC107',
-                              fontWeight: 'bold',
-                            }}
-                          >
-                            Pendiente
-                          </Chip>
+                        <TouchableOpacity onPress={() => handleMarcarCompletada(v.id)} activeOpacity={0.7}>
+                          <View style={styles.pendienteButton}>
+                            <Text style={styles.pendienteButtonText}>● Pendiente</Text>
+                          </View>
                         </TouchableOpacity>
                       )}
                     </View>
 
-                    <View style={styles.itemHeader}>
-                      <Text style={styles.itemTitle}>
-                        Modelo: {modeloTexto || 'Sin modelo'}
-                      </Text>
+                    {/* Modelo y tipo */}
+                    <View style={styles.modeloRow}>
+                      <Text style={styles.modeloText}>{modeloNombre}</Text>
+                      {tipoLabel ? (
+                        <View style={styles.tipoChip}>
+                          <Text style={styles.tipoChipText}>{tipoLabel}</Text>
+                        </View>
+                      ) : null}
                     </View>
 
-                    {lineaTexto ? (
-                      <Text style={styles.itemSubtext}>
-                        Línea: {lineaTexto}
-                      </Text>
+                    {/* Info de validación */}
+                    <View style={styles.infoGrid}>
+                      {linea ? (
+                        <View style={styles.infoItem}>
+                          <Text style={styles.infoLabel}>Línea</Text>
+                          <Text style={styles.infoValue}>{linea}</Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.infoItem}>
+                        <Text style={styles.infoLabel}>Turno</Text>
+                        <Text style={styles.infoValue}>{v.turno || '-'}</Text>
+                      </View>
+                    </View>
+
+                    {/* Lo que hay que validar */}
+                    {(emulador || convertidores) ? (
+                      <View style={styles.validarSection}>
+                        <Text style={styles.validarSectionTitle}>Equipos a validar</Text>
+                        {emulador ? (
+                          <View style={styles.equipoRow}>
+                            <View style={styles.equipoDot} />
+                            <Text style={styles.equipoText}>Emulador de Panel: <Text style={styles.equipoValor}>{emulador}</Text></Text>
+                          </View>
+                        ) : null}
+                        {convertidores ? (
+                          <View style={styles.equipoRow}>
+                            <View style={styles.equipoDot} />
+                            <Text style={styles.equipoText}>Convertidores: <Text style={styles.equipoValor}>{convertidores}</Text></Text>
+                          </View>
+                        ) : null}
+                      </View>
                     ) : null}
 
-                    <Text style={styles.itemSubtext}>
-                      Turno: {v.turno}
-                    </Text>
-                    <Text style={styles.itemSubtext}>
-                      Detalle: {v.comentario || 'Sin detalles'}
-                    </Text>
-
-                    {/* Botón Validar / Validado */}
+                    {/* Botón Validar */}
                     <View style={styles.actionsRow}>
                       {v.completada ? (
                         <View style={styles.validatedButtonDisabled}>
-                          <Text style={styles.validatedButtonText}>Validado</Text>
+                          <Text style={styles.validatedButtonText}>✓ Validado</Text>
                         </View>
                       ) : (
                         <TouchableOpacity
                           style={styles.validateButton}
-                          onPress={() => navigation.navigate('QRScanner')}
+                          onPress={() => handleValidar(v)}
                           activeOpacity={0.85}
                         >
-                          <Text style={styles.validateButtonText}>Validar</Text>
+                          <Text style={styles.validateButtonText}>Ir a Validar →</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -686,55 +708,142 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2C2C2C',
   },
+  itemContainerCompleted: {
+    opacity: 0.6,
+  },
   itemTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-  itemDateMain: {
-    color: '#FFFFFF',
-    fontSize: 16,
+  itemDate: {
+    color: '#B0B0B0',
+    fontSize: 13,
+  },
+  pendienteButton: {
+    backgroundColor: '#332200',
+    borderWidth: 1,
+    borderColor: '#FFC107',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  pendienteButtonText: {
+    color: '#FFC107',
+    fontSize: 13,
     fontWeight: '700',
   },
-  itemHeader: {
+  statusChipCompleted: {
+    backgroundColor: '#1B5E20',
+    borderColor: '#4CAF50',
+  },
+  statusChipCompletedText: {
+    color: '#81C784',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  modeloRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modeloText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
+    flex: 1,
+  },
+  tipoChip: {
+    backgroundColor: '#1A3A5C',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  tipoChipText: {
+    color: '#64B5F6',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 12,
+  },
+  infoItem: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  infoLabel: {
+    color: '#888888',
+    fontSize: 11,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  infoValue: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  validarSection: {
+    backgroundColor: '#1A2A1A',
+    borderLeftWidth: 3,
+    borderLeftColor: '#4CAF50',
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 12,
+    gap: 6,
+  },
+  validarSectionTitle: {
+    color: '#81C784',
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
     marginBottom: 4,
   },
-  itemTitle: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
+  equipoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
-  statusChip: {
-    borderColor: '#FFC107',
-    backgroundColor: 'transparent',
-  },
-  statusChipCompleted: {
+  equipoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#4CAF50',
-    borderColor: '#4CAF50',
+    marginTop: 5,
+  },
+  equipoText: {
+    color: '#B0B0B0',
+    fontSize: 13,
+    flex: 1,
+  },
+  equipoValor: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
   itemSubtext: {
     color: '#B0B0B0',
     fontSize: 14,
   },
   actionsRow: {
-    marginTop: 8,
+    marginTop: 4,
     flexDirection: 'row',
     justifyContent: 'flex-end',
   },
   validateButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 20,
     backgroundColor: '#4CAF50',
   },
   validateButtonText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   validatedButtonDisabled: {
     paddingHorizontal: 16,
