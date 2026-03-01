@@ -806,7 +806,7 @@ export default function SearchMainboardScreen({ navigation }) {
             onPress={() => setShowConectorFilterModal(false)}
           />
           <View style={styles.modalContent}>
-            <Title style={styles.modalTitle}>Filtrar Conectores</Title>
+            <Title style={styles.modalTitle}>Filtrar Modelo Interno</Title>
             <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={[styles.filterModalItem, !selectedConectorInterno && styles.filterModalItemActive]}
@@ -847,7 +847,7 @@ export default function SearchMainboardScreen({ navigation }) {
             onPress={() => setShowArduinoFilterModal(false)}
           />
           <View style={styles.modalContent}>
-            <Title style={styles.modalTitle}>Filtrar Arduino</Title>
+            <Title style={styles.modalTitle}>Filtrar Modelo Interno</Title>
             <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={[styles.filterModalItem, !selectedArduinoInterno && styles.filterModalItemActive]}
