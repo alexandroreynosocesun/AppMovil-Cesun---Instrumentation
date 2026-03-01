@@ -264,6 +264,7 @@ class ModeloObservacion(Base):
     id = Column(Integer, primary_key=True, index=True)
     modelo_mainboard = Column(String(100), nullable=False, index=True)
     texto = Column(Text, nullable=False)
+    foto = Column(Text, nullable=True)  # Base64 image (opcional)
     tecnico_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
     tecnico = relationship("Tecnico")
     created_at = Column(DateTime, default=datetime.utcnow)
