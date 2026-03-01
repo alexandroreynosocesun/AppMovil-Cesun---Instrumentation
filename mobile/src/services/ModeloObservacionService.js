@@ -16,9 +16,9 @@ class ModeloObservacionService {
     }
   }
 
-  async createObservacion(modelo_mainboard, texto) {
+  async createObservacion(modelo_mainboard, texto, foto = null) {
     try {
-      const response = await this.api.post('/modelo-observaciones/', { modelo_mainboard, texto });
+      const response = await this.api.post('/modelo-observaciones/', { modelo_mainboard, texto, foto });
       return { success: true, data: response.data };
     } catch (error) {
       logger.error('Error creando observación:', error);
