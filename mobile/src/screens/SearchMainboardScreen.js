@@ -496,7 +496,11 @@ export default function SearchMainboardScreen({ navigation }) {
                           </View>
                         ))
                       ) : (
-                        <Paragraph style={styles.arduinoNA}>N/A</Paragraph>
+                        <Paragraph style={styles.arduinoNA}>
+                          {selectedModeloInterno
+                            ? `Sin secuencias para "${selectedModeloInterno}"`
+                            : 'Sin secuencias Arduino registradas'}
+                        </Paragraph>
                       )}
                     </View>
 
