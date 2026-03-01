@@ -33,6 +33,18 @@ import { adaptadorService } from '../services/AdaptadorService';
 import { arduinoSequenceService } from '../services/ArduinoSequenceService';
 import logger from '../utils/logger';
 
+const getConectorLabel = (nombre) => {
+  if (!nombre) return '';
+  const lower = nombre.toLowerCase();
+  if (lower.includes('mini') && lower.includes('lvds') && lower.includes('68')) return 'FHD-68';
+  if (lower.includes('mini') && lower.includes('lvds') && lower.includes('60')) return 'HD';
+  if (lower.includes('mini') && lower.includes('lvds')) return 'HD';
+  if (lower.includes('lvds') && lower.includes('68')) return 'FHD-68';
+  if (lower.includes('lvds') && lower.includes('60')) return 'FHD-60';
+  if (lower.includes('lvds') && lower.includes('51')) return 'FHD-51';
+  return '';
+};
+
 export default function SearchMainboardScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user } = useAuth();
@@ -279,13 +291,31 @@ export default function SearchMainboardScreen({ navigation }) {
                       selectedModel.conectores.map((conector, index) => (
                         <View key={index} style={styles.conectorSection}>
                           <View style={styles.conectorHeader}>
-                            <Chip
-                              icon="cable-data"
-                              style={styles.conectorChip}
-                              textStyle={styles.chipText}
-                            >
-                              {conector.nombre_conector}
-                            </Chip>
+                            {(() => {
+                              const label = getConectorLabel(conector.nombre_conector);
+                              return label ? (
+                                <View style={styles.conectorHeaderInner}>
+                                  <Chip
+                                    icon="cable-data"
+                                    style={styles.conectorChip}
+                                    textStyle={styles.chipText}
+                                  >
+                                    {label}
+                                  </Chip>
+                                  <Paragraph style={styles.conectorDescText}>
+                                    {conector.nombre_conector}
+                                  </Paragraph>
+                                </View>
+                              ) : (
+                                <Chip
+                                  icon="cable-data"
+                                  style={styles.conectorChip}
+                                  textStyle={styles.chipText}
+                                >
+                                  {conector.nombre_conector}
+                                </Chip>
+                              );
+                            })()}
                           </View>
 
                           {/* Modelos internos - PRIMERO */}
@@ -711,6 +741,16 @@ const styles = StyleSheet.create({
   },
   conectorHeader: {
     marginBottom: 16,
+  },
+  conectorHeaderInner: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 4,
+  },
+  conectorDescText: {
+    color: '#888888',
+    fontSize: 12,
+    marginLeft: 4,
   },
   conectorChip: {
     backgroundColor: '#37474F',
