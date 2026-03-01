@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableWithoutFeedback } from 'react-native'
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableWithoutFeedback, TouchableOpacity } from 'react-native'
 import { showAlert } from '../utils/alertUtils';;
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Card, Title, Paragraph, Chip, ActivityIndicator, Divider, TextInput, Button } from 'react-native-paper';
+import { Card, Title, Paragraph, Chip, ActivityIndicator, Divider, TextInput, Button, IconButton } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { usePlatform } from '../hooks/usePlatform';
 import { webStyles } from '../utils/webStyles';
 import { adaptadorService } from '../services/AdaptadorService';
 import logger from '../utils/logger';
 import { formatDate, formatTime12Hour } from '../utils/dateUtils';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function AdaptadorDetailScreen({ navigation, route }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
+  const { user } = useAuth();
+  const isAdmin = user?.tipo_usuario === 'admin' || user?.usuario === 'admin' || user?.usuario === 'superadmin';
   const [adaptador, setAdaptador] = useState(route?.params?.adaptador || null);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -164,6 +167,28 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
         {
           text: 'Confirmar',
           onPress: () => handleUpdateConectorEstado(conector, nextEstado, null)
+        }
+      ]
+    );
+  };
+
+  const handleDeleteConector = (conector) => {
+    showAlert(
+      'Eliminar conector',
+      `¿Eliminar "${conector.nombre_conector}" de este adaptador?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await adaptadorService.deleteConector(conector.id);
+            if (result.success) {
+              await loadAdaptador();
+            } else {
+              showAlert('Error', result.error || 'No se pudo eliminar el conector.');
+            }
+          }
         }
       ]
     );
@@ -322,6 +347,15 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
                             ? `${group.primary.nombre_conector} / ${group.secondary.nombre_conector.replace('ZH-MINI-', '')}`
                             : group.primary.nombre_conector}
                         </Paragraph>
+                        {isAdmin && (
+                          <IconButton
+                            icon="delete-outline"
+                            iconColor="#F44336"
+                            size={18}
+                            onPress={() => handleDeleteConector(group.primary)}
+                            style={styles.deleteConectorButton}
+                          />
+                        )}
                         <Chip
                           icon={group.combinedEstado === 'OK' ? 'check-circle' : group.combinedEstado === 'NG' ? 'alert-circle' : 'clock-outline'}
                           style={[
@@ -779,8 +813,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     flex: 1,
   },
+  deleteConectorButton: {
+    margin: 0,
+    marginLeft: 4,
+  },
   conectorStatusChip: {
-    marginLeft: 10,
+    marginLeft: 4,
   },
   conectorStatusOK: {
     backgroundColor: '#4CAF50',
