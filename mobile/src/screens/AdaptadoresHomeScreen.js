@@ -98,14 +98,14 @@ export default function AdaptadoresHomeScreen({ navigation }) {
 
             <Button
               mode="contained"
-              icon="magnify"
+              icon="swap-horizontal"
               onPress={() => navigation.navigate('SearchMainboard')}
               style={styles.categoryButton}
               contentStyle={styles.categoryButtonContent}
               labelStyle={styles.categoryButtonLabel}
               buttonColor="#9C27B0"
             >
-              Buscar
+              Model Change
             </Button>
 
 
