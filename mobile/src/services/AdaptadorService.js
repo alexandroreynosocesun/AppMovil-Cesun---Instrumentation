@@ -167,6 +167,16 @@ class AdaptadorService {
     }
   }
 
+  async deleteConector(conectorId) {
+    try {
+      const response = await this.api.delete(`/adaptadores/conectores/${conectorId}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Error eliminando conector:', error);
+      return { success: false, error: this._handleError(error) };
+    }
+  }
+
   async getModelosMainboardByConector(nombreConector) {
     try {
       const response = await this.api.get(`/adaptadores/conectores/${encodeURIComponent(nombreConector)}/modelos-mainboard`);

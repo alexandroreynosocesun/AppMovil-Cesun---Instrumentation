@@ -509,6 +509,30 @@ async def delete_adaptador(
     
     return {"message": "Adaptador dado de baja correctamente"}
 
+@router.delete("/conectores/{conector_id}")
+async def delete_conector(
+    conector_id: int,
+    db: Session = Depends(get_db),
+    current_user: Tecnico = Depends(get_current_user)
+):
+    """Eliminar un conector específico de un adaptador (solo administradores)"""
+    if current_user.tipo_usuario != 'admin' and current_user.usuario not in ['admin', 'superadmin']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo los administradores pueden eliminar conectores"
+        )
+
+    conector = db.query(ConectorAdaptador).filter(ConectorAdaptador.id == conector_id).first()
+    if not conector:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Conector no encontrado"
+        )
+
+    db.delete(conector)
+    db.commit()
+    return {"message": "Conector eliminado correctamente"}
+
 @router.get("/conectores/{nombre_conector}/modelos")
 async def get_modelos_by_conector_name(
     nombre_conector: str,
