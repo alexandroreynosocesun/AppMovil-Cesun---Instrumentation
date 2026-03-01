@@ -112,10 +112,27 @@ def _process_half(row, offset, records):
             })
 
 
+def _normalize_converter_code(codigo: str) -> str:
+    """Normaliza el código del convertidor (columna 19 del CSV PCB).
+    Reemplaza guiones bajos por guiones y convierte a mayúsculas.
+    Retorna '' si el valor no es un código válido (vacío, '/', número puro).
+    """
+    if not codigo:
+        return ''
+    s = codigo.strip()
+    if s in ('/', '\\', ''):
+        return ''
+    if s.isdigit():
+        return ''
+    return s.replace('_', '-').upper()
+
+
 def parse_pcb_csv(csv_content: str):
     """
     Parsear PCB information CSV y retornar datos agregados para modelos_mainboard_conector.
     Agrega modelo_interno y tool_sw por (nombre_conector, modelo_mainboard).
+    Columna [19] (转接板/Converter) tiene el código ZH-MINI real (ej: ZH_MINI_HD_3).
+    Si tiene un código válido se usa como nombre_conector; si no, se usa columna [16].
     """
     reader = csv.reader(StringIO(csv_content))
 
@@ -129,14 +146,18 @@ def parse_pcb_csv(csv_content: str):
     aggregated = {}
 
     for row in reader:
-        if len(row) < 19:
+        if len(row) < 17:
             continue
 
         modelo_interno = row[1].strip() if row[1] else ""
         modelo_mainboard = row[4].strip() if row[4] else ""
-        nombre_conector = row[16].strip() if row[16] else ""
-        tool_type = row[17].strip() if len(row) > 17 and row[17] else ""  # TOOL (ej: MINI LVDS, SKD)
-        tool_sw = row[18].strip() if len(row) > 18 and row[18] else ""    # TOOL SW (ej: Mini08, Mini18)
+        iface_conector = row[16].strip() if row[16] else ""                    # LCD interface type (pin description)
+        tool_type = row[17].strip() if len(row) > 17 and row[17] else ""       # TOOL (ej: MINI LVDS, SKD)
+        tool_sw = row[18].strip() if len(row) > 18 and row[18] else ""         # TOOL SW (ej: Mini08, Mini18)
+        converter_raw = row[19].strip() if len(row) > 19 and row[19] else ""   # 转接板/Converter (ej: ZH_MINI_HD_3)
+
+        converter_codigo = _normalize_converter_code(converter_raw)
+        nombre_conector = converter_codigo if converter_codigo else iface_conector
 
         # Saltar filas sin datos esenciales
         if not modelo_mainboard or not nombre_conector:
