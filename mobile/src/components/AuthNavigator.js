@@ -257,7 +257,7 @@ export default function AuthNavigator() {
           <Stack.Screen 
             name="SearchMainboard" 
             component={SearchMainboardScreen} 
-            options={{ title: 'Buscar Modelo Mainboard' }}
+            options={{ title: 'Model Change' }}
           />
           <Stack.Screen
             name="ArduinoSequences"
