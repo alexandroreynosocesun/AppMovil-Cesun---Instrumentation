@@ -187,7 +187,7 @@ async def delete_user(
 ):
     """Eliminar usuario (solo administradores)"""
     from ..models.models import (
-        Validacion, Reparacion, JigNG, DamagedLabel, 
+        Validacion, Reparacion, Jig, JigNG, DamagedLabel,
         SolicitudRegistro, AuditoriaPDF, Adaptador, ValidacionAdaptador, ConectorAdaptador
     )
     from ..utils.logger import get_logger
@@ -211,6 +211,13 @@ async def delete_user(
     try:
         # Eliminar o actualizar referencias antes de eliminar el usuario
         
+        # 0. Limpiar FK en jigs (tecnico_ultima_validacion_id es nullable)
+        jigs_actualizados = db.query(Jig).filter(
+            Jig.tecnico_ultima_validacion_id == user_id
+        ).update({Jig.tecnico_ultima_validacion_id: None})
+        if jigs_actualizados > 0:
+            logger.info(f"Actualizados {jigs_actualizados} jigs (tecnico_ultima_validacion_id) del usuario {user_id}")
+
         # 1. Eliminar damaged_labels asociados (reportado_por_id es NOT NULL)
         damaged_labels_count = db.query(DamagedLabel).filter(
             DamagedLabel.reportado_por_id == user_id
