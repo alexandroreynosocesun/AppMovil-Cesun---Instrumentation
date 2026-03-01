@@ -44,9 +44,13 @@ export default function SearchMainboardScreen({ navigation }) {
   const [searchTimeout, setSearchTimeout] = useState(null);
   const searchInputRef = useRef(null);
 
-  // Shared filter (applies to connectors + arduino)
-  const [selectedModeloInterno, setSelectedModeloInterno] = useState(null);
-  const [showFilterModal, setShowFilterModal] = useState(false);
+  // Filtro de conectores (PCB info)
+  const [selectedConectorInterno, setSelectedConectorInterno] = useState(null);
+  const [showConectorFilterModal, setShowConectorFilterModal] = useState(false);
+
+  // Filtro de Arduino (MiniSOP)
+  const [selectedArduinoInterno, setSelectedArduinoInterno] = useState(null);
+  const [showArduinoFilterModal, setShowArduinoFilterModal] = useState(false);
 
   // Arduino dialog
   const [showArduinoDialog, setShowArduinoDialog] = useState(false);
@@ -64,22 +68,26 @@ export default function SearchMainboardScreen({ navigation }) {
   const canEditArduino = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
   const canDeleteObs = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
 
-  // All unique modelo_interno values (union from connectors + arduino)
-  const allModelosInternos = selectedModel ? [...new Set([
-    ...(selectedModel.conectores || []).flatMap(c => c.modelos_internos || []),
-    ...(selectedModel.arduino_sequences || []).map(s => s.modelo_interno).filter(Boolean),
-  ])].sort() : [];
+  // Opciones de filtro para conectores (PCB info)
+  const conectorModelosInternos = selectedModel
+    ? [...new Set((selectedModel.conectores || []).flatMap(c => c.modelos_internos || []))].sort()
+    : [];
 
-  // Filtered data based on shared filter
+  // Opciones de filtro para Arduino (MiniSOP)
+  const arduinoModelosInternos = selectedModel
+    ? [...new Set((selectedModel.arduino_sequences || []).map(s => s.modelo_interno).filter(Boolean))].sort()
+    : [];
+
+  // Datos filtrados
   const filteredConectores = selectedModel?.conectores
-    ? (selectedModeloInterno
-        ? selectedModel.conectores.filter(c => c.modelos_internos?.includes(selectedModeloInterno))
+    ? (selectedConectorInterno
+        ? selectedModel.conectores.filter(c => c.modelos_internos?.includes(selectedConectorInterno))
         : selectedModel.conectores)
     : [];
 
   const filteredArduino = selectedModel?.arduino_sequences
-    ? (selectedModeloInterno
-        ? selectedModel.arduino_sequences.filter(s => s.modelo_interno === selectedModeloInterno)
+    ? (selectedArduinoInterno
+        ? selectedModel.arduino_sequences.filter(s => s.modelo_interno === selectedArduinoInterno)
         : selectedModel.arduino_sequences)
     : [];
 
@@ -197,7 +205,8 @@ export default function SearchMainboardScreen({ navigation }) {
     setSearchQuery(modeloMainboard);
     setSuggestions([]);
     setSelectedModel(null);
-    setSelectedModeloInterno(null);
+    setSelectedConectorInterno(null);
+    setSelectedArduinoInterno(null);
     setObservaciones([]);
     setLoadingDetails(true);
     try {
@@ -325,40 +334,45 @@ export default function SearchMainboardScreen({ navigation }) {
                 <Card style={styles.detailsCard}>
                   <Card.Content>
 
-                    {/* Header: mainboard chip + filtro compartido */}
+                    {/* Header: mainboard chip */}
                     <View style={styles.mainboardHeader}>
                       <Chip icon="developer-board" style={styles.mainboardChip} textStyle={styles.mainboardChipText}>
                         {selectedModel.modelo_mainboard}
                       </Chip>
-                      {allModelosInternos.length > 0 && (
+                    </View>
+
+                    <Divider style={styles.divider} />
+
+                    {/* Header conectores + filtro propio */}
+                    <View style={styles.sectionHeader}>
+                      <Chip icon="cable-data" style={styles.sectionChip} textStyle={styles.chipText}>
+                        Conectores
+                      </Chip>
+                      {conectorModelosInternos.length > 0 && (
                         <Button
                           mode="outlined"
                           compact
                           icon="filter-variant"
-                          onPress={() => setShowFilterModal(true)}
+                          onPress={() => setShowConectorFilterModal(true)}
                           textColor="#B0B0B0"
                           style={styles.filterButton}
                         >
-                          {selectedModeloInterno || 'Filtrar'}
+                          {selectedConectorInterno || 'Filtrar'}
                         </Button>
                       )}
                     </View>
-
-                    {/* Chip de filtro activo */}
-                    {selectedModeloInterno && (
+                    {selectedConectorInterno && (
                       <View style={styles.activeFilterRow}>
                         <Chip
                           icon="close-circle"
                           style={styles.activeFilterChip}
                           textStyle={styles.activeFilterChipText}
-                          onPress={() => setSelectedModeloInterno(null)}
+                          onPress={() => setSelectedConectorInterno(null)}
                         >
-                          {selectedModeloInterno}
+                          {selectedConectorInterno}
                         </Chip>
                       </View>
                     )}
-
-                    <Divider style={styles.divider} />
 
                     {/* Conectores */}
                     {filteredConectores.length > 0 ? (
@@ -431,8 +445,8 @@ export default function SearchMainboardScreen({ navigation }) {
                       ))
                     ) : (
                       <Paragraph style={styles.emptyText}>
-                        {selectedModeloInterno
-                          ? `No hay conectores para "${selectedModeloInterno}"`
+                        {selectedConectorInterno
+                          ? `No hay conectores para "${selectedConectorInterno}"`
                           : 'No se encontró información para este modelo de mainboard.'}
                       </Paragraph>
                     )}
@@ -444,22 +458,48 @@ export default function SearchMainboardScreen({ navigation }) {
                         <Chip icon="memory" style={styles.arduinoChip} textStyle={styles.chipText}>
                           Arduino
                         </Chip>
-                        {canEditArduino && (
-                          <Button
-                            mode="contained"
-                            compact
-                            onPress={() => {
-                              setArduinoForm(prev => ({ ...prev, modelo: selectedModel?.modelo_mainboard || '' }));
-                              setShowArduinoDialog(true);
-                            }}
-                            buttonColor="#37474F"
-                            textColor="#FFFFFF"
-                            style={styles.addArduinoButton}
-                          >
-                            Agregar
-                          </Button>
-                        )}
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          {arduinoModelosInternos.length > 0 && (
+                            <Button
+                              mode="outlined"
+                              compact
+                              icon="filter-variant"
+                              onPress={() => setShowArduinoFilterModal(true)}
+                              textColor="#B0B0B0"
+                              style={styles.filterButton}
+                            >
+                              {selectedArduinoInterno || 'Filtrar'}
+                            </Button>
+                          )}
+                          {canEditArduino && (
+                            <Button
+                              mode="contained"
+                              compact
+                              onPress={() => {
+                                setArduinoForm(prev => ({ ...prev, modelo: selectedModel?.modelo_mainboard || '' }));
+                                setShowArduinoDialog(true);
+                              }}
+                              buttonColor="#37474F"
+                              textColor="#FFFFFF"
+                              style={styles.addArduinoButton}
+                            >
+                              Agregar
+                            </Button>
+                          )}
+                        </View>
                       </View>
+                      {selectedArduinoInterno && (
+                        <View style={styles.activeFilterRow}>
+                          <Chip
+                            icon="close-circle"
+                            style={styles.activeFilterChip}
+                            textStyle={styles.activeFilterChipText}
+                            onPress={() => setSelectedArduinoInterno(null)}
+                          >
+                            {selectedArduinoInterno}
+                          </Chip>
+                        </View>
+                      )}
                       {filteredArduino.length > 0 ? (
                         filteredArduino.map((seq, i, arr) => (
                           <View key={seq.id || i} style={styles.arduinoItem}>
@@ -497,8 +537,8 @@ export default function SearchMainboardScreen({ navigation }) {
                         ))
                       ) : (
                         <Paragraph style={styles.arduinoNA}>
-                          {selectedModeloInterno
-                            ? `Sin secuencias para "${selectedModeloInterno}"`
+                          {selectedArduinoInterno
+                            ? `Sin secuencias para "${selectedArduinoInterno}"`
                             : 'Sin secuencias Arduino registradas'}
                         </Paragraph>
                       )}
@@ -707,30 +747,30 @@ export default function SearchMainboardScreen({ navigation }) {
       </Modal>
 
       <Portal>
-        {/* Modal de filtro compartido */}
+        {/* Filtro de Conectores (PCB) */}
         <Dialog
-          visible={showFilterModal}
-          onDismiss={() => setShowFilterModal(false)}
+          visible={showConectorFilterModal}
+          onDismiss={() => setShowConectorFilterModal(false)}
           style={styles.dialog}
         >
-          <Dialog.Title style={styles.dialogTitle}>Filtrar por Modelo Interno</Dialog.Title>
+          <Dialog.Title style={styles.dialogTitle}>Filtrar Conectores</Dialog.Title>
           <Dialog.Content>
             <ScrollView style={{ maxHeight: 300 }}>
               <TouchableOpacity
-                style={[styles.filterModalItem, !selectedModeloInterno && styles.filterModalItemActive]}
-                onPress={() => { setSelectedModeloInterno(null); setShowFilterModal(false); }}
+                style={[styles.filterModalItem, !selectedConectorInterno && styles.filterModalItemActive]}
+                onPress={() => { setSelectedConectorInterno(null); setShowConectorFilterModal(false); }}
               >
-                <Paragraph style={[styles.filterModalItemText, !selectedModeloInterno && styles.filterModalItemTextActive]}>
+                <Paragraph style={[styles.filterModalItemText, !selectedConectorInterno && styles.filterModalItemTextActive]}>
                   Todos
                 </Paragraph>
               </TouchableOpacity>
-              {allModelosInternos.map(interno => (
+              {conectorModelosInternos.map(interno => (
                 <TouchableOpacity
                   key={interno}
-                  style={[styles.filterModalItem, selectedModeloInterno === interno && styles.filterModalItemActive]}
-                  onPress={() => { setSelectedModeloInterno(interno); setShowFilterModal(false); }}
+                  style={[styles.filterModalItem, selectedConectorInterno === interno && styles.filterModalItemActive]}
+                  onPress={() => { setSelectedConectorInterno(interno); setShowConectorFilterModal(false); }}
                 >
-                  <Paragraph style={[styles.filterModalItemText, selectedModeloInterno === interno && styles.filterModalItemTextActive]}>
+                  <Paragraph style={[styles.filterModalItemText, selectedConectorInterno === interno && styles.filterModalItemTextActive]}>
                     {interno}
                   </Paragraph>
                 </TouchableOpacity>
@@ -738,7 +778,42 @@ export default function SearchMainboardScreen({ navigation }) {
             </ScrollView>
           </Dialog.Content>
           <Dialog.Actions>
-            <Button onPress={() => setShowFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
+            <Button onPress={() => setShowConectorFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
+          </Dialog.Actions>
+        </Dialog>
+
+        {/* Filtro de Arduino (MiniSOP) */}
+        <Dialog
+          visible={showArduinoFilterModal}
+          onDismiss={() => setShowArduinoFilterModal(false)}
+          style={styles.dialog}
+        >
+          <Dialog.Title style={styles.dialogTitle}>Filtrar Arduino</Dialog.Title>
+          <Dialog.Content>
+            <ScrollView style={{ maxHeight: 300 }}>
+              <TouchableOpacity
+                style={[styles.filterModalItem, !selectedArduinoInterno && styles.filterModalItemActive]}
+                onPress={() => { setSelectedArduinoInterno(null); setShowArduinoFilterModal(false); }}
+              >
+                <Paragraph style={[styles.filterModalItemText, !selectedArduinoInterno && styles.filterModalItemTextActive]}>
+                  Todos
+                </Paragraph>
+              </TouchableOpacity>
+              {arduinoModelosInternos.map(interno => (
+                <TouchableOpacity
+                  key={interno}
+                  style={[styles.filterModalItem, selectedArduinoInterno === interno && styles.filterModalItemActive]}
+                  onPress={() => { setSelectedArduinoInterno(interno); setShowArduinoFilterModal(false); }}
+                >
+                  <Paragraph style={[styles.filterModalItemText, selectedArduinoInterno === interno && styles.filterModalItemTextActive]}>
+                    {interno}
+                  </Paragraph>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Dialog.Content>
+          <Dialog.Actions>
+            <Button onPress={() => setShowArduinoFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
           </Dialog.Actions>
         </Dialog>
       </Portal>
@@ -825,10 +900,18 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   mainboardHeader: {
+    marginBottom: 8,
+    alignItems: 'flex-start',
+  },
+  sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
+    marginBottom: 12,
+  },
+  sectionChip: {
+    backgroundColor: '#37474F',
+    alignSelf: 'flex-start',
   },
   mainboardChip: {
     backgroundColor: '#37474F',
