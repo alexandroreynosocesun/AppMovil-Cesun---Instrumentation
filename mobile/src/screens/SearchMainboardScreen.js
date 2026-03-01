@@ -35,6 +35,11 @@ import logger from '../utils/logger';
 
 const getConectorLabel = (nombre) => {
   if (!nombre) return '';
+  // ZH-MINI codes from Converter column (e.g. "ZH-MINI-HD-3" → "HD-3")
+  if (nombre.toUpperCase().startsWith('ZH-MINI-')) {
+    return nombre.substring(8);
+  }
+  // Fallback: pattern match on raw pin description (legacy data)
   const lower = nombre.toLowerCase();
   if (lower.includes('mini') && lower.includes('lvds') && lower.includes('68')) return 'FHD-68';
   if (lower.includes('mini') && lower.includes('lvds') && lower.includes('60')) return 'HD';
