@@ -619,7 +619,6 @@ export default function AssignValidationScreen({ navigation, route }) {
                       outlineColor="#3C3C3C"
                       activeOutlineColor="#2196F3"
                       textColor="#FFFFFF"
-                      right={<TextInput.Icon icon="chevron-down" color="#888888" />}
                       placeholder="Toca para seleccionar un técnico"
                     />
                   </View>
@@ -663,7 +662,6 @@ export default function AssignValidationScreen({ navigation, route }) {
                       outlineColor="#3C3C3C"
                       activeOutlineColor="#2196F3"
                       textColor="#FFFFFF"
-                      right={<TextInput.Icon icon="chevron-down" color="#888888" />}
                       placeholder="Toca para seleccionar un modelo"
                     />
                   </View>
@@ -698,7 +696,6 @@ export default function AssignValidationScreen({ navigation, route }) {
                     outlineColor="#3C3C3C"
                     activeOutlineColor="#2196F3"
                     textColor="#FFFFFF"
-                    right={<TextInput.Icon icon="chevron-down" color="#888888" />}
                     placeholder="Toca para seleccionar una línea (1-6)"
                   />
                 </View>
