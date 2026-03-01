@@ -22,8 +22,6 @@ import {
   Divider,
   Chip,
   Button,
-  Dialog,
-  Portal,
   IconButton
 } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -794,16 +792,22 @@ export default function SearchMainboardScreen({ navigation }) {
         </KeyboardAvoidingView>
       </Modal>
 
-      <Portal>
-        {/* Filtro de Conectores (PCB) */}
-        <Dialog
-          visible={showConectorFilterModal}
-          onDismiss={() => setShowConectorFilterModal(false)}
-          style={styles.dialog}
-        >
-          <Dialog.Title style={styles.dialogTitle}>Filtrar Conectores</Dialog.Title>
-          <Dialog.Content>
-            <ScrollView style={{ maxHeight: 300 }}>
+      {/* Filtro de Conectores (PCB) - bottom sheet */}
+      <Modal
+        visible={showConectorFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowConectorFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowConectorFilterModal(false)}
+          />
+          <View style={styles.modalContent}>
+            <Title style={styles.modalTitle}>Filtrar Conectores</Title>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={[styles.filterModalItem, !selectedConectorInterno && styles.filterModalItemActive]}
                 onPress={() => { setSelectedConectorInterno(null); setShowConectorFilterModal(false); }}
@@ -824,21 +828,27 @@ export default function SearchMainboardScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowConectorFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
-          </Dialog.Actions>
-        </Dialog>
+            <Button onPress={() => setShowConectorFilterModal(false)} textColor="#B0B0B0" style={{ marginTop: 8 }}>Cerrar</Button>
+          </View>
+        </View>
+      </Modal>
 
-        {/* Filtro de Arduino (MiniSOP) */}
-        <Dialog
-          visible={showArduinoFilterModal}
-          onDismiss={() => setShowArduinoFilterModal(false)}
-          style={styles.dialog}
-        >
-          <Dialog.Title style={styles.dialogTitle}>Filtrar Arduino</Dialog.Title>
-          <Dialog.Content>
-            <ScrollView style={{ maxHeight: 300 }}>
+      {/* Filtro de Arduino (MiniSOP) - bottom sheet */}
+      <Modal
+        visible={showArduinoFilterModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowArduinoFilterModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setShowArduinoFilterModal(false)}
+          />
+          <View style={styles.modalContent}>
+            <Title style={styles.modalTitle}>Filtrar Arduino</Title>
+            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={[styles.filterModalItem, !selectedArduinoInterno && styles.filterModalItemActive]}
                 onPress={() => { setSelectedArduinoInterno(null); setShowArduinoFilterModal(false); }}
@@ -859,12 +869,10 @@ export default function SearchMainboardScreen({ navigation }) {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </Dialog.Content>
-          <Dialog.Actions>
-            <Button onPress={() => setShowArduinoFilterModal(false)} textColor="#B0B0B0">Cerrar</Button>
-          </Dialog.Actions>
-        </Dialog>
-      </Portal>
+            <Button onPress={() => setShowArduinoFilterModal(false)} textColor="#B0B0B0" style={{ marginTop: 8 }}>Cerrar</Button>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
