@@ -296,31 +296,13 @@ export default function SearchMainboardScreen({ navigation }) {
                       selectedModel.conectores.map((conector, index) => (
                         <View key={index} style={styles.conectorSection}>
                           <View style={styles.conectorHeader}>
-                            {(() => {
-                              const label = getConectorLabel(conector.nombre_conector);
-                              return label ? (
-                                <View style={styles.conectorHeaderInner}>
-                                  <Chip
-                                    icon="cable-data"
-                                    style={styles.conectorChip}
-                                    textStyle={styles.chipText}
-                                  >
-                                    {label}
-                                  </Chip>
-                                  <Paragraph style={styles.conectorDescText}>
-                                    {conector.nombre_conector}
-                                  </Paragraph>
-                                </View>
-                              ) : (
-                                <Chip
-                                  icon="cable-data"
-                                  style={styles.conectorChip}
-                                  textStyle={styles.chipText}
-                                >
-                                  {conector.nombre_conector}
-                                </Chip>
-                              );
-                            })()}
+                            <Chip
+                              icon="cable-data"
+                              style={styles.conectorChip}
+                              textStyle={styles.chipText}
+                            >
+                              {conector.nombre_conector}
+                            </Chip>
                           </View>
 
                           {/* Modelos internos - PRIMERO */}
