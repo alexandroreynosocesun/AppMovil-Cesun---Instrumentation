@@ -26,7 +26,6 @@ ADAPTADOR_CONECTORES = {
     "ADA20100_02": [
         "ZH-MINI-FHD-2-68-1",
         "ZH-MINI-FHD-2-60-1",
-        "ZH-MINI-HD-2"
     ],
     "CSTH-100/ZH-S20": [
         "ZH-MINI-HD-2",
