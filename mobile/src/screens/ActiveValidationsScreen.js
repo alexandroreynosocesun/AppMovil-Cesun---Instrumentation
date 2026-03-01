@@ -477,6 +477,28 @@ export default function ActiveValidationsScreen() {
     );
   };
 
+  const parseComentario = (comentario) => {
+    if (!comentario) return {};
+    const parts = comentario.split('|').map(p => p.trim());
+    const result = {};
+    parts.forEach(part => {
+      const colonIdx = part.indexOf(':');
+      if (colonIdx === -1) return;
+      const key = part.substring(0, colonIdx).trim().toLowerCase();
+      const value = part.substring(colonIdx + 1).trim();
+      if (key === 'modelo') result.modeloCompleto = value;
+      else if (key === 'línea' || key === 'linea') result.linea = value;
+      else if (key === 'emulador de panel') result.emuladorPanel = value;
+      else if (key === 'convertidores') result.convertidores = value;
+    });
+    if (result.modeloCompleto) {
+      const match = result.modeloCompleto.match(/^(.+?)\s*\((.+?)\)$/);
+      if (match) { result.modelo = match[1].trim(); result.tipoLabel = match[2].trim(); }
+      else { result.modelo = result.modeloCompleto; result.tipoLabel = ''; }
+    }
+    return result;
+  };
+
   // Permitir acceso a todos los roles excepto gestión
   if (user?.tipo_usuario === 'gestion' || user?.tipo_usuario === 'Gestion') {
     return (
@@ -647,216 +669,132 @@ export default function ActiveValidationsScreen() {
         )}
 
         {!loading && filteredValidations.length > 0 && (
-          <View style={styles.listContainer}>
-            <Card style={styles.summaryCard}>
-              <Card.Content>
-                <Title style={styles.sectionTitle}>
-                  Validaciones activas: {filteredValidations.length}
-                </Title>
-              </Card.Content>
-            </Card>
+          <Card style={styles.listCard}>
+            <Card.Content>
+              <Title style={styles.sectionTitle}>
+                Validaciones activas: {filteredValidations.length}
+              </Title>
+              <Divider style={styles.divider} />
 
-            {filteredValidations.map((v) => {
-                // Debug: Log de datos de validación
-                logger.debug('📋 Validación:', {
-                  id: v.id,
-                  tecnico_asignado_id: v.tecnico_asignado_id,
-                  comentario: v.comentario?.substring(0, 100),
-                  modelo_actual: v.modelo_actual
-                });
-                
+              {filteredValidations.map((v) => {
+                const parsed = parseComentario(v.comentario);
                 const tecnicoAsignado = tecnicosMap[v.tecnico_asignado_id];
                 const tecnicoLabel = tecnicoAsignado
                   ? `${tecnicoAsignado.nombre} - #${tecnicoAsignado.numero_empleado}`
                   : (v.tecnico_asignado_id ? `ID: ${v.tecnico_asignado_id}` : 'Sin técnico asignado');
-                
-                // Debug: Log del técnico encontrado
-                if (v.tecnico_asignado_id) {
-                  logger.debug(`👤 Técnico asignado ID ${v.tecnico_asignado_id}:`, tecnicoAsignado ? 'Encontrado' : 'No encontrado en mapa');
-                }
 
-                // Convertir fecha UTC del backend a hora local
                 let fechaTexto = 'Sin fecha';
                 if (v.fecha) {
                   try {
                     let fechaStr = String(v.fecha);
-                    
-                    // El backend ahora siempre envía fechas con 'Z' al final (UTC)
-                    // Si por alguna razón no tiene timezone, agregarlo
                     if (!/[Zz]$|[+-]\d{2}:\d{2}$/.test(fechaStr)) {
-                      if (fechaStr.includes('T')) {
-                        fechaStr = fechaStr + 'Z';
-                      } else {
-                        fechaStr = fechaStr + 'T00:00:00Z';
-                      }
+                      fechaStr = fechaStr.includes('T') ? fechaStr + 'Z' : fechaStr + 'T00:00:00Z';
                     }
-                    
-                    // Crear objeto Date (JavaScript interpreta 'Z' como UTC)
                     const fechaObj = new Date(fechaStr);
-                    
-                    // Verificar que la fecha es válida
-                    if (isNaN(fechaObj.getTime())) {
-                      fechaTexto = 'Fecha inválida';
-                      logger.warn('Fecha inválida recibida:', v.fecha);
-                    } else {
-                      // toLocaleString automáticamente convierte UTC a la zona horaria local del dispositivo
-                      fechaTexto = fechaObj.toLocaleString('es-MX', { 
-                        weekday: 'short', 
-                        year: 'numeric', 
-                        month: 'short', 
-                        day: 'numeric',
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hour12: true
+                    if (!isNaN(fechaObj.getTime())) {
+                      fechaTexto = fechaObj.toLocaleString('es-MX', {
+                        weekday: 'short', year: 'numeric', month: 'short',
+                        day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: true,
                       });
                     }
-                  } catch (e) {
-                    logger.error('Error formateando fecha:', e, v.fecha);
-                    fechaTexto = 'Fecha inválida';
-                  }
+                  } catch (e) { fechaTexto = 'Fecha inválida'; }
                 }
 
-                // Parsear comentario para extraer información estructurada
-                // Usar modelo_actual directamente, y solo parsear del comentario si no existe
-                let modeloTexto = v.modelo_actual || '';
-                let lineaTexto = '';
-                let toolsTexto = '';
-                let convertidoresTexto = '';
-                let adaptadoresTexto = '';
-                
-                if (v.comentario) {
-                  try {
-                    const parts = v.comentario.split('|').map(p => p.trim());
-                    parts.forEach(part => {
-                      if (part.toLowerCase().startsWith('modelo:')) {
-                        // Solo sobrescribir si modelo_actual no existe
-                        if (!modeloTexto) {
-                          modeloTexto = part.split(':').slice(1).join(':').trim();
-                        }
-                      } else if (part.toLowerCase().startsWith('línea:') || part.toLowerCase().startsWith('linea:')) {
-                        lineaTexto = part.split(':').slice(1).join(':').trim();
-                      } else if (part.toLowerCase().startsWith('tools:') || part.toLowerCase().startsWith('emulador de panel:')) {
-                        toolsTexto = part.split(':').slice(1).join(':').trim();
-                      } else if (part.toLowerCase().startsWith('convertidores:')) {
-                        convertidoresTexto = part.split(':').slice(1).join(':').trim();
-                      } else if (part.toLowerCase().startsWith('adaptadores:')) {
-                        adaptadoresTexto = part.split(':').slice(1).join(':').trim();
-                      }
-                    });
-                  } catch (e) {
-                    // Si falla el parseo, usar comentario completo
-                  }
-                }
-
-                const statusInfo = (() => {
-                  const estado = String(v.estado || '').toLowerCase();
-                  if (estado === 'no_validado' || estado === 'no validado') {
-                    return { label: '⚠️ No validado', isCompleted: false, isNoValidado: true };
-                  }
-                  if (v.completada) {
-                    return { label: '✓ Completada', isCompleted: true, isNoValidado: false };
-                  }
-                  return { label: '⏳ Pendiente', isCompleted: false, isNoValidado: false };
-                })();
+                const modeloNombre = parsed.modelo || v.modelo_actual || 'Sin modelo';
+                const tipoLabel = parsed.tipoLabel || '';
+                const linea = parsed.linea || '';
+                const emulador = parsed.emuladorPanel || '';
+                const convertidores = parsed.convertidores || '';
+                const estadoLower = String(v.estado || '').toLowerCase();
+                const isNoValidado = estadoLower === 'no_validado' || estadoLower === 'no validado';
 
                 return (
-                  <Card key={v.id} style={styles.validationCard}>
-                    <Card.Content style={styles.validationCardContent}>
-                      {/* Header con Estado */}
-                      <View style={styles.validationHeader}>
-                        <View style={styles.validationHeaderLeft}>
-                          <Text style={styles.validationDate}>{fechaTexto}</Text>
-                          <Text style={styles.validationTurno}>Turno {v.turno || 'N/A'}</Text>
+                  <View key={v.id} style={[styles.itemContainer, v.completada && styles.itemContainerCompleted]}>
+
+                    {/* Header: fecha + status */}
+                    <View style={styles.itemTopRow}>
+                      <Text style={styles.itemDate}>{fechaTexto}</Text>
+                      {isNoValidado ? (
+                        <View style={styles.noValidadoBadge}>
+                          <Text style={styles.noValidadoBadgeText}>⚠️ No validado</Text>
                         </View>
-                        <Chip
-                          mode="outlined"
-                          style={[
-                            styles.statusChip,
-                            statusInfo.isCompleted && styles.statusChipCompleted,
-                            statusInfo.isNoValidado && styles.statusChipNoValidado,
-                          ]}
-                          textStyle={{
-                            color: statusInfo.isNoValidado
-                              ? '#EF5350'
-                              : (statusInfo.isCompleted ? '#4CAF50' : '#FFC107'),
-                            fontWeight: 'bold',
-                            fontSize: 12,
-                          }}
-                        >
-                          {statusInfo.label}
+                      ) : v.completada ? (
+                        <Chip mode="flat" style={styles.statusChipCompleted} textStyle={styles.statusChipCompletedText}>
+                          Completada
                         </Chip>
-                      </View>
-
-                      <Divider style={styles.validationDivider} />
-
-                      {/* Información Principal */}
-                      <View style={styles.validationInfoSection}>
-                        <View style={styles.validationInfoRow}>
-                          <Text style={styles.validationLabel}>Modelo:</Text>
-                          <Text style={styles.validationValue}>{modeloTexto || 'N/A'}</Text>
+                      ) : (
+                        <View style={styles.pendienteButton}>
+                          <Text style={styles.pendienteButtonText}>● Pendiente</Text>
                         </View>
-                        {lineaTexto ? (
-                          <View style={styles.validationInfoRow}>
-                            <Text style={styles.validationLabel}>Línea:</Text>
-                            <Text style={styles.validationValue}>{lineaTexto}</Text>
+                      )}
+                    </View>
+
+                    {/* Modelo y tipo */}
+                    <View style={styles.modeloRow}>
+                      <Text style={styles.modeloText}>{modeloNombre}</Text>
+                      {tipoLabel ? (
+                        <View style={styles.tipoChip}>
+                          <Text style={styles.tipoChipText}>{tipoLabel}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+
+                    {/* Info grid: Línea, Turno */}
+                    <View style={styles.infoGrid}>
+                      {linea ? (
+                        <View style={styles.infoItem}>
+                          <Text style={styles.infoLabel}>Línea</Text>
+                          <Text style={styles.infoValue}>{linea}</Text>
+                        </View>
+                      ) : null}
+                      <View style={styles.infoItem}>
+                        <Text style={styles.infoLabel}>Turno</Text>
+                        <Text style={styles.infoValue}>{v.turno || '-'}</Text>
+                      </View>
+                    </View>
+
+                    {/* Técnico asignado */}
+                    <View style={styles.tecnicoRow}>
+                      <Text style={styles.tecnicoLabel}>Técnico</Text>
+                      <Text style={styles.tecnicoValue}>{tecnicoLabel}</Text>
+                    </View>
+
+                    {/* Equipos a validar */}
+                    {(emulador || convertidores) ? (
+                      <View style={styles.validarSection}>
+                        <Text style={styles.validarSectionTitle}>Equipos</Text>
+                        {emulador ? (
+                          <View style={styles.equipoRow}>
+                            <View style={styles.equipoDot} />
+                            <Text style={styles.equipoText}>Emulador de Panel: <Text style={styles.equipoValor}>{emulador}</Text></Text>
                           </View>
                         ) : null}
-                        <View style={styles.validationInfoRow}>
-                          <Text style={styles.validationLabel}>Técnico Asignado:</Text>
-                          <Text style={styles.validationValue}>{tecnicoLabel}</Text>
-                        </View>
+                        {convertidores ? (
+                          <View style={styles.equipoRow}>
+                            <View style={styles.equipoDot} />
+                            <Text style={styles.equipoText}>Convertidores: <Text style={styles.equipoValor}>{convertidores}</Text></Text>
+                          </View>
+                        ) : null}
                       </View>
+                    ) : null}
 
-                      {/* Herramientas y Equipos */}
-                      {(toolsTexto || convertidoresTexto || adaptadoresTexto) && (
-                        <>
-                          <Divider style={styles.validationDivider} />
-                          <View style={styles.validationEquipmentSection}>
-                            {toolsTexto ? (
-                              <View style={styles.validationEquipmentItem}>
-                                <Text style={styles.validationEquipmentLabel}>🔧 Emulador de Panel:</Text>
-                                <Text style={styles.validationEquipmentValue}>{toolsTexto}</Text>
-                              </View>
-                            ) : null}
-                            {convertidoresTexto ? (
-                              <View style={styles.validationEquipmentItem}>
-                                <Text style={styles.validationEquipmentLabel}>⚡ Convertidores:</Text>
-                                <Text style={styles.validationEquipmentValue}>{convertidoresTexto}</Text>
-                              </View>
-                            ) : null}
-                            {adaptadoresTexto ? (
-                              <View style={styles.validationEquipmentItem}>
-                                <Text style={styles.validationEquipmentLabel}>🔌 Adaptadores:</Text>
-                                <Text style={styles.validationEquipmentValue}>{adaptadoresTexto}</Text>
-                              </View>
-                            ) : null}
-                          </View>
-                        </>
-                      )}
-
-                      {/* Botón de Eliminar (solo para admin) */}
-                      {(user?.usuario === 'admin' || user?.usuario === 'superadmin') && (
-                        <>
-                          <Divider style={styles.validationDivider} />
-                          <View style={styles.deleteButtonContainer}>
-                            <Button
-                              mode="outlined"
-                              onPress={() => handleDeleteValidation(v.id)}
-                              icon="delete"
-                              buttonColor="#d32f2f"
-                              textColor="#fff"
-                              style={styles.deleteButton}
-                            >
-                              Eliminar
-                            </Button>
-                          </View>
-                        </>
-                      )}
-                    </Card.Content>
-                  </Card>
+                    {/* Eliminar (solo admin) */}
+                    {(user?.usuario === 'admin' || user?.usuario === 'superadmin') && (
+                      <View style={styles.deleteButtonContainer}>
+                        <TouchableOpacity
+                          style={styles.deleteButton}
+                          onPress={() => handleDeleteValidation(v.id)}
+                          activeOpacity={0.8}
+                        >
+                          <Text style={styles.deleteButtonText}>Eliminar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+                  </View>
                 );
-            })}
-          </View>
+              })}
+            </Card.Content>
+          </Card>
         )}
       </ScrollView>
     </View>
@@ -913,12 +851,9 @@ const styles = StyleSheet.create({
     color: '#B0B0B0',
     textAlign: 'center',
   },
-  listContainer: {
+  listCard: {
     marginTop: 8,
-  },
-  summaryCard: {
-    marginBottom: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     backgroundColor: '#1E1E1E',
     borderWidth: 1,
     borderColor: '#3C3C3C',
@@ -927,105 +862,182 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 0,
+    marginBottom: 8,
   },
   divider: {
     marginVertical: 8,
     backgroundColor: '#3C3C3C',
   },
-  validationCard: {
-    marginBottom: 16,
-    borderRadius: 12,
-    backgroundColor: '#1E1E1E',
-    borderWidth: 2,
-    borderColor: '#2C2C2C',
-    elevation: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+  // Card items
+  itemContainer: {
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C2C',
   },
-  validationCardContent: {
-    padding: 16,
+  itemContainerCompleted: {
+    opacity: 0.6,
   },
-  validationHeader: {
+  itemTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 10,
   },
-  validationHeaderLeft: {
+  itemDate: {
+    color: '#B0B0B0',
+    fontSize: 13,
+    flex: 1,
+    marginRight: 8,
+  },
+  pendienteButton: {
+    backgroundColor: '#332200',
+    borderWidth: 1,
+    borderColor: '#FFC107',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  pendienteButtonText: {
+    color: '#FFC107',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  statusChipCompleted: {
+    backgroundColor: '#1B5E20',
+    borderColor: '#4CAF50',
+  },
+  statusChipCompletedText: {
+    color: '#81C784',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  noValidadoBadge: {
+    backgroundColor: '#3B1A1A',
+    borderWidth: 1,
+    borderColor: '#EF5350',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+  },
+  noValidadoBadgeText: {
+    color: '#EF5350',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  modeloRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  modeloText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
     flex: 1,
   },
-  validationDate: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 4,
+  tipoChip: {
+    backgroundColor: '#1A3A5C',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
-  validationTurno: {
-    color: '#2196F3',
-    fontSize: 13,
+  tipoChipText: {
+    color: '#64B5F6',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  infoGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    marginBottom: 10,
+  },
+  infoItem: {
+    backgroundColor: '#2A2A2A',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  infoLabel: {
+    color: '#888888',
+    fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
   },
-  validationDivider: {
-    backgroundColor: '#3C3C3C',
-    marginVertical: 12,
-    height: 1,
-  },
-  validationInfoSection: {
-    marginBottom: 8,
-  },
-  validationInfoRow: {
-    flexDirection: 'row',
-    marginBottom: 10,
-    alignItems: 'flex-start',
-  },
-  validationLabel: {
-    color: '#B0B0B0',
-    fontSize: 14,
-    fontWeight: '600',
-    width: 130,
-    marginRight: 8,
-  },
-  validationValue: {
+  infoValue: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  tecnicoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  tecnicoLabel: {
+    color: '#888888',
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    minWidth: 60,
+  },
+  tecnicoValue: {
+    color: '#B0B0B0',
+    fontSize: 13,
     flex: 1,
   },
-  validationEquipmentSection: {
-    marginTop: 4,
+  validarSection: {
+    backgroundColor: '#1A1A2A',
+    borderLeftWidth: 3,
+    borderLeftColor: '#2196F3',
+    borderRadius: 6,
+    padding: 10,
+    marginBottom: 10,
+    gap: 6,
   },
-  validationEquipmentItem: {
-    marginBottom: 12,
-    paddingLeft: 4,
-  },
-  validationEquipmentLabel: {
-    color: '#2196F3',
-    fontSize: 13,
+  validarSectionTitle: {
+    color: '#64B5F6',
+    fontSize: 12,
     fontWeight: '700',
+    textTransform: 'uppercase',
     marginBottom: 4,
   },
-  validationEquipmentValue: {
-    color: '#E0E0E0',
+  equipoRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  equipoDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#2196F3',
+    marginTop: 5,
+  },
+  equipoText: {
+    color: '#B0B0B0',
     fontSize: 13,
-    fontWeight: '400',
-    lineHeight: 18,
+    flex: 1,
   },
-  statusChip: {
-    borderColor: '#FFC107',
-    backgroundColor: 'rgba(255, 193, 7, 0.1)',
-    borderWidth: 1.5,
+  equipoValor: {
+    color: '#FFFFFF',
+    fontWeight: '600',
   },
-  statusChipCompleted: {
-    borderColor: '#4CAF50',
-    backgroundColor: 'rgba(76, 175, 80, 0.1)',
+  deleteButtonContainer: {
+    marginTop: 8,
+    alignItems: 'flex-end',
   },
-  statusChipNoValidado: {
-    borderColor: '#EF5350',
-    backgroundColor: 'rgba(239, 83, 80, 0.1)',
+  deleteButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#d32f2f',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   errorText: {
     color: '#F44336',
@@ -1039,34 +1051,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E1E1E',
     borderWidth: 1,
     borderColor: '#3C3C3C',
-  },
-  filterContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 12,
-  },
-  filterButton: {
-    flex: 1,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: '#2C2C2C',
-    borderWidth: 1,
-    borderColor: '#3C3C3C',
-    alignItems: 'center',
-  },
-  filterButtonActive: {
-    backgroundColor: '#2196F3',
-    borderColor: '#2196F3',
-  },
-  filterButtonText: {
-    color: '#B0B0B0',
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  filterButtonTextActive: {
-    color: '#FFFFFF',
   },
   statusFilterContainer: {
     flexDirection: 'row',
@@ -1134,13 +1118,6 @@ const styles = StyleSheet.create({
   datePickerConfirmButton: {
     marginTop: 20,
     backgroundColor: '#2196F3',
-  },
-  deleteButtonContainer: {
-    marginTop: 12,
-    paddingTop: 12,
-  },
-  deleteButton: {
-    borderColor: '#d32f2f',
   },
 });
 
