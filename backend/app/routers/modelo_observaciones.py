@@ -13,12 +13,14 @@ router = APIRouter()
 class ObservacionCreate(BaseModel):
     modelo_mainboard: str
     texto: str
+    foto: Optional[str] = None  # Base64 image (opcional)
 
 
 class ObservacionOut(BaseModel):
     id: int
     modelo_mainboard: str
     texto: str
+    foto: Optional[str] = None
     tecnico_nombre: Optional[str] = None
     created_at: datetime
 
@@ -52,6 +54,7 @@ async def get_observaciones(
             id=row.id,
             modelo_mainboard=row.modelo_mainboard,
             texto=row.texto,
+            foto=row.foto,
             tecnico_nombre=row.tecnico.nombre if row.tecnico else None,
             created_at=row.created_at,
         ))
@@ -67,6 +70,7 @@ async def create_observacion(
     obs = ModeloObservacion(
         modelo_mainboard=data.modelo_mainboard.strip(),
         texto=data.texto.strip(),
+        foto=data.foto,
         tecnico_id=current_user.id,
     )
     db.add(obs)
@@ -76,6 +80,7 @@ async def create_observacion(
         id=obs.id,
         modelo_mainboard=obs.modelo_mainboard,
         texto=obs.texto,
+        foto=obs.foto,
         tecnico_nombre=current_user.nombre,
         created_at=obs.created_at,
     )
