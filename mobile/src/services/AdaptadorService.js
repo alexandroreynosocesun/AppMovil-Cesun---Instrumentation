@@ -167,6 +167,16 @@ class AdaptadorService {
     }
   }
 
+  async deleteAdaptador(adaptadorId) {
+    try {
+      const response = await this.api.delete(`/adaptadores/${adaptadorId}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      logger.error('Error eliminando adaptador:', error);
+      return { success: false, error: this._handleError(error) };
+    }
+  }
+
   async deleteConector(conectorId) {
     try {
       const response = await this.api.delete(`/adaptadores/conectores/${conectorId}`);
