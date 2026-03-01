@@ -172,6 +172,28 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
     );
   };
 
+  const handleDeleteAdaptador = () => {
+    showAlert(
+      'Eliminar adaptador',
+      `¿Eliminar ${tipo} #${adaptador.numero_adaptador} (${adaptador.codigo_qr})? Esta acción lo dará de baja del sistema.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await adaptadorService.deleteAdaptador(adaptador.id);
+            if (result.success) {
+              navigation.goBack();
+            } else {
+              showAlert('Error', result.error || 'No se pudo eliminar el adaptador.');
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const handleDeleteConector = (conector) => {
     showAlert(
       'Eliminar conector',
@@ -288,7 +310,7 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
                 <Title style={styles.mainTitle}>
                   {tipo} #{adaptador.numero_adaptador}
                 </Title>
-                <Chip 
+                <Chip
                   icon={adaptador.estado === 'activo' ? 'check-circle' : 'alert-circle'}
                   style={[
                     styles.statusChip,
@@ -297,6 +319,15 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
                 >
                   {adaptador.estado}
                 </Chip>
+                {isAdmin && (
+                  <IconButton
+                    icon="delete"
+                    iconColor="#F44336"
+                    size={22}
+                    onPress={handleDeleteAdaptador}
+                    style={styles.deleteAdaptadorButton}
+                  />
+                )}
               </View>
 
               <Divider style={styles.divider} />
@@ -812,6 +843,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     flex: 1,
+  },
+  deleteAdaptadorButton: {
+    margin: 0,
+    marginLeft: 6,
   },
   deleteConectorButton: {
     margin: 0,
