@@ -369,11 +369,8 @@ export default function SearchMainboardScreen({ navigation }) {
                     <Divider style={styles.divider} />
 
                     {/* Header conectores + filtro propio */}
-                    <View style={styles.sectionHeader}>
-                      <Chip icon="cable-data" style={styles.sectionChip} textStyle={styles.chipText}>
-                        Conectores
-                      </Chip>
-                      {conectorModelosInternos.length > 0 && (
+                    {conectorModelosInternos.length > 0 && (
+                      <View style={[styles.sectionHeader, { justifyContent: 'flex-end' }]}>
                         <Button
                           mode="outlined"
                           compact
@@ -384,8 +381,8 @@ export default function SearchMainboardScreen({ navigation }) {
                         >
                           {selectedConectorInterno || 'Filtrar'}
                         </Button>
-                      )}
-                    </View>
+                      </View>
+                    )}
                     {selectedConectorInterno && (
                       <View style={styles.activeFilterRow}>
                         <Chip
@@ -847,7 +844,7 @@ export default function SearchMainboardScreen({ navigation }) {
             onPress={() => setShowArduinoFilterModal(false)}
           />
           <View style={styles.modalContent}>
-            <Title style={styles.modalTitle}>Filtrar Modelo Interno</Title>
+            <Title style={styles.modalTitle}>Filtrar Arduino</Title>
             <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
               <TouchableOpacity
                 style={[styles.filterModalItem, !selectedArduinoInterno && styles.filterModalItemActive]}
