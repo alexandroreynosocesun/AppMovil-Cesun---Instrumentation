@@ -620,9 +620,10 @@ async def update_conector_estado(
             conn.fecha_estado_ng = now_local
             conn.tecnico_ng_id = current_user.id
             conn.usuario_reporte_ng = current_user.nombre
-            # Solo guardar comentario en el conector principal
+            # Solo guardar comentario y foto en el conector principal
             if es_principal:
                 conn.comentario_ng = conector_data.comentario
+                conn.foto_ng = conector_data.foto
         elif conector_data.estado == "OK":
             # Si está OK, limpiar información de NG si existía
             if estado_previo == "NG":
@@ -630,6 +631,7 @@ async def update_conector_estado(
                 conn.tecnico_ng_id = None
                 conn.usuario_reporte_ng = None
                 conn.comentario_ng = None
+                conn.foto_ng = None
     
     # Actualizar el conector principal
     actualizar_conector(conector, estado_anterior, es_principal=True)
@@ -651,6 +653,7 @@ async def update_conector_estado(
         "estado": conector.estado,
         "fecha_estado_ng": conector.fecha_estado_ng.isoformat() if conector.fecha_estado_ng else None,
         "comentario_ng": conector.comentario_ng,
+        "foto_ng": conector.foto_ng,
         "fecha_ultima_validacion": conector.fecha_ultima_validacion.isoformat() if conector.fecha_ultima_validacion else None,
         "linea_ultima_validacion": conector.linea_ultima_validacion,
         "turno_ultima_validacion": conector.turno_ultima_validacion,
