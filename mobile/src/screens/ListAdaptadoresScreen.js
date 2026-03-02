@@ -125,8 +125,9 @@ export default function ListAdaptadoresScreen({ navigation }) {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.4,
+        quality: 0.3,
         base64: true,
+        exif: false,
       });
       if (!result.canceled && result.assets[0]) {
         setNgFoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
