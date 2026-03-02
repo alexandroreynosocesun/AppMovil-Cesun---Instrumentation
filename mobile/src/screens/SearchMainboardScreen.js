@@ -9,9 +9,7 @@ import {
   Platform,
   FlatList,
   Modal,
-  Image
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Card,
@@ -62,7 +60,6 @@ export default function SearchMainboardScreen({ navigation }) {
   const [observaciones, setObservaciones] = useState([]);
   const [loadingObs, setLoadingObs] = useState(false);
   const [newObsText, setNewObsText] = useState('');
-  const [newObsFoto, setNewObsFoto] = useState(null);
   const [showObsDialog, setShowObsDialog] = useState(false);
   const [savingObs, setSavingObs] = useState(false);
 
@@ -104,40 +101,16 @@ export default function SearchMainboardScreen({ navigation }) {
     }
   };
 
-  const handleTakeObsFoto = async () => {
-    try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
-        showAlert('Permisos requeridos', 'Necesitamos acceso a la cámara para tomar la foto.');
-        return;
-      }
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'images',
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        base64: true,
-      });
-      if (!result.canceled && result.assets[0]) {
-        setNewObsFoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
-      }
-    } catch (error) {
-      logger.error('Error tomando foto:', error);
-      showAlert('Error', 'No se pudo tomar la foto.');
-    }
-  };
-
   const handleSaveObs = async () => {
     if (!newObsText.trim()) return;
     setSavingObs(true);
     const result = await modeloObservacionService.createObservacion(
-      selectedModel.modelo_mainboard, newObsText.trim(), newObsFoto
+      selectedModel.modelo_mainboard, newObsText.trim()
     );
     setSavingObs(false);
     if (result.success) {
       setObservaciones(prev => [result.data, ...prev]);
       setNewObsText('');
-      setNewObsFoto(null);
       setShowObsDialog(false);
     } else {
       showAlert('Error', result.error || 'No se pudo guardar');
@@ -359,18 +332,12 @@ export default function SearchMainboardScreen({ navigation }) {
                 <Card style={styles.detailsCard}>
                   <Card.Content>
 
-                    {/* Header: mainboard chip */}
-                    <View style={styles.mainboardHeader}>
+                    {/* Header conectores: chip modelo + filtro */}
+                    <View style={[styles.sectionHeader, { justifyContent: 'space-between' }]}>
                       <Chip icon="developer-board" style={styles.mainboardChip} textStyle={styles.mainboardChipText}>
                         {selectedModel.modelo_mainboard}
                       </Chip>
-                    </View>
-
-                    <Divider style={styles.divider} />
-
-                    {/* Header conectores + filtro propio */}
-                    {conectorModelosInternos.length > 0 && (
-                      <View style={[styles.sectionHeader, { justifyContent: 'flex-end' }]}>
+                      {conectorModelosInternos.length > 0 && (
                         <Button
                           mode="outlined"
                           compact
@@ -381,8 +348,8 @@ export default function SearchMainboardScreen({ navigation }) {
                         >
                           {selectedConectorInterno || 'Filtrar'}
                         </Button>
-                      </View>
-                    )}
+                      )}
+                    </View>
                     {selectedConectorInterno && (
                       <View style={styles.activeFilterRow}>
                         <Chip
@@ -592,9 +559,6 @@ export default function SearchMainboardScreen({ navigation }) {
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                               <View style={{ flex: 1 }}>
                                 <Paragraph style={styles.obsTexto}>{obs.texto}</Paragraph>
-                                {obs.foto && (
-                                  <Image source={{ uri: obs.foto }} style={styles.obsThumb} resizeMode="cover" />
-                                )}
                                 <View style={styles.obsMetaRow}>
                                   <Paragraph style={styles.obsMeta}>{obs.tecnico_nombre || 'Usuario'}</Paragraph>
                                   <Paragraph style={styles.obsMetaDot}> · </Paragraph>
@@ -748,24 +712,6 @@ export default function SearchMainboardScreen({ navigation }) {
               activeOutlineColor="#2196F3"
               placeholder="Ej: Necesita resistencia 80 ohms, Mini LVDS config diferente..."
             />
-            {/* Foto opcional */}
-            {newObsFoto ? (
-              <View style={styles.obsPhotoPreview}>
-                <Image source={{ uri: newObsFoto }} style={styles.obsPhotoImg} />
-                <View style={styles.obsPhotoActions}>
-                  <Button compact mode="outlined" onPress={handleTakeObsFoto} textColor="#4CAF50" style={styles.obsPhotoBtn}>
-                    Cambiar
-                  </Button>
-                  <Button compact mode="outlined" onPress={() => setNewObsFoto(null)} textColor="#EF5350" style={styles.obsPhotoBtn}>
-                    Quitar
-                  </Button>
-                </View>
-              </View>
-            ) : (
-              <TouchableOpacity style={styles.obsPhotoPlaceholder} onPress={handleTakeObsFoto} activeOpacity={0.7}>
-                <Paragraph style={styles.obsPhotoPlaceholderText}>📷  Agregar foto (opcional)</Paragraph>
-              </TouchableOpacity>
-            )}
             <View style={styles.modalActions}>
               <Button
                 onPress={() => { setShowObsDialog(false); setNewObsText(''); setNewObsFoto(null); }}
@@ -951,10 +897,6 @@ const styles = StyleSheet.create({
   detailsCard: {
     backgroundColor: '#2A2A2A',
     borderRadius: 12,
-  },
-  mainboardHeader: {
-    marginBottom: 8,
-    alignItems: 'flex-start',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -1191,44 +1133,6 @@ const styles = StyleSheet.create({
   obsMetaDot: {
     color: '#888888',
     fontSize: 12,
-  },
-  obsThumb: {
-    width: '100%',
-    height: 160,
-    borderRadius: 8,
-    marginTop: 8,
-    marginBottom: 6,
-  },
-  obsPhotoPreview: {
-    marginBottom: 10,
-  },
-  obsPhotoImg: {
-    width: '100%',
-    height: 160,
-    borderRadius: 8,
-    marginBottom: 8,
-  },
-  obsPhotoActions: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  obsPhotoBtn: {
-    flex: 1,
-    borderColor: '#444444',
-  },
-  obsPhotoPlaceholder: {
-    borderWidth: 1,
-    borderColor: '#444444',
-    borderStyle: 'dashed',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-    backgroundColor: '#222222',
-  },
-  obsPhotoPlaceholderText: {
-    color: '#888888',
-    fontSize: 14,
   },
   // Modals
   modalOverlay: {
