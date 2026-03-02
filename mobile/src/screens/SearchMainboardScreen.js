@@ -5,11 +5,15 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TouchableWithoutFeedback,
   KeyboardAvoidingView,
   Platform,
   FlatList,
   Modal,
+  Image,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Card,
@@ -60,8 +64,11 @@ export default function SearchMainboardScreen({ navigation }) {
   const [observaciones, setObservaciones] = useState([]);
   const [loadingObs, setLoadingObs] = useState(false);
   const [newObsText, setNewObsText] = useState('');
+  const [newObsFoto, setNewObsFoto] = useState(null);
   const [showObsDialog, setShowObsDialog] = useState(false);
   const [savingObs, setSavingObs] = useState(false);
+  const [showFotoViewModal, setShowFotoViewModal] = useState(false);
+  const [fotoViewUri, setFotoViewUri] = useState(null);
 
   const canEditArduino = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
   const canDeleteObs = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin' || user?.tipo_usuario === 'ingeniero';
@@ -101,16 +108,46 @@ export default function SearchMainboardScreen({ navigation }) {
     }
   };
 
+  const handleTakeObsFoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert('Permisos requeridos', 'Necesitamos acceso a la cámara.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 1,
+        base64: false,
+        exif: false,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const ctx = ImageManipulator.manipulate(result.assets[0].uri);
+        ctx.resize({ width: 800 });
+        const imageRef = await ctx.renderAsync();
+        const manipulated = await imageRef.saveAsync({ format: SaveFormat.JPEG, compress: 0.3, base64: true });
+        ctx.release();
+        imageRef.release();
+        setNewObsFoto(`data:image/jpeg;base64,${manipulated.base64}`);
+      }
+    } catch (error) {
+      showAlert('Error', 'No se pudo tomar la foto.');
+    }
+  };
+
   const handleSaveObs = async () => {
     if (!newObsText.trim()) return;
     setSavingObs(true);
     const result = await modeloObservacionService.createObservacion(
-      selectedModel.modelo_mainboard, newObsText.trim()
+      selectedModel.modelo_mainboard, newObsText.trim(), newObsFoto || null
     );
     setSavingObs(false);
     if (result.success) {
       setObservaciones(prev => [result.data, ...prev]);
       setNewObsText('');
+      setNewObsFoto(null);
       setShowObsDialog(false);
     } else {
       showAlert('Error', result.error || 'No se pudo guardar');
@@ -564,6 +601,18 @@ export default function SearchMainboardScreen({ navigation }) {
                                   <Paragraph style={styles.obsMetaDot}> · </Paragraph>
                                   <Paragraph style={styles.obsMeta}>{formatDate(obs.created_at)}</Paragraph>
                                 </View>
+                                {obs.foto && (
+                                  <Button
+                                    compact
+                                    mode="outlined"
+                                    icon="image"
+                                    onPress={() => { setFotoViewUri(obs.foto); setShowFotoViewModal(true); }}
+                                    textColor="#2196F3"
+                                    style={styles.verFotoObsBtn}
+                                  >
+                                    Ver foto
+                                  </Button>
+                                )}
                               </View>
                               {canDeleteObs && (
                                 <IconButton
@@ -712,6 +761,24 @@ export default function SearchMainboardScreen({ navigation }) {
               activeOutlineColor="#2196F3"
               placeholder="Ej: Necesita resistencia 80 ohms, Mini LVDS config diferente..."
             />
+            {newObsFoto ? (
+              <TouchableOpacity onPress={() => { setFotoViewUri(newObsFoto); setShowFotoViewModal(true); }} style={styles.obsFotoPreview}>
+                <Image source={{ uri: newObsFoto }} style={styles.obsThumbnail} resizeMode="cover" />
+                <Button compact mode="text" onPress={() => setNewObsFoto(null)} textColor="#EF5350" icon="close">
+                  Quitar foto
+                </Button>
+              </TouchableOpacity>
+            ) : (
+              <Button
+                mode="outlined"
+                icon="camera"
+                onPress={handleTakeObsFoto}
+                textColor="#2196F3"
+                style={{ borderColor: '#2196F3', marginBottom: 8 }}
+              >
+                Tomar foto
+              </Button>
+            )}
             <View style={styles.modalActions}>
               <Button
                 onPress={() => { setShowObsDialog(false); setNewObsText(''); setNewObsFoto(null); }}
@@ -733,6 +800,22 @@ export default function SearchMainboardScreen({ navigation }) {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Foto viewer a pantalla completa */}
+      <Modal
+        visible={showFotoViewModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFotoViewModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowFotoViewModal(false)}>
+          <View style={styles.fotoViewOverlay}>
+            {fotoViewUri && (
+              <Image source={{ uri: fotoViewUri }} style={styles.fotoViewImage} resizeMode="contain" />
+            )}
+          </View>
+        </TouchableWithoutFeedback>
       </Modal>
 
       {/* Filtro de Conectores (PCB) - bottom sheet */}
@@ -1176,5 +1259,30 @@ const styles = StyleSheet.create({
   dialogInput: {
     marginBottom: 10,
     backgroundColor: '#2A2A2A',
+  },
+  obsFotoPreview: {
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  obsThumbnail: {
+    width: '100%',
+    height: 140,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  verFotoObsBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    borderColor: '#2196F3',
+  },
+  fotoViewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoViewImage: {
+    width: '100%',
+    height: '80%',
   },
 });
