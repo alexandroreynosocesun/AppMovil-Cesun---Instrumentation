@@ -566,7 +566,9 @@ async def update_conector_estado(
     current_user: Tecnico = Depends(get_current_user)
 ):
     """Actualizar estado individual de un conector (OK/NG) y su conector relacionado (solo para adaptadores)"""
-    conector = db.query(ConectorAdaptador).filter(ConectorAdaptador.id == conector_id).first()
+    conector = db.query(ConectorAdaptador)\
+        .options(defer(ConectorAdaptador.foto_ng))\
+        .filter(ConectorAdaptador.id == conector_id).first()
     if not conector:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -606,10 +608,12 @@ async def update_conector_estado(
         nombre_relacionado = conector_relations.get(conector.nombre_conector)
         if nombre_relacionado:
             # Buscar el conector relacionado en el mismo adaptador
-            conector_relacionado = db.query(ConectorAdaptador).filter(
-                ConectorAdaptador.adaptador_id == conector.adaptador_id,
-                ConectorAdaptador.nombre_conector == nombre_relacionado
-            ).first()
+            conector_relacionado = db.query(ConectorAdaptador)\
+                .options(defer(ConectorAdaptador.foto_ng))\
+                .filter(
+                    ConectorAdaptador.adaptador_id == conector.adaptador_id,
+                    ConectorAdaptador.nombre_conector == nombre_relacionado
+                ).first()
     
     # Guardar estado anterior
     estado_anterior = conector.estado
@@ -643,31 +647,42 @@ async def update_conector_estado(
     
     # Actualizar el conector principal
     actualizar_conector(conector, estado_anterior, es_principal=True)
-    
+
     # Actualizar el conector relacionado si existe (solo para adaptadores)
     if conector_relacionado:
         estado_anterior_relacionado = conector_relacionado.estado
         actualizar_conector(conector_relacionado, estado_anterior_relacionado, es_principal=False)
-    
+
+    # Guardar valores antes del commit para evitar recargar foto_ng al acceder al objeto después
+    _id = conector.id
+    _nombre = conector.nombre_conector
+    _estado = conector.estado
+    _fecha_ng = conector.fecha_estado_ng
+    _comentario_ng = conector.comentario_ng
+    _fecha_val = conector.fecha_ultima_validacion
+    _linea = conector.linea_ultima_validacion
+    _turno = conector.turno_ultima_validacion
+    _tecnico_ng_id = conector.tecnico_ng_id
+    _tecnico_val_id = conector.tecnico_ultima_validacion_id
+    _usuario_ng = conector.usuario_reporte_ng
+
     db.commit()
-    db.refresh(conector)
-    if conector_relacionado:
-        db.refresh(conector_relacionado)
-    
-    # Serializar respuesta
+    # No se usa db.refresh() para evitar recargar foto_ng del servidor
+
+    # Serializar respuesta usando valores guardados
     result = {
-        "id": conector.id,
-        "nombre_conector": conector.nombre_conector,
-        "estado": conector.estado,
-        "fecha_estado_ng": conector.fecha_estado_ng.isoformat() if conector.fecha_estado_ng else None,
-        "comentario_ng": conector.comentario_ng,
-        "fecha_ultima_validacion": conector.fecha_ultima_validacion.isoformat() if conector.fecha_ultima_validacion else None,
-        "linea_ultima_validacion": conector.linea_ultima_validacion,
-        "turno_ultima_validacion": conector.turno_ultima_validacion,
+        "id": _id,
+        "nombre_conector": _nombre,
+        "estado": _estado,
+        "fecha_estado_ng": _fecha_ng.isoformat() if _fecha_ng else None,
+        "comentario_ng": _comentario_ng,
+        "fecha_ultima_validacion": _fecha_val.isoformat() if _fecha_val else None,
+        "linea_ultima_validacion": _linea,
+        "turno_ultima_validacion": _turno,
     }
-    
-    if conector.tecnico_ng_id:
-        tecnico_ng = db.query(Tecnico).filter(Tecnico.id == conector.tecnico_ng_id).first()
+
+    if _tecnico_ng_id:
+        tecnico_ng = db.query(Tecnico).filter(Tecnico.id == _tecnico_ng_id).first()
         if tecnico_ng:
             result["tecnico_ng"] = {
                 "id": tecnico_ng.id,
@@ -675,9 +690,9 @@ async def update_conector_estado(
                 "numero_empleado": tecnico_ng.numero_empleado,
                 "usuario": tecnico_ng.usuario
             }
-    
-    if conector.tecnico_ultima_validacion_id:
-        tecnico_ultima_validacion = db.query(Tecnico).filter(Tecnico.id == conector.tecnico_ultima_validacion_id).first()
+
+    if _tecnico_val_id:
+        tecnico_ultima_validacion = db.query(Tecnico).filter(Tecnico.id == _tecnico_val_id).first()
         if tecnico_ultima_validacion:
             result["tecnico_ultima_validacion"] = {
                 "id": tecnico_ultima_validacion.id,
@@ -685,9 +700,9 @@ async def update_conector_estado(
                 "numero_empleado": tecnico_ultima_validacion.numero_empleado,
                 "usuario": tecnico_ultima_validacion.usuario
             }
-    
-    if conector.usuario_reporte_ng:
-        result["usuario_reporte_ng"] = conector.usuario_reporte_ng
+
+    if _usuario_ng:
+        result["usuario_reporte_ng"] = _usuario_ng
     
     return result
 
