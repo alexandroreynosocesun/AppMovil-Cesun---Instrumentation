@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm import Session, selectinload, defer
 from sqlalchemy import func
 from typing import Optional, List
 from datetime import datetime
@@ -98,7 +98,10 @@ async def get_adaptadores(
 
     query = db.query(Adaptador)
     if include_conectores:
-        query = query.options(selectinload(Adaptador.conectores))
+        # Defer foto_ng (base64 image) to avoid loading large data in list queries
+        query = query.options(
+            selectinload(Adaptador.conectores).options(defer(ConectorAdaptador.foto_ng))
+        )
         if include_tecnicos:
             query = query.options(
                 selectinload(Adaptador.conectores).selectinload(ConectorAdaptador.tecnico_ng),
@@ -137,8 +140,13 @@ async def get_adaptador_by_qr(
     """Obtener adaptador por código QR con conectores"""
     # Usar eager loading para optimizar las consultas y evitar N+1
     adaptador = db.query(Adaptador)\
-        .options(selectinload(Adaptador.conectores).selectinload(ConectorAdaptador.tecnico_ng),
-                 selectinload(Adaptador.conectores).selectinload(ConectorAdaptador.tecnico_ultima_validacion))\
+        .options(
+            selectinload(Adaptador.conectores).options(
+                defer(ConectorAdaptador.foto_ng),
+                selectinload(ConectorAdaptador.tecnico_ng),
+                selectinload(ConectorAdaptador.tecnico_ultima_validacion)
+            )
+        )\
         .filter(Adaptador.codigo_qr == codigo_qr).first()
     if not adaptador:
         raise HTTPException(
@@ -653,7 +661,6 @@ async def update_conector_estado(
         "estado": conector.estado,
         "fecha_estado_ng": conector.fecha_estado_ng.isoformat() if conector.fecha_estado_ng else None,
         "comentario_ng": conector.comentario_ng,
-        "foto_ng": conector.foto_ng,
         "fecha_ultima_validacion": conector.fecha_ultima_validacion.isoformat() if conector.fecha_ultima_validacion else None,
         "linea_ultima_validacion": conector.linea_ultima_validacion,
         "turno_ultima_validacion": conector.turno_ultima_validacion,
