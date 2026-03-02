@@ -109,12 +109,11 @@ class AdaptadorService {
     }
   }
 
-  async updateConectorEstado(conectorId, estado, comentario = null) {
+  async updateConectorEstado(conectorId, estado, comentario = null, foto = null) {
     try {
       const data = { estado };
-      if (comentario) {
-        data.comentario = comentario;
-      }
+      if (comentario) data.comentario = comentario;
+      if (foto) data.foto = foto;
       const response = await this.api.put(`/adaptadores/conectores/${conectorId}/estado`, data);
       return {
         success: true,
