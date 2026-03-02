@@ -344,6 +344,7 @@ class ConectorAdaptador(ConectorAdaptadorBase):
 class ConectorAdaptadorUpdate(BaseModel):
     estado: str  # OK, NG
     comentario: Optional[str] = None
+    foto: Optional[str] = None  # Base64 foto NG (opcional)
 
 class ConectorUsoBulkUpdate(BaseModel):
     conector_ids: List[int]
