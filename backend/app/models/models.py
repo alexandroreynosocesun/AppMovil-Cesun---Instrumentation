@@ -191,6 +191,7 @@ class ConectorAdaptador(Base):
     tecnico_ng_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)  # Quién lo marcó como NG
     usuario_reporte_ng = Column(String(100), nullable=True)  # Backup: nombre de usuario
     comentario_ng = Column(Text, nullable=True)  # Comentario cuando se marcó como NG
+    foto_ng = Column(Text, nullable=True)  # Base64 foto cuando se marca NG
     fecha_ultima_validacion = Column(DateTime, nullable=True)
     tecnico_ultima_validacion_id = Column(Integer, ForeignKey("tecnicos.id"), nullable=True)
     linea_ultima_validacion = Column(String(50), nullable=True)

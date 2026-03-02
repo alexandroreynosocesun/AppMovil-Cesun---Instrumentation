@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert } from 'react-native'
+import { View, StyleSheet, ScrollView, RefreshControl, TouchableOpacity, Alert, Modal, TouchableWithoutFeedback, Image } from 'react-native'
 import { showAlert } from '../utils/alertUtils';;
+import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, Title, Paragraph, Button, Chip, ActivityIndicator, TextInput } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -72,6 +73,10 @@ export default function ListAdaptadoresScreen({ navigation }) {
     Array.isArray(adaptador.conectores) && adaptador.conectores.some(c => c.estado === 'NG');
 
   const [updatingIds, setUpdatingIds] = useState({});
+  const [showNgModal, setShowNgModal] = useState(false);
+  const [ngComment, setNgComment] = useState('');
+  const [ngFoto, setNgFoto] = useState(null);
+  const [pendingAdaptador, setPendingAdaptador] = useState(null);
 
   const handleMarkOk = (adaptador) => {
     const conector = getConector(adaptador);
@@ -103,34 +108,53 @@ export default function ListAdaptadoresScreen({ navigation }) {
       showAlert('Sin conector', 'No se encontró el conector.');
       return;
     }
-    Alert.prompt
-      ? Alert.prompt('Marcar NG', 'Comentario (opcional):', [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: 'Confirmar NG',
-            style: 'destructive',
-            onPress: async (comment) => {
-              setUpdatingIds(prev => ({ ...prev, [conector.id]: true }));
-              const result = await adaptadorService.updateConectorEstado(conector.id, 'NG', comment || null);
-              if (result.success) {
-                loadAdaptadores();
-              } else {
-                showAlert('Error', 'No se pudo marcar como NG.');
-              }
-              setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
-            }
-          }
-        ])
-      : (async () => {
-          setUpdatingIds(prev => ({ ...prev, [conector.id]: true }));
-          const result = await adaptadorService.updateConectorEstado(conector.id, 'NG');
-          if (result.success) {
-            loadAdaptadores();
-          } else {
-            showAlert('Error', 'No se pudo marcar como NG.');
-          }
-          setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
-        })();
+    setPendingAdaptador(adaptador);
+    setNgComment('');
+    setNgFoto(null);
+    setShowNgModal(true);
+  };
+
+  const handleTakeNgFoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        showAlert('Permisos requeridos', 'Necesitamos acceso a la cámara.');
+        return;
+      }
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: 'images',
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.4,
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setNgFoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
+      }
+    } catch (error) {
+      showAlert('Error', 'No se pudo tomar la foto.');
+    }
+  };
+
+  const handleConfirmNg = async () => {
+    const conector = getConector(pendingAdaptador);
+    if (!conector?.id) { setShowNgModal(false); setPendingAdaptador(null); return; }
+    const trimmedComment = ngComment.trim();
+    if (!trimmedComment) {
+      showAlert('Falta comentario', 'Escribe la falla antes de marcar NG.');
+      return;
+    }
+    setUpdatingIds(prev => ({ ...prev, [conector.id]: true }));
+    const result = await adaptadorService.updateConectorEstado(conector.id, 'NG', trimmedComment, ngFoto);
+    if (result.success) {
+      loadAdaptadores();
+      setShowNgModal(false);
+      setPendingAdaptador(null);
+      setNgFoto(null);
+    } else {
+      showAlert('Error', 'No se pudo marcar como NG.');
+    }
+    setUpdatingIds(prev => { const next = { ...prev }; delete next[conector.id]; return next; });
   };
 
   const handlePendientePress = (adaptador) => {
@@ -412,6 +436,66 @@ export default function ListAdaptadoresScreen({ navigation }) {
           </View>
         </View>
       )}
+
+      {/* Modal NG */}
+      <Modal
+        visible={showNgModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowNgModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowNgModal(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalContent}>
+                <Title style={styles.modalTitle}>Marcar NG</Title>
+                <TextInput
+                  label="Comentarios"
+                  value={ngComment}
+                  onChangeText={setNgComment}
+                  style={styles.modalInput}
+                  mode="outlined"
+                  multiline
+                  numberOfLines={3}
+                  placeholder="Describe la falla"
+                  textColor="#FFFFFF"
+                  placeholderTextColor="#B0B0B0"
+                  theme={{
+                    colors: {
+                      primary: '#4CAF50',
+                      background: '#1F1F1F',
+                      surface: '#2C2C2C',
+                      text: '#FFFFFF',
+                      placeholder: '#B0B0B0',
+                    },
+                  }}
+                />
+                {ngFoto ? (
+                  <View style={styles.ngPhotoPreview}>
+                    <Image source={{ uri: ngFoto }} style={styles.ngPhotoImg} resizeMode="cover" />
+                    <View style={styles.ngPhotoActions}>
+                      <Button compact mode="outlined" onPress={handleTakeNgFoto} textColor="#4CAF50" style={styles.ngPhotoBtn}>Cambiar</Button>
+                      <Button compact mode="outlined" onPress={() => setNgFoto(null)} textColor="#EF5350" style={styles.ngPhotoBtn}>Quitar</Button>
+                    </View>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.ngPhotoPlaceholder} onPress={handleTakeNgFoto} activeOpacity={0.7}>
+                    <Paragraph style={styles.ngPhotoPlaceholderText}>📷  Foto de la falla (opcional)</Paragraph>
+                  </TouchableOpacity>
+                )}
+                <View style={styles.modalButtons}>
+                  <Button mode="outlined" onPress={() => setShowNgModal(false)} style={styles.modalCancelButton} textColor="#F44336">
+                    Cancelar
+                  </Button>
+                  <Button mode="contained" onPress={handleConfirmNg} style={styles.modalSaveButton} buttonColor="#4CAF50">
+                    Guardar
+                  </Button>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }
@@ -590,6 +674,74 @@ const styles = StyleSheet.create({
   },
   floatingButton: {
     borderRadius: 8,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    width: '100%',
+    maxWidth: 520,
+    borderWidth: 1.5,
+    borderColor: '#2A2A2A',
+    padding: 20,
+  },
+  modalTitle: {
+    textAlign: 'center',
+    marginBottom: 12,
+    color: '#FFFFFF',
+  },
+  modalInput: {
+    backgroundColor: '#1F1F1F',
+    marginBottom: 16,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    borderColor: '#F44336',
+  },
+  modalSaveButton: {
+    flex: 1,
+  },
+  ngPhotoPreview: {
+    marginBottom: 12,
+  },
+  ngPhotoImg: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 8,
+  },
+  ngPhotoActions: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  ngPhotoBtn: {
+    flex: 1,
+    borderColor: '#444444',
+  },
+  ngPhotoPlaceholder: {
+    borderWidth: 1,
+    borderColor: '#444444',
+    borderStyle: 'dashed',
+    borderRadius: 8,
+    padding: 12,
+    alignItems: 'center',
+    marginBottom: 12,
+    backgroundColor: '#1A1A1A',
+  },
+  ngPhotoPlaceholderText: {
+    color: '#888888',
+    fontSize: 13,
   },
 });
 
