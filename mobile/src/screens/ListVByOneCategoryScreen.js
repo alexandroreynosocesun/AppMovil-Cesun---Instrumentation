@@ -12,6 +12,7 @@ import {
   Image
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, Title, Paragraph, Button, Chip, ActivityIndicator, TextInput } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -191,12 +192,18 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
         mediaTypes: 'images',
         allowsEditing: true,
         aspect: [4, 3],
-        quality: 0.3,
-        base64: true,
+        quality: 1,
+        base64: false,
         exif: false,
       });
       if (!result.canceled && result.assets[0]) {
-        setNgFoto(`data:image/jpeg;base64,${result.assets[0].base64}`);
+        const ctx = ImageManipulator.manipulate(result.assets[0].uri);
+        ctx.resize({ width: 800 });
+        const imageRef = await ctx.renderAsync();
+        const manipulated = await imageRef.saveAsync({ format: SaveFormat.JPEG, compress: 0.3, base64: true });
+        ctx.release();
+        imageRef.release();
+        setNgFoto(`data:image/jpeg;base64,${manipulated.base64}`);
       }
     } catch (error) {
       showAlert('Error', 'No se pudo tomar la foto.');
