@@ -29,6 +29,7 @@ def serialize_adaptador(
     adaptador: Adaptador,
     include_conectores: bool = True,
     include_tecnicos: bool = True,
+    include_foto: bool = False,
     db: Session = None
 ) -> dict:
     """Serializar adaptador con información relacionada"""
@@ -76,7 +77,10 @@ def serialize_adaptador(
             
             if conector.usuario_reporte_ng:
                 conector_dict["usuario_reporte_ng"] = conector.usuario_reporte_ng
-            
+
+            if include_foto and conector.estado == "NG":
+                conector_dict["foto_ng"] = conector.foto_ng
+
             result["conectores"].append(conector_dict)
     
     return result
@@ -142,7 +146,6 @@ async def get_adaptador_by_qr(
     adaptador = db.query(Adaptador)\
         .options(
             selectinload(Adaptador.conectores).options(
-                defer(ConectorAdaptador.foto_ng),
                 selectinload(ConectorAdaptador.tecnico_ng),
                 selectinload(ConectorAdaptador.tecnico_ultima_validacion)
             )
@@ -155,7 +158,7 @@ async def get_adaptador_by_qr(
         )
     
     # Ya no necesitamos pasar db porque usamos las relaciones directamente
-    return serialize_adaptador(adaptador, include_conectores=True, db=None)
+    return serialize_adaptador(adaptador, include_conectores=True, include_foto=True, db=None)
 
 @router.get("/modelos", response_model=List[str])
 async def get_modelos_disponibles_endpoint(
@@ -557,6 +560,19 @@ async def get_modelos_by_conector_name(
         "nombre_conector": nombre_conector,
         "modelos": modelos
     }
+
+@router.get("/conectores/{conector_id}/foto")
+async def get_conector_foto(
+    conector_id: int,
+    db: Session = Depends(get_db),
+    current_user: Tecnico = Depends(get_current_user)
+):
+    """Obtener foto NG de un conector específico"""
+    row = db.query(ConectorAdaptador.foto_ng).filter(ConectorAdaptador.id == conector_id).first()
+    if not row or not row.foto_ng:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Foto no encontrada")
+    return {"foto_ng": row.foto_ng}
+
 
 @router.put("/conectores/{conector_id}/estado")
 async def update_conector_estado(

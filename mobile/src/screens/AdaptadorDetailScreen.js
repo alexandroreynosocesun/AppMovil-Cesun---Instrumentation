@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableWithoutFeedback, TouchableOpacity } from 'react-native'
+import { View, StyleSheet, ScrollView, RefreshControl, Alert, Modal, TouchableWithoutFeedback, TouchableOpacity, Image } from 'react-native'
 import { showAlert } from '../utils/alertUtils';;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Card, Title, Paragraph, Chip, ActivityIndicator, Divider, TextInput, Button, IconButton } from 'react-native-paper';
@@ -22,6 +22,8 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
   const [showNgModal, setShowNgModal] = useState(false);
   const [ngComment, setNgComment] = useState('');
   const [pendingConector, setPendingConector] = useState(null);
+  const [showFotoModal, setShowFotoModal] = useState(false);
+  const [fotoModalUri, setFotoModalUri] = useState(null);
 
   useEffect(() => {
     if (!adaptador && route?.params?.codigo_qr) {
@@ -505,6 +507,19 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
                                 }
                                 return null;
                               })()}
+                              {(() => {
+                                const fotoNg = (group.primary.estado === 'NG' ? group.primary.foto_ng : null)
+                                  || (group.secondary?.estado === 'NG' ? group.secondary?.foto_ng : null);
+                                if (!fotoNg) return null;
+                                return (
+                                  <TouchableOpacity
+                                    onPress={() => { setFotoModalUri(fotoNg); setShowFotoModal(true); }}
+                                    style={styles.ngThumbnailContainer}
+                                  >
+                                    <Image source={{ uri: fotoNg }} style={styles.ngThumbnail} resizeMode="cover" />
+                                  </TouchableOpacity>
+                                );
+                              })()}
                             </>
                           ) : (
                             <>
@@ -632,6 +647,14 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
                                 }
                                 return null;
                               })()}
+                              {group.primary.foto_ng && (
+                                <TouchableOpacity
+                                  onPress={() => { setFotoModalUri(group.primary.foto_ng); setShowFotoModal(true); }}
+                                  style={styles.ngThumbnailContainer}
+                                >
+                                  <Image source={{ uri: group.primary.foto_ng }} style={styles.ngThumbnail} resizeMode="cover" />
+                                </TouchableOpacity>
+                              )}
                             </>
                           ) : (
                             <>
@@ -677,6 +700,22 @@ export default function AdaptadorDetailScreen({ navigation, route }) {
           </Card>
         </ScrollView>
       </SafeAreaView>
+
+      {/* Modal para ver foto NG */}
+      <Modal
+        visible={showFotoModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFotoModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowFotoModal(false)}>
+          <View style={styles.fotoModalOverlay}>
+            {fotoModalUri && (
+              <Image source={{ uri: fotoModalUri }} style={styles.fotoModalImage} resizeMode="contain" />
+            )}
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
 
       {/* Opciones de conectores deshabilitadas para pruebas */}
       <Modal
@@ -918,6 +957,24 @@ const styles = StyleSheet.create({
   emptyCard: {
     backgroundColor: '#2A2A2A',
     margin: 20,
+  },
+  ngThumbnailContainer: {
+    marginTop: 8,
+  },
+  ngThumbnail: {
+    width: '100%',
+    height: 120,
+    borderRadius: 8,
+  },
+  fotoModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoModalImage: {
+    width: '100%',
+    height: '80%',
   },
 });
 

@@ -128,6 +128,15 @@ class AdaptadorService {
     }
   }
 
+  async getConectorFoto(conectorId) {
+    try {
+      const response = await this.api.get(`/adaptadores/conectores/${conectorId}/foto`);
+      return { success: true, data: response.data.foto_ng };
+    } catch (error) {
+      return { success: false, error: this._handleError(error) };
+    }
+  }
+
   async toggleDualConector(adaptadorId) {
     try {
       const response = await this.api.put(`/adaptadores/${adaptadorId}/dual-conector`);
