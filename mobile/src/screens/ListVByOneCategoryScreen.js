@@ -65,6 +65,9 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
   const [selectedIds, setSelectedIds] = useState({});
   const [selectionMode, setSelectionMode] = useState(false);
   const [togglingDualIds, setTogglingDualIds] = useState({});
+  const [showFotoViewModal, setShowFotoViewModal] = useState(false);
+  const [fotoViewUri, setFotoViewUri] = useState(null);
+  const [loadingFoto, setLoadingFoto] = useState(false);
 
   useEffect(() => {
     if (isFocused) {
@@ -295,6 +298,22 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
       const suffix = getNumeroSuffix(numero);
       return suffix === searchValue || numero.includes(searchValue);
     });
+
+  const handleVerFoto = async (item) => {
+    const conector = getConector(item);
+    if (!conector?.id) return;
+    setFotoViewUri(null);
+    setLoadingFoto(true);
+    setShowFotoViewModal(true);
+    const result = await adaptadorService.getConectorFoto(conector.id);
+    setLoadingFoto(false);
+    if (result.success && result.data) {
+      setFotoViewUri(result.data);
+    } else {
+      setShowFotoViewModal(false);
+      showAlert('Sin foto', 'No hay foto registrada para este componente.');
+    }
+  };
 
   const handleToggleDual = async (item) => {
     if (togglingDualIds[item.id]) return;
@@ -568,6 +587,18 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
                       Fecha NG: {formatDate(getNgInfo(item).fecha)} {formatTime12Hour(getNgInfo(item).fecha)}
                     </Paragraph>
                   ) : null}
+                  {getConectorEstado(item) === 'NG' && (
+                    <Button
+                      compact
+                      mode="outlined"
+                      onPress={() => handleVerFoto(item)}
+                      textColor={config.accentColor}
+                      style={[styles.verFotoBtn, { borderColor: config.accentColor }]}
+                      icon="image"
+                    >
+                      Ver foto
+                    </Button>
+                  )}
                   {getConectorEstado(item) === 'OK' && getOkInfo(item)?.tecnico ? (
                     <Paragraph style={styles.okInfoText}>
                       Validado por: {getOkInfo(item).tecnico.nombre} ({getOkInfo(item).tecnico.numero_empleado})
@@ -661,6 +692,24 @@ export default function ListVByOneCategoryScreen({ route, navigation }) {
                 </View>
               </View>
             </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      {/* Modal para ver foto NG */}
+      <Modal
+        visible={showFotoViewModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowFotoViewModal(false)}
+      >
+        <TouchableWithoutFeedback onPress={() => setShowFotoViewModal(false)}>
+          <View style={styles.fotoViewOverlay}>
+            {loadingFoto ? (
+              <ActivityIndicator size="large" color={config.accentColor} />
+            ) : fotoViewUri ? (
+              <Image source={{ uri: fotoViewUri }} style={styles.fotoViewImage} resizeMode="contain" />
+            ) : null}
           </View>
         </TouchableWithoutFeedback>
       </Modal>
@@ -993,5 +1042,19 @@ const styles = StyleSheet.create({
   ngPhotoPlaceholderText: {
     color: '#888888',
     fontSize: 13,
+  },
+  verFotoBtn: {
+    marginTop: 6,
+    alignSelf: 'flex-start',
+  },
+  fotoViewOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fotoViewImage: {
+    width: '100%',
+    height: '80%',
   },
 });
