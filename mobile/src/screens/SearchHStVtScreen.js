@@ -14,6 +14,25 @@ function getName(item) {
   return typeof item === 'string' ? item : item.nombre;
 }
 
+function naturalCompare(a, b) {
+  const re = /(\d+)|(\D+)/g;
+  const pa = a.match(re) || [];
+  const pb = b.match(re) || [];
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    if (pa[i] === undefined) return -1;
+    if (pb[i] === undefined) return 1;
+    const na = parseInt(pa[i], 10);
+    const nb = parseInt(pb[i], 10);
+    if (!isNaN(na) && !isNaN(nb)) {
+      if (na !== nb) return na - nb;
+    } else {
+      const cmp = pa[i].localeCompare(pb[i]);
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
+}
+
 function getFecha(item) {
   return typeof item === 'object' && item.fecha ? item.fecha : 0;
 }
@@ -78,8 +97,8 @@ export default function SearchHStVtScreen() {
     .sort((a, b) => {
       const na = getName(a).toLowerCase();
       const nb = getName(b).toLowerCase();
-      if (sortKey === 'az') return na.localeCompare(nb);
-      if (sortKey === 'za') return nb.localeCompare(na);
+      if (sortKey === 'az') return naturalCompare(na, nb);
+      if (sortKey === 'za') return naturalCompare(nb, na);
       if (sortKey === 'nuevo') return getFecha(b) - getFecha(a);
       if (sortKey === 'antiguo') return getFecha(a) - getFecha(b);
       return 0;
