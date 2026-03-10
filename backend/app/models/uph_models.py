@@ -23,7 +23,6 @@ class Linea(UphBase):
 
     asignaciones = relationship("Asignacion", back_populates="linea")
     modelos = relationship("ModeloUPH", back_populates="linea")
-    eventos = relationship("EventoUPH", back_populates="linea_rel")
 
 
 class ModeloUPH(UphBase):
@@ -78,8 +77,3 @@ class EventoUPH(UphBase):
     timestamp = Column(DateTime(timezone=True), nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    linea_rel = relationship(
-        "Linea",
-        primaryjoin="EventoUPH.linea == foreign(Linea.nombre)",
-        viewonly=True
-    )
