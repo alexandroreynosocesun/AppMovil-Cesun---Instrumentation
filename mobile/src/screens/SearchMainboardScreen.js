@@ -37,7 +37,16 @@ import logger from '../utils/logger';
 
 export default function SearchMainboardScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const role = user?.tipo_usuario;
+  const showLogout = role === 'lider_linea' || role === 'balances';
+
+  const handleLogout = () => {
+    showAlert('Cerrar sesión', '¿Deseas cerrar sesión?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Salir', style: 'destructive', onPress: logout },
+    ]);
+  };
   const [searchQuery, setSearchQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -297,6 +306,12 @@ export default function SearchMainboardScreen({ navigation }) {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {showLogout && (
+              <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+                <Text style={styles.logoutText}>Cerrar sesión</Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.header}>
               <Title style={styles.mainTitle}>Cambio de Modelo</Title>
               <Paragraph style={styles.subtitle}>
@@ -1285,4 +1300,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '80%',
   },
+  logoutBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#B71C1C',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginBottom: 8,
+  },
+  logoutText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
 });
