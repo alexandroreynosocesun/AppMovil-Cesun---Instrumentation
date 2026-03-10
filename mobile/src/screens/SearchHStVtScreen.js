@@ -7,7 +7,7 @@ import { hstvtService } from '../services/HStVtService';
 
 function getFamily(item) {
   const name = typeof item === 'string' ? item : item.nombre;
-  return name.split('-')[0];
+  return name.split('-')[0].replace(/\.HStvt$/i, '');
 }
 
 function getName(item) {
@@ -141,7 +141,7 @@ export default function SearchHStVtScreen() {
         />
 
         {/* Ordenar */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.sortRow} contentContainerStyle={styles.rowContent}>
           {SORT_OPTIONS.map(opt => (
             <TouchableOpacity
               key={opt.key}
@@ -157,7 +157,7 @@ export default function SearchHStVtScreen() {
         </ScrollView>
 
         {/* Filtros de familia */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.familiaRow}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.familiaRow} contentContainerStyle={styles.rowContent}>
           <TouchableOpacity
             style={[styles.familiaBtn, !familiaFiltro && styles.familiaBtnActive]}
             onPress={() => setFamiliaFiltro(null)}
@@ -204,7 +204,9 @@ const styles = StyleSheet.create({
   safe: { flex: 1, paddingHorizontal: 16, paddingTop: 8 },
   searchInput: { backgroundColor: '#1A1A1A', marginBottom: 8 },
 
-  sortRow: { marginBottom: 8 },
+  sortRow: { marginBottom: 8, flexGrow: 0, flexShrink: 0 },
+  familiaRow: { marginBottom: 8, flexGrow: 0, flexShrink: 0 },
+  rowContent: { alignItems: 'center', paddingVertical: 2 },
   sortBtn: {
     borderWidth: 1,
     borderColor: '#333',
@@ -213,12 +215,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     marginRight: 8,
     backgroundColor: '#1E1E1E',
+    height: 32,
+    justifyContent: 'center',
   },
   sortBtnActive: { backgroundColor: '#0D47A1', borderColor: '#2196F3' },
   sortText: { color: '#AAA', fontSize: 12 },
   sortTextActive: { color: '#FFF', fontWeight: 'bold' },
-
-  familiaRow: { marginBottom: 8 },
   familiaBtn: {
     borderWidth: 1,
     borderColor: '#333',
@@ -227,6 +229,8 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginRight: 8,
     backgroundColor: '#1E1E1E',
+    height: 30,
+    justifyContent: 'center',
   },
   familiaBtnActive: { backgroundColor: '#1A237E', borderColor: '#2196F3' },
   familiaText: { color: '#AAA', fontSize: 12 },
