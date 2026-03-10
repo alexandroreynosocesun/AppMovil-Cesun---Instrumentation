@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput, ActivityIndicator, Divider } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { hstvtService } from '../services/HStVtService';
+import { useAuth } from '../contexts/AuthContext';
 
 function getFamily(item) {
   const name = typeof item === 'string' ? item : item.nombre;
@@ -63,6 +64,17 @@ const SORT_OPTIONS = [
 ];
 
 export default function SearchHStVtScreen() {
+  const { user, logout } = useAuth();
+  const role = user?.tipo_usuario;
+  const showLogout = role === 'lider_linea' || role === 'balances';
+
+  const handleLogout = () => {
+    Alert.alert('Cerrar sesión', '¿Deseas cerrar sesión?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Salir', style: 'destructive', onPress: logout },
+    ]);
+  };
+
   const [scripts, setScripts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -143,6 +155,12 @@ export default function SearchHStVtScreen() {
     <View style={styles.container}>
       <LinearGradient colors={['#1A237E', '#0F0F0F']} style={styles.gradient} />
       <SafeAreaView style={styles.safe}>
+
+        {showLogout && (
+          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+            <Text style={styles.logoutText}>Cerrar sesión</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Búsqueda */}
         <TextInput
@@ -282,4 +300,13 @@ const styles = StyleSheet.create({
   value: { color: '#DDD', fontSize: 12 },
   modeloExterno: { color: '#FF9800', fontSize: 12, marginTop: 4 },
   error: { color: '#F44336', textAlign: 'center', marginTop: 40 },
+  logoutBtn: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#B71C1C',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    marginBottom: 8,
+  },
+  logoutText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
 });
