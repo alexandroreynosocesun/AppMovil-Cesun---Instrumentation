@@ -18,24 +18,11 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { usePlatform } from '../hooks/usePlatform';
 import { webStyles } from '../utils/webStyles';
 import { useLanguage } from '../contexts/LanguageContext';
-import { useAuth } from '../contexts/AuthContext';
-
 const { width, height } = Dimensions.get('window');
 
 export default function ModuleSelectionScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { t } = useLanguage();
-  const { user } = useAuth();
-
-  // Roles con acceso directo a una sola pantalla
-  React.useEffect(() => {
-    const role = user?.tipo_usuario;
-    if (role === 'lider_linea') {
-      navigation.replace('SearchHStVt');
-    } else if (role === 'balances') {
-      navigation.replace('SearchMainboard');
-    }
-  }, [user]);
 
   const modules = [
     {
