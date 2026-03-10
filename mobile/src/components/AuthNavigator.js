@@ -44,6 +44,7 @@ import AdaptadorModelDetailScreen from '../screens/AdaptadorModelDetailScreen';
 import UpdateAdaptadorConectoresScreen from '../screens/UpdateAdaptadorConectoresScreen';
 import AddAdaptadorScreen from '../screens/AddAdaptadorScreen';
 import SearchMainboardScreen from '../screens/SearchMainboardScreen';
+import SearchHStVtScreen from '../screens/SearchHStVtScreen';
 import ArduinoSequencesScreen from '../screens/ArduinoSequencesScreen';
 // Pantallas VByOne / Mini LVDS / 2K LVDS
 import VByOneHomeScreen from '../screens/VByOneHomeScreen';
@@ -254,10 +255,15 @@ export default function AuthNavigator() {
             component={UpdateAdaptadorConectoresScreen}
             options={{ title: 'Actualizar conectores' }}
           />
-          <Stack.Screen 
-            name="SearchMainboard" 
-            component={SearchMainboardScreen} 
+          <Stack.Screen
+            name="SearchMainboard"
+            component={SearchMainboardScreen}
             options={{ title: 'Model Change' }}
+          />
+          <Stack.Screen
+            name="SearchHStVt"
+            component={SearchHStVtScreen}
+            options={{ title: 'Search Model' }}
           />
           <Stack.Screen
             name="ArduinoSequences"

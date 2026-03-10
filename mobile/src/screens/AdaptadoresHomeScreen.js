@@ -108,6 +108,18 @@ export default function AdaptadoresHomeScreen({ navigation }) {
               Model Change
             </Button>
 
+            <Button
+              mode="contained"
+              icon="file-search"
+              onPress={() => navigation.navigate('SearchHStVt')}
+              style={styles.categoryButton}
+              contentStyle={styles.categoryButtonContent}
+              labelStyle={styles.categoryButtonLabel}
+              buttonColor="#00796B"
+            >
+              Search Model
+            </Button>
+
 
           </View>
         </ScrollView>
