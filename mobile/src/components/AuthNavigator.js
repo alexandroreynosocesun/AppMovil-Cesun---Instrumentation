@@ -58,8 +58,15 @@ import InventarioScreen from '../screens/InventarioScreen';
 const Stack = createStackNavigator();
 
 export default function AuthNavigator() {
-  const { isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading, user } = useAuth();
   const { isWeb, isDesktop, maxWidth } = usePlatform();
+
+  const getInitialRoute = () => {
+    const role = user?.tipo_usuario;
+    if (role === 'lider_linea') return 'SearchHStVt';
+    if (role === 'balances') return 'SearchMainboard';
+    return 'ModuleSelection';
+  };
 
   if (loading) {
     return (
@@ -72,6 +79,7 @@ export default function AuthNavigator() {
   return (
     <View style={[styles.navigatorContainer, isWeb && webStyles.container]}>
       <Stack.Navigator
+        initialRouteName={isAuthenticated ? getInitialRoute() : 'Login'}
         screenOptions={{
           headerStyle: {
             backgroundColor: '#1A1A1A',
