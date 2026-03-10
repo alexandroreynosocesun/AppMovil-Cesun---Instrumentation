@@ -78,8 +78,8 @@ export default function SearchHStVtScreen() {
     .sort((a, b) => {
       const na = getName(a).toLowerCase();
       const nb = getName(b).toLowerCase();
-      if (sortKey === 'az') return na.localeCompare(nb);
-      if (sortKey === 'za') return nb.localeCompare(na);
+      if (sortKey === 'az') return nb.localeCompare(na);
+      if (sortKey === 'za') return na.localeCompare(nb);
       if (sortKey === 'nuevo') return getFecha(b) - getFecha(a);
       if (sortKey === 'antiguo') return getFecha(a) - getFecha(b);
       return 0;
