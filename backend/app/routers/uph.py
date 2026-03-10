@@ -567,3 +567,149 @@ setInterval(cargar, 5000);
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+@router.get("/op/{op_id}", response_class=HTMLResponse)
+def vista_operador(op_id: int, linea: str = "L6", db: Session = Depends(get_uph_db)):
+    """
+    Vista de pantalla completa para un operador (por posición 1-N en asignaciones de hoy).
+    Ejemplo: /api/uph/op/1?linea=L6
+    """
+    hoy = datetime.now().strftime("%Y-%m-%d")
+
+    # Obtener asignaciones de hoy para la línea, ordenadas por estación
+    asignaciones = (
+        db.query(Asignacion)
+        .join(Linea, Asignacion.linea_id == Linea.id)
+        .filter(Linea.nombre == linea, Asignacion.fecha == hoy)
+        .order_by(Asignacion.estacion)
+        .all()
+    )
+
+    # Agrupar estaciones por operador (num_empleado)
+    grupos: dict = {}
+    for asig in asignaciones:
+        emp = asig.num_empleado
+        if emp not in grupos:
+            grupos[emp] = {
+                "nombre": asig.operador.nombre if asig.operador else emp,
+                "estaciones": [],
+            }
+        grupos[emp]["estaciones"].append(asig.estacion)
+
+    ops_list = list(grupos.values())
+
+    # Si no hay asignaciones, usar grupos por defecto (estaciones fijas por posición)
+    if not ops_list:
+        est_linea = ESTACIONES_POR_LINEA.get(linea, [])
+        chunk = (len(est_linea) + 2) // 3  # dividir en 3 grupos aprox.
+        ops_list = [
+            {"nombre": f"Operador {i+1}", "estaciones": est_linea[i*chunk:(i+1)*chunk]}
+            for i in range(3)
+            if est_linea[i*chunk:(i+1)*chunk]
+        ]
+
+    if op_id < 1 or op_id > len(ops_list):
+        return HTMLResponse(content=f"<h2>Operador {op_id} no encontrado para {linea} hoy</h2>", status_code=404)
+
+    op = ops_list[op_id - 1]
+    nombre = op["nombre"]
+    estaciones = op["estaciones"]
+    est_js = str(estaciones)  # ej. ["601","602","603"]
+
+    html = f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Operador {op_id} — {linea}</title>
+<style>
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Segoe UI', sans-serif; background: #0a0a0a; color: #eee;
+         display: flex; flex-direction: column; min-height: 100vh; }}
+  header {{ background: #1a1a2e; padding: 14px 24px; border-bottom: 2px solid #2196F3;
+            display: flex; justify-content: space-between; align-items: center; }}
+  .op-name {{ font-size: 1.6rem; font-weight: bold; color: #fff; }}
+  .op-sub  {{ font-size: 1rem; color: #2196F3; }}
+  #hora    {{ font-size: 1rem; color: #555; }}
+  main {{ flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 20px; padding: 24px; align-content: center; }}
+  .card {{ background: #141414; border: 2px solid #222; border-radius: 16px;
+           padding: 28px 20px; text-align: center; transition: border-color .4s; }}
+  .card.verde   {{ border-color: #22c55e; background: #052010; }}
+  .card.naranja {{ border-color: #f97316; background: #1c0e00; }}
+  .card.rojo    {{ border-color: #ef4444; background: #1a0404; }}
+  .est-label {{ font-size: 13px; color: #666; margin-bottom: 6px; }}
+  .est-num   {{ font-size: 2rem; font-weight: bold; color: #2196F3; }}
+  .big {{ font-size: 4rem; font-weight: 900; margin: 14px 0; line-height: 1; }}
+  .card.verde   .big {{ color: #22c55e; }}
+  .card.naranja .big {{ color: #f97316; }}
+  .card.rojo    .big {{ color: #ef4444; }}
+  .card:not(.verde):not(.naranja):not(.rojo) .big {{ color: #555; }}
+  .uph-row {{ font-size: 14px; color: #666; margin-top: 8px; }}
+  .uph-val {{ font-size: 1.4rem; color: #aaa; font-weight: bold; }}
+  .dot {{ display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 6px; }}
+  .dot.verde   {{ background: #22c55e; box-shadow: 0 0 10px #22c55e; }}
+  .dot.naranja {{ background: #f97316; box-shadow: 0 0 10px #f97316; }}
+  .dot.rojo    {{ background: #ef4444; box-shadow: 0 0 10px #ef4444; }}
+  footer {{ text-align: center; padding: 10px; color: #333; font-size: 12px; }}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="op-name">{nombre}</div>
+    <div class="op-sub">Línea {linea} · Operador {op_id}</div>
+  </div>
+  <div id="hora">—</div>
+</header>
+<main id="main">Cargando...</main>
+<footer id="ocr-status">OCR: verificando...</footer>
+<script>
+const BASE = window.location.origin;
+const LINEA = "{linea}";
+const ESTACIONES = {est_js};
+const META = 60;
+
+function color(uph, meta) {{
+  if (!meta) return '';
+  const p = uph / meta;
+  return p >= 0.9 ? 'verde' : p >= 0.7 ? 'naranja' : 'rojo';
+}}
+
+async function cargar() {{
+  const r  = await fetch(`${{BASE}}/api/uph/datos?linea=${{LINEA}}`);
+  const d  = await r.json();
+  document.getElementById('hora').textContent = d.hora;
+
+  const mapa = {{}};
+  d.estaciones.forEach(e => {{ mapa[e.estacion] = e; }});
+
+  const cards = ESTACIONES.map(est => {{
+    const e   = mapa[est] || {{}};
+    const cnt = e.hora_actual ?? 0;
+    const uph = e.uph ?? 0;
+    const cl  = color(uph, META);
+    return `<div class="card ${{cl}}">
+      <div class="est-label">Estación</div>
+      <div class="est-num">${{est}}</div>
+      <div class="big">${{cnt}}</div>
+      <div class="uph-row">UPH última hora</div>
+      <div class="uph-val"><span class="dot ${{cl}}"></span>${{uph.toFixed ? uph.toFixed(1) : uph}}</div>
+    </div>`;
+  }}).join('');
+
+  document.getElementById('main').innerHTML = cards;
+
+  const re = await fetch(`${{BASE}}/api/uph/estado_cliente?linea=${{LINEA}}`);
+  const st = await re.json();
+  document.getElementById('ocr-status').textContent =
+    `OCR: ${{st.hace}} · ${{st.conectado ? '● Conectado' : '○ Sin señal'}}`;
+}}
+
+cargar();
+setInterval(cargar, 5000);
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
