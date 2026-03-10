@@ -11,6 +11,7 @@ import {
   FlatList,
   Modal,
   Image,
+  Text,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
