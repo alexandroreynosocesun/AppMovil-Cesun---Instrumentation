@@ -9,7 +9,9 @@ import uvicorn
 
 from app.database import get_db, engine
 from app.models import models
-from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage, adaptadores, arduino_sequences, inventario, seed, modelo_observaciones, hstvt
+from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage, adaptadores, arduino_sequences, inventario, seed, modelo_observaciones, hstvt, uph
+from app.database_uph import uph_engine
+from app.models import uph_models
 from app.config import CORS_ORIGINS, IS_PRODUCTION, FORCE_HTTPS, API_HOST, API_PORT
 from app.utils.logger import get_logger
 from app.services.monitoring_service import init_monitoring
@@ -17,8 +19,10 @@ from app.services.monitoring_service import init_monitoring
 # Configurar logging
 logger = get_logger(__name__)
 
-# Crear tablas de la base de datos
+# Crear tablas de la base de datos principal
 models.Base.metadata.create_all(bind=engine)
+# Crear tablas de la base de datos UPH
+uph_models.UphBase.metadata.create_all(bind=uph_engine)
 
 app = FastAPI(
     title="Hisense CheckApp",
@@ -113,6 +117,7 @@ app.include_router(inventario.router, prefix="/api/inventario", tags=["inventari
 app.include_router(seed.router, prefix="/api/seed", tags=["seed"])
 app.include_router(modelo_observaciones.router, prefix="/api/modelo-observaciones", tags=["modelo-observaciones"])
 app.include_router(hstvt.router, prefix="/api/hstvt", tags=["hstvt"])
+app.include_router(uph.router, prefix="/api/uph", tags=["uph"])
 
 # Montar directorio de uploads para servir imágenes
 uploads_dir = Path(__file__).parent / "uploads"
