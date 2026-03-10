@@ -186,11 +186,14 @@ async def register(solicitud_data: SolicitudRegistroCreate, db: Session = Depend
     # Mapear valores del frontend al backend
     # El frontend ya envía 'ingeniero' cuando se selecciona 'asignaciones'
     tipo_usuario_map = {
-        'ingeniero': 'ingeniero',  # El frontend envía 'ingeniero' cuando se selecciona 'asignaciones'
-        'tecnico': 'tecnico',  # El frontend envía 'tecnico' cuando se selecciona 'validaciones'
+        'ingeniero': 'ingeniero',
+        'tecnico': 'tecnico',
         'gestion': 'gestion',
-        # Compatibilidad: si llega 'asignaciones' directamente, mapearlo a 'ingeniero'
-        'asignaciones': 'ingeniero'
+        'lider_linea': 'lider_linea',
+        'balances': 'balances',
+        # Compatibilidad legacy
+        'asignaciones': 'ingeniero',
+        'validaciones': 'tecnico',
     }
     tipo_usuario_backend = tipo_usuario_map.get(solicitud_data.tipo_usuario, 'tecnico')
     
