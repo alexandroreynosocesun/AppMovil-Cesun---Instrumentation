@@ -8,6 +8,7 @@ Router UPH/Andon - Sistema de producción Hisense
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from pydantic import BaseModel
@@ -339,3 +340,230 @@ def listar_turnos(
         }
         for t in turnos
     ]
+
+
+# ─────────────────────────────────────────────
+# Endpoints de testing / dashboard
+# ─────────────────────────────────────────────
+
+ESTACIONES_POR_LINEA = {
+    "L6":  [str(i) for i in range(601, 609)],
+    "L7":  [str(i) for i in range(701, 709)],
+    "L8":  [str(i) for i in range(801, 809)],
+    "L9":  [str(i) for i in range(901, 909)],
+    "L10": [str(i) for i in range(1001, 1009)],
+    "L11": [str(i) for i in range(1101, 1109)],
+}
+
+
+@router.get("/datos")
+def api_datos(linea: str = "L6", db: Session = Depends(get_uph_db)):
+    """
+    Modo prueba: acumula TODOS los eventos GOOD desde el inicio (sin ventana de 1h).
+    Equivalente al /api/datos del servidor Flask original.
+    """
+    ahora = datetime.now(timezone.utc)
+    desde = datetime(2000, 1, 1, tzinfo=timezone.utc)
+
+    rows = (
+        db.query(EventoUPH.estacion, func.count(EventoUPH.id).label("total"))
+        .filter(
+            EventoUPH.linea == linea,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= desde,
+        )
+        .group_by(EventoUPH.estacion)
+        .all()
+    )
+    conteos = {r.estacion: r.total for r in rows}
+
+    estaciones_list = ESTACIONES_POR_LINEA.get(linea, [str(i) for i in range(601, 609)])
+    datos = [
+        {
+            "estacion": est,
+            "hora_actual": conteos.get(est, 0),
+            "turno": conteos.get(est, 0),
+            "uph": _uph_ultima_hora(db, linea, est),
+        }
+        for est in estaciones_list
+    ]
+    return {"linea": linea, "hora": ahora.strftime("%H:%M:%S"), "estaciones": datos}
+
+
+@router.get("/estado_cliente")
+def estado_cliente(linea: str = "L6", db: Session = Depends(get_uph_db)):
+    """Indica si el cliente OCR está activo (último evento < 3 min)."""
+    ultimo = (
+        db.query(func.max(EventoUPH.timestamp))
+        .filter(EventoUPH.linea == linea)
+        .scalar()
+    )
+    if ultimo is None:
+        return {"conectado": False, "hace": "nunca"}
+
+    if ultimo.tzinfo is None:
+        ultimo = ultimo.replace(tzinfo=timezone.utc)
+    delta = datetime.now(timezone.utc) - ultimo
+    minutos = int(delta.total_seconds() / 60)
+    if minutos < 1:
+        hace = "hace menos de 1 min"
+    elif minutos == 1:
+        hace = "hace 1 min"
+    else:
+        hace = f"hace {minutos} min"
+    return {"conectado": delta.total_seconds() < 180, "hace": hace}
+
+
+class LimpiarIn(BaseModel):
+    linea: Optional[str] = None
+
+
+@router.post("/limpiar")
+def limpiar_eventos(data: LimpiarIn, db: Session = Depends(get_uph_db)):
+    """Elimina eventos para pruebas. Si linea=None borra todo."""
+    q = db.query(EventoUPH)
+    if data.linea:
+        q = q.filter(EventoUPH.linea == data.linea)
+    eliminados = q.delete(synchronize_session=False)
+    db.commit()
+    return {"ok": True, "eliminados": eliminados}
+
+
+@router.get("/dashboard", response_class=HTMLResponse)
+def dashboard():
+    """Dashboard HTML de testing — sin autenticación."""
+    html = """<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UPH Dashboard - Hisense</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', sans-serif; background: #0f0f0f; color: #eee; min-height: 100vh; }
+  header { background: #1a1a2e; padding: 16px 24px; display: flex; align-items: center; gap: 16px; border-bottom: 2px solid #2196F3; }
+  header h1 { font-size: 1.4rem; color: #2196F3; }
+  .controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding: 14px 24px; background: #111; border-bottom: 1px solid #222; }
+  select, button { padding: 8px 14px; border-radius: 6px; border: 1px solid #333; background: #1e1e1e; color: #eee; font-size: 14px; cursor: pointer; }
+  button:hover { background: #2a2a2a; }
+  .btn-limpiar { background: #7f1d1d; border-color: #ef4444; color: #fca5a5; }
+  .btn-limpiar:hover { background: #991b1b; }
+  #estado { font-size: 13px; color: #888; margin-left: auto; }
+  #estado .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+  .dot.verde { background: #22c55e; }
+  .dot.rojo  { background: #ef4444; }
+  main { padding: 20px 24px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .card { background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 12px; padding: 18px; text-align: center; transition: border-color .3s; }
+  .card.verde  { border-color: #22c55e; }
+  .card.naranja{ border-color: #f97316; }
+  .card.rojo   { border-color: #ef4444; }
+  .estacion-label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .estacion-num { font-size: 1.8rem; font-weight: bold; color: #2196F3; }
+  .contador { font-size: 2.4rem; font-weight: bold; margin: 10px 0; }
+  .card.verde  .contador { color: #22c55e; }
+  .card.naranja .contador { color: #f97316; }
+  .card.rojo   .contador { color: #ef4444; }
+  .uph-label { font-size: 12px; color: #666; }
+  .uph-val { font-size: 1.1rem; color: #aaa; }
+  .meta-line { font-size: 12px; color: #555; margin-top: 6px; }
+  .hora { text-align: right; color: #555; font-size: 13px; padding: 8px 0; }
+  .semaforo { display: inline-block; width: 14px; height: 14px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+  .semaforo.verde   { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+  .semaforo.naranja { background: #f97316; box-shadow: 0 0 8px #f97316; }
+  .semaforo.rojo    { background: #ef4444; box-shadow: 0 0 8px #ef4444; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ UPH Dashboard — Hisense</h1>
+  <span style="color:#555;font-size:13px">Testing / Producción</span>
+</header>
+<div class="controls">
+  <label for="linea" style="color:#aaa;font-size:14px">Línea:</label>
+  <select id="linea" onchange="cargar()">
+    <option>L6</option><option>L7</option><option>L8</option>
+    <option>L9</option><option>L10</option><option>L11</option>
+  </select>
+  <button onclick="cargar()">🔄 Actualizar</button>
+  <button class="btn-limpiar" onclick="limpiar()">🗑️ Limpiar datos</button>
+  <div id="estado"><span class="dot rojo" id="dot"></span><span id="estado-txt">Verificando...</span></div>
+</div>
+<main>
+  <div class="hora" id="hora">—</div>
+  <div class="grid" id="grid">Cargando...</div>
+</main>
+<script>
+const BASE = window.location.origin;
+
+function colorCard(uph, meta) {
+  if (!meta || meta <= 0) return '';
+  const pct = uph / meta;
+  if (pct >= 0.9) return 'verde';
+  if (pct >= 0.7) return 'naranja';
+  return 'rojo';
+}
+
+async function cargar() {
+  const linea = document.getElementById('linea').value;
+
+  // Datos acumulados (modo prueba)
+  const r = await fetch(`${BASE}/api/uph/datos?linea=${linea}`);
+  const d = await r.json();
+  document.getElementById('hora').textContent = 'Actualizado: ' + d.hora;
+
+  // Datos andon (UPH real + meta + color)
+  let andon = null;
+  try {
+    const ra = await fetch(`${BASE}/api/uph/andon/${linea}`, {
+      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('token') || '') }
+    });
+    if (ra.ok) andon = await ra.json();
+  } catch(e) {}
+
+  const andonMap = {};
+  if (andon && andon.estaciones) {
+    andon.estaciones.forEach(e => { andonMap[e.estacion] = e; });
+  }
+
+  const grid = document.getElementById('grid');
+  grid.innerHTML = d.estaciones.map(est => {
+    const a = andonMap[est.estacion] || {};
+    const uph = a.uph_real ?? est.uph;
+    const meta = a.uph_meta ?? 0;
+    const color = a.color || colorCard(uph, meta);
+    return `<div class="card ${color}">
+      <div class="estacion-label">Estación</div>
+      <div class="estacion-num">${est.estacion}</div>
+      <div class="contador">${est.hora_actual}</div>
+      <div class="uph-label">UPH última hora</div>
+      <div class="uph-val"><span class="semaforo ${color}"></span>${uph.toFixed ? uph.toFixed(1) : uph}</div>
+      ${meta > 0 ? `<div class="meta-line">Meta: ${meta.toFixed ? meta.toFixed(1) : meta}</div>` : ''}
+      ${a.nombre_operador ? `<div class="meta-line" style="color:#888;margin-top:8px">👤 ${a.nombre_operador}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  // Estado cliente OCR
+  const re = await fetch(`${BASE}/api/uph/estado_cliente?linea=${linea}`);
+  const estado = await re.json();
+  document.getElementById('dot').className = 'dot ' + (estado.conectado ? 'verde' : 'rojo');
+  document.getElementById('estado-txt').textContent = `OCR cliente: ${estado.hace}`;
+}
+
+async function limpiar() {
+  const linea = document.getElementById('linea').value;
+  if (!confirm(`¿Eliminar todos los eventos de ${linea}?`)) return;
+  await fetch(`${BASE}/api/uph/limpiar`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ linea })
+  });
+  cargar();
+}
+
+cargar();
+setInterval(cargar, 5000);
+</script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
