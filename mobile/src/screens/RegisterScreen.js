@@ -48,13 +48,17 @@ export default function RegisterScreen({ navigation }) {
   const tipoUsuarioMap = {
     'asignaciones': 'ingeniero',
     'validaciones': 'tecnico',
-    'gestion': 'gestion'
+    'gestion': 'gestion',
+    'lider_linea': 'lider_linea',
+    'balances': 'balances',
   };
-  
+
   const tipoUsuarioOptions = [
     { value: 'asignaciones', label: t('userTypeAssignments') },
     { value: 'validaciones', label: t('userTypeValidations') },
-    { value: 'gestion', label: t('userTypeManagement') }
+    { value: 'gestion', label: t('userTypeManagement') },
+    { value: 'lider_linea', label: t('userTypeLiderLinea') },
+    { value: 'balances', label: t('userTypeBalances') },
   ];
   
   const getSelectedLabel = () => {
