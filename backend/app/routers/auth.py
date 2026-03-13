@@ -1,4 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+
+limiter = Limiter(key_func=get_remote_address)
 from sqlalchemy.orm import Session
 from datetime import timedelta
 from ..database import get_db
@@ -30,7 +34,8 @@ router = APIRouter()
     - `token_type`: Tipo de token (siempre "bearer")
     - `tecnico`: Información del técnico autenticado
     """)
-async def login(login_data: TecnicoLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(request: Request, login_data: TecnicoLogin, db: Session = Depends(get_db)):
     """Iniciar sesión de técnico"""
     user = authenticate_user(db, login_data.usuario, login_data.password)
     if not user:

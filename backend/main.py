@@ -3,6 +3,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import RedirectResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 from pathlib import Path
 import uvicorn
@@ -18,6 +21,9 @@ from app.services.monitoring_service import init_monitoring
 
 # Configurar logging
 logger = get_logger(__name__)
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Crear tablas de la base de datos principal
 models.Base.metadata.create_all(bind=engine)
@@ -69,6 +75,10 @@ app = FastAPI(
 
 # Inicializar monitoreo (Prometheus y Sentry)
 init_monitoring(app)
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Middleware para forzar HTTPS en producción
 if IS_PRODUCTION and FORCE_HTTPS:
@@ -125,7 +135,8 @@ uploads_dir.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
 @app.get("/")
-async def root():
+@limiter.limit("10/minute")
+async def root(request: Request):
     return {"message": "Hisense CheckApp API"}
 
 @app.get("/health")
