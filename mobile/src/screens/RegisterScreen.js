@@ -51,6 +51,7 @@ export default function RegisterScreen({ navigation }) {
     'gestion': 'gestion',
     'lider_linea': 'lider_linea',
     'balances': 'balances',
+    'gerencia': 'gerencia',
   };
 
   const tipoUsuarioOptions = [
@@ -59,6 +60,7 @@ export default function RegisterScreen({ navigation }) {
     { value: 'gestion', label: t('userTypeManagement') },
     { value: 'lider_linea', label: t('userTypeLiderLinea') },
     { value: 'balances', label: t('userTypeBalances') },
+    { value: 'gerencia', label: t('userTypeGerencia') },
   ];
   
   const getSelectedLabel = () => {
