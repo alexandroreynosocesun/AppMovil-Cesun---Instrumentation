@@ -1,4 +1,5 @@
 import React from 'react';
+import { useAuth } from '../contexts/AuthContext';
 import {
   View,
   StyleSheet,
@@ -23,6 +24,10 @@ const { width, height } = Dimensions.get('window');
 export default function ModuleSelectionScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { t } = useLanguage();
+  const { user } = useAuth();
+
+  const role = user?.tipo_usuario;
+  const esAdminOIngeniero = ['admin', 'superadmin', 'ingeniero'].includes(role);
 
   const modules = [
     {
@@ -48,7 +53,15 @@ export default function ModuleSelectionScreen({ navigation }) {
       icon: '📡',
       color: ['#FF9800', '#F57C00'],
       route: 'VByOneHome'
-    }
+    },
+    ...(esAdminOIngeniero ? [{
+      id: 'modelos_uph',
+      title: 'Modelos UPH',
+      description: 'Gestiona modelos, UPH por línea y cantidades por operador',
+      icon: '📊',
+      color: ['#7B1FA2', '#4A148C'],
+      route: 'ModelosUPHAdmin'
+    }] : []),
   ];
 
   const handleModulePress = (module) => {
@@ -58,8 +71,9 @@ export default function ModuleSelectionScreen({ navigation }) {
       navigation.navigate('AdaptadoresHome');
     } else if (module.id === 'vbyone') {
       navigation.navigate('VByOneHome');
+    } else if (module.id === 'modelos_uph') {
+      navigation.navigate('ModelosUPHAdmin');
     } else {
-      // Por ahora, mostrar mensaje de "próximamente" para los otros módulos
       alert(t('comingSoon', { module: module.title }));
     }
   };
