@@ -54,15 +54,26 @@ import AddVByOneScreen from '../screens/AddVByOneScreen';
 import UpdateVByOneUsageScreen from '../screens/UpdateVByOneUsageScreen';
 // Pantalla de Inventario
 import InventarioScreen from '../screens/InventarioScreen';
+// Pantallas UPH / Gerencia
+import UPHDashboardScreen from '../screens/UPHDashboardScreen';
+import ReporteSemanalUPHScreen from '../screens/ReporteSemanalUPHScreen';
+import OperadorHistorialScreen from '../screens/OperadorHistorialScreen';
+// Pantallas Modelos UPH
+import ModelosUPHAdminScreen from '../screens/ModelosUPHAdminScreen';
+import ModeloLideraScreen from '../screens/ModeloLideraScreen';
+// Pantallas Asignación / Operadores
+import AsignacionLideraScreen from '../screens/AsignacionLideraScreen';
+import OperadoresAdminScreen from '../screens/OperadoresAdminScreen';
 
 const Stack = createStackNavigator();
 
 export default function AuthNavigator() {
   const { isAuthenticated, loading, user } = useAuth();
-  const { isWeb, isDesktop, maxWidth } = usePlatform();
+  const { isWeb, maxWidth } = usePlatform();
 
   const getInitialRoute = () => {
     const role = user?.tipo_usuario;
+    if (role === 'gerencia') return 'UPHDashboard';
     if (role === 'lider_linea') return 'SearchHStVt';
     if (role === 'balances') return 'SearchMainboard';
     return 'ModuleSelection';
@@ -309,6 +320,42 @@ export default function AuthNavigator() {
             name="Inventario"
             component={InventarioScreen}
             options={{ title: 'Inventario' }}
+          />
+          {/* Pantallas UPH / Gerencia */}
+          <Stack.Screen
+            name="UPHDashboard"
+            component={UPHDashboardScreen}
+            options={{ title: 'Dashboard UPH', headerShown: false }}
+          />
+          <Stack.Screen
+            name="ReporteSemanalUPH"
+            component={ReporteSemanalUPHScreen}
+            options={{ title: 'Reporte Semanal UPH' }}
+          />
+          <Stack.Screen
+            name="OperadorHistorial"
+            component={OperadorHistorialScreen}
+            options={{ title: 'Historial Operador' }}
+          />
+          <Stack.Screen
+            name="ModelosUPHAdmin"
+            component={ModelosUPHAdminScreen}
+            options={{ title: 'Gestión de Modelos UPH' }}
+          />
+          <Stack.Screen
+            name="ModeloLidera"
+            component={ModeloLideraScreen}
+            options={{ title: 'Cantidades por Modelo' }}
+          />
+          <Stack.Screen
+            name="AsignacionLinea"
+            component={AsignacionLideraScreen}
+            options={{ title: 'Asignación de Operadores' }}
+          />
+          <Stack.Screen
+            name="OperadoresAdmin"
+            component={OperadoresAdminScreen}
+            options={{ title: 'Gestión de Operadores' }}
           />
         </>
       ) : (

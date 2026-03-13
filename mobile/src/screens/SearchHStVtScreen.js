@@ -64,7 +64,7 @@ const SORT_OPTIONS = [
   { key: 'antiguo',label: 'Más antiguo',  icon: '🕓' },
 ];
 
-export default function SearchHStVtScreen() {
+export default function SearchHStVtScreen({ navigation }) {
   const { user, logout } = useAuth();
   const role = user?.tipo_usuario;
   const showLogout = role === 'lider_linea' || role === 'balances';
@@ -157,11 +157,29 @@ export default function SearchHStVtScreen() {
       <LinearGradient colors={['#1A237E', '#0F0F0F']} style={styles.gradient} />
       <SafeAreaView style={styles.safe}>
 
-        {showLogout && (
-          <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
-            <Text style={styles.logoutText}>Cerrar sesión</Text>
-          </TouchableOpacity>
-        )}
+        <View style={styles.topBar}>
+          <View style={styles.topBtns}>
+            <TouchableOpacity
+              style={styles.modelosBtn}
+              onPress={() => navigation.navigate('ModeloLidera')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modelosBtnText}>📋 Cantidades</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.modelosBtn, { backgroundColor: '#2E7D32', marginLeft: 8 }]}
+              onPress={() => navigation.navigate('AsignacionLinea')}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.modelosBtnText}>👥 Asignación</Text>
+            </TouchableOpacity>
+          </View>
+          {showLogout && (
+            <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
+              <Text style={styles.logoutText}>Cerrar sesión</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
         {/* Búsqueda */}
         <TextInput
@@ -301,13 +319,25 @@ const styles = StyleSheet.create({
   value: { color: '#DDD', fontSize: 12 },
   modeloExterno: { color: '#FF9800', fontSize: 12, marginTop: 4 },
   error: { color: '#F44336', textAlign: 'center', marginTop: 40 },
+  topBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  topBtns: { flexDirection: 'row', alignItems: 'center' },
+  modelosBtn: {
+    backgroundColor: '#1565C0',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  modelosBtnText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
   logoutBtn: {
-    alignSelf: 'flex-end',
     backgroundColor: '#B71C1C',
     borderRadius: 8,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    marginBottom: 8,
   },
   logoutText: { color: '#FFF', fontSize: 13, fontWeight: 'bold' },
 });

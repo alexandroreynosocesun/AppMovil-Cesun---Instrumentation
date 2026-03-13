@@ -7,6 +7,9 @@ Router UPH/Andon - Sistema de producción Hisense
 - Gestión de operadores, modelos y asignaciones
 """
 
+import csv
+import os
+from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
@@ -18,6 +21,21 @@ from ..database_uph import get_uph_db
 from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH
 from ..auth import get_current_user
 from ..models.models import Tecnico
+
+# Directorio donde se guardan los CSV en el servidor
+UPH_CSV_DIR = Path(__file__).parent.parent.parent / "uph_logs"
+UPH_CSV_DIR.mkdir(exist_ok=True)
+
+
+def _append_csv(linea: str, estacion: str, evento: str, contador, ts: datetime):
+    fecha = ts.strftime("%Y%m%d")
+    archivo = UPH_CSV_DIR / f"uph_backup_{fecha}.csv"
+    escribir_header = not archivo.exists()
+    with open(archivo, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if escribir_header:
+            writer.writerow(["timestamp", "linea", "estacion", "evento", "contador"])
+        writer.writerow([ts.isoformat(), linea, estacion, evento, contador])
 
 router = APIRouter()
 
@@ -55,6 +73,19 @@ class ModeloUPHIn(BaseModel):
     linea_id: int
 
 
+class AsignacionItemIn(BaseModel):
+    estacion: str
+    num_empleado: str
+
+
+class AsignacionBulkIn(BaseModel):
+    linea: str
+    fecha: str          # "YYYY-MM-DD"
+    turno_id: int
+    modelo_id: Optional[int] = None
+    asignaciones: List[AsignacionItemIn]
+
+
 # ─────────────────────────────────────────────
 # Helpers
 # ─────────────────────────────────────────────
@@ -90,6 +121,12 @@ def _ensure_admin_or_jefa(current_user: Tecnico):
         raise HTTPException(status_code=403, detail="Sin permisos")
 
 
+def _ensure_gerencia(current_user: Tecnico):
+    """Permite acceso a gerencia, admin, ingeniero y lider_linea."""
+    if current_user.tipo_usuario not in ("admin", "superadmin", "ingeniero", "lider_linea", "gerencia"):
+        raise HTTPException(status_code=403, detail="Sin permisos")
+
+
 # ─────────────────────────────────────────────
 # Endpoints
 # ─────────────────────────────────────────────
@@ -103,14 +140,8 @@ def recibir_evento(evento: EventoIn, request: Request, db: Session = Depends(get
     if evento.evento != "GOOD":
         return {"ok": False, "detalle": "Evento ignorado (solo se registran GOOD)"}
 
+    # Siempre usar la hora del servidor para evitar desfase por zona horaria de las PCs
     ts = datetime.now(timezone.utc)
-    if evento.timestamp:
-        try:
-            ts = datetime.fromisoformat(evento.timestamp)
-            if ts.tzinfo is None:
-                ts = ts.replace(tzinfo=timezone.utc)
-        except ValueError:
-            pass
 
     registro = EventoUPH(
         linea=evento.linea,
@@ -121,6 +152,10 @@ def recibir_evento(evento: EventoIn, request: Request, db: Session = Depends(get
     )
     db.add(registro)
     db.commit()
+
+    # Guardar también en CSV en el servidor
+    _append_csv(evento.linea, evento.estacion, evento.evento, evento.contador, ts)
+
     return {"ok": True, "id": registro.id}
 
 
@@ -315,6 +350,64 @@ def crear_modelo(
     return {"id": modelo.id, "ok": True}
 
 
+@router.put("/modelos/{modelo_id}")
+def actualizar_modelo(
+    modelo_id: int,
+    data: ModeloUPHIn,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Actualiza nombre y UPH de un modelo."""
+    _ensure_admin_or_jefa(current_user)
+    modelo = db.query(ModeloUPH).filter(ModeloUPH.id == modelo_id).first()
+    if not modelo:
+        raise HTTPException(status_code=404, detail="Modelo no encontrado")
+    modelo.nombre = data.nombre
+    modelo.uph_total = data.uph_total
+    modelo.linea_id = data.linea_id
+    db.commit()
+    return {"id": modelo.id, "ok": True}
+
+
+@router.delete("/modelos/{modelo_id}", status_code=204)
+def eliminar_modelo(
+    modelo_id: int,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Elimina un modelo UPH."""
+    _ensure_admin_or_jefa(current_user)
+    modelo = db.query(ModeloUPH).filter(ModeloUPH.id == modelo_id).first()
+    if not modelo:
+        raise HTTPException(status_code=404, detail="Modelo no encontrado")
+    db.delete(modelo)
+    db.commit()
+
+
+@router.get("/modelos/linea/{linea_nombre}")
+def modelos_por_linea(
+    linea_nombre: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Lista modelos disponibles para una línea específica."""
+    _ensure_gerencia(current_user)
+    linea = db.query(Linea).filter(Linea.nombre == linea_nombre).first()
+    if not linea:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    modelos = db.query(ModeloUPH).filter(ModeloUPH.linea_id == linea.id).all()
+    return [
+        {
+            "id": m.id,
+            "nombre": m.nombre,
+            "uph_total": m.uph_total,
+            "linea": linea.nombre,
+            "linea_id": linea.id,
+        }
+        for m in modelos
+    ]
+
+
 @router.get("/lineas")
 def listar_lineas(
     db: Session = Depends(get_uph_db),
@@ -340,6 +433,344 @@ def listar_turnos(
         }
         for t in turnos
     ]
+
+
+# ─────────────────────────────────────────────
+# Endpoints de Gerencia / Dashboard
+# ─────────────────────────────────────────────
+
+@router.get("/resumen")
+def resumen_todas_lineas(
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Resumen en tiempo real de todas las líneas para gerencia."""
+    _ensure_gerencia(current_user)
+    lineas = db.query(Linea).order_by(Linea.nombre).all()
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    resultado = []
+    for linea in lineas:
+        asig = (
+            db.query(Asignacion)
+            .filter(Asignacion.linea_id == linea.id, Asignacion.fecha == hoy)
+            .first()
+        )
+        modelo = asig.modelo if asig else None
+        uph_meta = modelo.uph_total if modelo else 0
+        uph_real = _uph_ultima_hora(db, linea.nombre)
+        total_estaciones = (
+            db.query(func.count(func.distinct(Asignacion.estacion)))
+            .filter(Asignacion.linea_id == linea.id, Asignacion.fecha == hoy)
+            .scalar() or 0
+        )
+        resultado.append({
+            "linea": linea.nombre,
+            "linea_id": linea.id,
+            "modelo": modelo.nombre if modelo else None,
+            "uph_real": round(uph_real, 1),
+            "uph_meta": round(uph_meta, 1),
+            "color": _color_semaforo(uph_real, uph_meta),
+            "total_estaciones": total_estaciones,
+            "actualizado": datetime.now(timezone.utc).isoformat(),
+        })
+    return {"lineas": resultado, "actualizado": datetime.now(timezone.utc).isoformat()}
+
+
+@router.get("/historial/{num_empleado}")
+def historial_operador(
+    num_empleado: str,
+    dias: int = 7,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Historial diario de UPH y KPI de un operador."""
+    _ensure_gerencia(current_user)
+    operador = db.query(Operador).filter(Operador.num_empleado == num_empleado).first()
+    if not operador:
+        raise HTTPException(status_code=404, detail="Operador no encontrado")
+
+    desde_fecha = (datetime.now(timezone.utc) - timedelta(days=dias)).strftime("%Y-%m-%d")
+    asignaciones = (
+        db.query(Asignacion)
+        .filter(Asignacion.num_empleado == num_empleado, Asignacion.fecha >= desde_fecha)
+        .all()
+    )
+
+    historial_por_dia: dict = {}
+    for asig in asignaciones:
+        fecha = asig.fecha
+        linea_nombre = asig.linea.nombre if asig.linea else ""
+        inicio_dia = datetime.strptime(fecha, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+        fin_dia = inicio_dia + timedelta(days=1)
+        eventos = (
+            db.query(func.count(EventoUPH.id))
+            .filter(
+                EventoUPH.estacion == asig.estacion,
+                EventoUPH.linea == linea_nombre,
+                EventoUPH.evento == "GOOD",
+                EventoUPH.timestamp >= inicio_dia,
+                EventoUPH.timestamp < fin_dia,
+            )
+            .scalar() or 0
+        )
+        if fecha not in historial_por_dia:
+            historial_por_dia[fecha] = {
+                "total_eventos": 0,
+                "uph_meta": asig.modelo.uph_total if asig.modelo else 0,
+            }
+        historial_por_dia[fecha]["total_eventos"] += eventos
+
+    historial = []
+    for fecha, data in sorted(historial_por_dia.items()):
+        uph_dia = round(data["total_eventos"] / 12, 2)
+        uph_meta = data["uph_meta"]
+        kpi_pct = round((uph_dia / uph_meta * 100) if uph_meta > 0 else 0, 1)
+        historial.append({
+            "fecha": fecha,
+            "total_eventos": data["total_eventos"],
+            "uph_promedio": uph_dia,
+            "uph_meta": round(uph_meta, 1),
+            "kpi_pct": kpi_pct,
+        })
+
+    return {
+        "operador": {
+            "num_empleado": operador.num_empleado,
+            "nombre": operador.nombre,
+            "foto_url": operador.foto_url,
+        },
+        "historial": historial,
+        "periodo_dias": dias,
+    }
+
+
+@router.get("/reporte/semanal/completo")
+def reporte_semanal_completo(
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Reporte semanal completo: todos los operadores con UPH promedio y KPI."""
+    _ensure_gerencia(current_user)
+    hace_7_dias = datetime.now(timezone.utc) - timedelta(days=7)
+    desde_fecha = hace_7_dias.strftime("%Y-%m-%d")
+
+    operadores = db.query(Operador).filter(Operador.activo == True).all()
+    resultado = []
+    for op in operadores:
+        asignaciones = (
+            db.query(Asignacion)
+            .filter(Asignacion.num_empleado == op.num_empleado, Asignacion.fecha >= desde_fecha)
+            .all()
+        )
+        if not asignaciones:
+            continue
+
+        estaciones = list(set(a.estacion for a in asignaciones))
+        total_eventos = (
+            db.query(func.count(EventoUPH.id))
+            .filter(
+                EventoUPH.estacion.in_(estaciones),
+                EventoUPH.evento == "GOOD",
+                EventoUPH.timestamp >= hace_7_dias,
+            )
+            .scalar() or 0
+        )
+
+        dias_activos = len(set(a.fecha for a in asignaciones))
+        horas_trabajadas = dias_activos * 12
+        uph_promedio = round(total_eventos / horas_trabajadas, 2) if horas_trabajadas > 0 else 0
+
+        ultimo_modelo = next(
+            (a.modelo for a in sorted(asignaciones, key=lambda x: x.fecha, reverse=True) if a.modelo),
+            None,
+        )
+        uph_meta = ultimo_modelo.uph_total if ultimo_modelo else 0
+        kpi_pct = round((uph_promedio / uph_meta * 100) if uph_meta > 0 else 0, 1)
+
+        resultado.append({
+            "num_empleado": op.num_empleado,
+            "nombre": op.nombre,
+            "foto_url": op.foto_url,
+            "total_eventos": total_eventos,
+            "uph_promedio": uph_promedio,
+            "uph_meta": round(uph_meta, 1),
+            "kpi_pct": kpi_pct,
+            "dias_activos": dias_activos,
+        })
+
+    resultado.sort(key=lambda x: x["uph_promedio"], reverse=True)
+    for i, op in enumerate(resultado):
+        op["ranking"] = i + 1
+
+    return {
+        "periodo": {"desde": desde_fecha, "hasta": datetime.now().strftime("%Y-%m-%d")},
+        "operadores": resultado,
+        "total_operadores": len(resultado),
+    }
+
+
+# ─────────────────────────────────────────────
+# Endpoints de Asignación / Scoreboard
+# ─────────────────────────────────────────────
+
+@router.get("/turno/actual")
+def turno_actual(db: Session = Depends(get_uph_db), current_user: Tecnico = Depends(get_current_user)):
+    """Detecta el turno actual basado en la hora del servidor."""
+    hora_ahora = datetime.now().strftime("%H:%M")
+    turnos = db.query(Turno).all()
+    for t in turnos:
+        inicio = t.hora_inicio  # "06:30"
+        fin = t.hora_fin        # "18:30"
+        if inicio <= fin:
+            if inicio <= hora_ahora <= fin:
+                return {"turno": t, "detectado": True}
+        else:  # turno nocturno que cruza medianoche
+            if hora_ahora >= inicio or hora_ahora <= fin:
+                return {"turno": t, "detectado": True}
+    # Si no coincide con ninguno, devolver el primero
+    primer_turno = db.query(Turno).first()
+    return {"turno": primer_turno, "detectado": False}
+
+
+@router.get("/lineas/{linea_nombre}/estaciones")
+def estaciones_linea(
+    linea_nombre: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Estaciones configuradas para una línea (de asignaciones activas o predefinidas)."""
+    _ensure_gerencia(current_user)
+    estaciones_pre = ESTACIONES_POR_LINEA.get(linea_nombre, [])
+    if estaciones_pre:
+        return {"linea": linea_nombre, "estaciones": estaciones_pre}
+    # Fallback: derivar de asignaciones históricas
+    rows = (
+        db.query(func.distinct(Asignacion.estacion))
+        .join(Linea, Asignacion.linea_id == Linea.id)
+        .filter(Linea.nombre == linea_nombre)
+        .all()
+    )
+    return {"linea": linea_nombre, "estaciones": sorted([r[0] for r in rows])}
+
+
+@router.post("/asignacion/bulk", status_code=201)
+def crear_asignacion_bulk(
+    data: AsignacionBulkIn,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Asigna múltiples operadores a estaciones de una línea para el día/turno indicado."""
+    _ensure_admin_or_jefa(current_user)
+
+    linea = db.query(Linea).filter(Linea.nombre == data.linea).first()
+    if not linea:
+        raise HTTPException(status_code=404, detail=f"Línea '{data.linea}' no encontrada")
+
+    turno = db.query(Turno).filter(Turno.id == data.turno_id).first()
+    if not turno:
+        raise HTTPException(status_code=404, detail="Turno no encontrado")
+
+    # Eliminar asignaciones previas del mismo día/línea/turno
+    db.query(Asignacion).filter(
+        Asignacion.linea_id == linea.id,
+        Asignacion.fecha == data.fecha,
+        Asignacion.turno_id == data.turno_id,
+    ).delete()
+
+    creadas = 0
+    for item in data.asignaciones:
+        if not item.num_empleado:
+            continue
+        op = db.query(Operador).filter(Operador.num_empleado == item.num_empleado).first()
+        if not op:
+            continue
+        asig = Asignacion(
+            num_empleado=item.num_empleado,
+            estacion=item.estacion,
+            linea_id=linea.id,
+            fecha=data.fecha,
+            turno_id=data.turno_id,
+            modelo_id=data.modelo_id,
+        )
+        db.add(asig)
+        creadas += 1
+
+    db.commit()
+    return {"ok": True, "creadas": creadas, "linea": data.linea, "fecha": data.fecha}
+
+
+@router.get("/scoreboard/hoy")
+def scoreboard_hoy(
+    linea: Optional[str] = None,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Scoreboard en tiempo real del día: operadores rankeados por KPI actual."""
+    _ensure_gerencia(current_user)
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    ahora = datetime.now(timezone.utc)
+    inicio_dia = datetime.strptime(hoy, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    query = db.query(Asignacion).filter(Asignacion.fecha == hoy)
+    if linea:
+        linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
+        if linea_obj:
+            query = query.filter(Asignacion.linea_id == linea_obj.id)
+
+    asignaciones = query.all()
+
+    # Pre-calcular # estaciones por linea para dividir UPH meta
+    estaciones_por_linea: dict = {}
+    for asig in asignaciones:
+        lid = asig.linea_id
+        if lid not in estaciones_por_linea:
+            estaciones_por_linea[lid] = set()
+        estaciones_por_linea[lid].add(asig.estacion)
+
+    resultado = []
+    for asig in asignaciones:
+        linea_nombre = asig.linea.nombre if asig.linea else ""
+        num_est = len(estaciones_por_linea.get(asig.linea_id, {1})) or 1
+        uph_meta_linea = asig.modelo.uph_total if asig.modelo else 0
+        uph_meta_est = round(uph_meta_linea / num_est, 1)
+
+        uph_hora = _uph_ultima_hora(db, linea_nombre, asig.estacion)
+
+        total_hoy = (
+            db.query(func.count(EventoUPH.id))
+            .filter(
+                EventoUPH.estacion == asig.estacion,
+                EventoUPH.linea == linea_nombre,
+                EventoUPH.evento == "GOOD",
+                EventoUPH.timestamp >= inicio_dia,
+                EventoUPH.timestamp <= ahora,
+            )
+            .scalar() or 0
+        )
+
+        kpi_pct = round((uph_hora / uph_meta_est * 100) if uph_meta_est > 0 else 0, 1)
+
+        resultado.append({
+            "estacion": asig.estacion,
+            "num_empleado": asig.operador.num_empleado if asig.operador else None,
+            "nombre": asig.operador.nombre if asig.operador else "Sin asignar",
+            "linea": linea_nombre,
+            "uph_hora": round(uph_hora, 1),
+            "uph_meta": uph_meta_est,
+            "kpi_pct": kpi_pct,
+            "total_hoy": total_hoy,
+            "excedente": round(uph_hora - uph_meta_est, 1),
+        })
+
+    resultado.sort(key=lambda x: x["kpi_pct"], reverse=True)
+    for i, r in enumerate(resultado):
+        r["ranking"] = i + 1
+
+    return {
+        "scoreboard": resultado,
+        "fecha": hoy,
+        "actualizado": ahora.isoformat(),
+    }
 
 
 # ─────────────────────────────────────────────
