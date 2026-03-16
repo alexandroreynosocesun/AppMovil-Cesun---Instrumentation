@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Modal, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput, ActivityIndicator, Divider } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,21 +39,32 @@ function getFecha(item) {
   return typeof item === 'object' && item.fecha ? item.fecha : 0;
 }
 
+const PINS_RE = /^\d+(\+\d+)?p$/i;
+const MIC_RE = /^Mic\(/i;
+
 function parseScript(item) {
   const filename = getName(item);
   const noExt = filename.replace(/\.HStvt$/i, '');
   const isExterno = noExt.toUpperCase().includes('EXTERNO');
   const parts = noExt.split('-');
+
+  const pins = parts.find(p => PINS_RE.test(p)) || null;
+  const mic  = parts.find(p => MIC_RE.test(p))  || null;
+  const cleanParts = parts.filter(p => !PINS_RE.test(p) && !MIC_RE.test(p));
+  const cleanNoExt = cleanParts.join('-');
+
   return {
-    familia: parts[0] || '',
-    modelo: parts[1] || '',
-    version: parts[2] || '',
+    familia: cleanParts[0] || '',
+    modelo:  cleanParts[1] || '',
+    version: cleanParts[2] || '',
     destino: isExterno
-      ? noExt.split(' ')[0].split('-').slice(3).join('-')
-      : parts.slice(3).join('-'),
+      ? cleanNoExt.split(' ')[0].split('-').slice(3).join('-')
+      : cleanParts.slice(3).join('-'),
     externo: isExterno,
     modeloExterno: isExterno ? noExt.split('EXTERNO')[1]?.trim() : null,
     fecha: getFecha(item),
+    pins,
+    mic,
   };
 }
 
@@ -64,7 +75,7 @@ const SORT_OPTIONS = [
   { key: 'antiguo',label: 'Más antiguo',  icon: '🕓' },
 ];
 
-export default function SearchHStVtScreen({ navigation }) {
+export default function SearchHStVtScreen() {
   const { user, logout } = useAuth();
   const role = user?.tipo_usuario;
   const showLogout = role === 'lider_linea' || role === 'balances';
@@ -83,6 +94,24 @@ export default function SearchHStVtScreen({ navigation }) {
   const [familiaFiltro, setFamiliaFiltro] = useState(null);
   const [familias, setFamilias] = useState([]);
   const [sortKey, setSortKey] = useState('nuevo');
+  const [selectedScript, setSelectedScript] = useState(null);
+
+  const handleShare = (p, filename) => {
+    const lines = [
+      `[ Script HStVt ]`,
+      ``,
+      `Familia   ${p.familia}`,
+      `Modelo    ${p.modelo}`,
+      `Versión   ${p.version}`,
+      `Destino   ${p.destino || '—'}`,
+    ];
+    if (p.pins) lines.push(`Pines     ${p.pins}`);
+    if (p.mic)  lines.push(`Mic       ${p.mic}`);
+    if (p.externo && p.modeloExterno) lines.push(`Externo   ${p.modeloExterno}`);
+    if (p.fecha) lines.push(``, `📅  ${formatFecha(p.fecha)}`);
+    lines.push(``, `📁  ${filename}`);
+    Share.share({ message: lines.join('\n') });
+  };
 
   useEffect(() => { loadScripts(); }, []);
 
@@ -125,8 +154,9 @@ export default function SearchHStVtScreen({ navigation }) {
 
   const renderItem = ({ item }) => {
     const p = parseScript(item);
+    const filename = getName(item);
     return (
-      <View style={styles.card}>
+      <TouchableOpacity style={styles.card} onPress={() => setSelectedScript({ p, filename })} activeOpacity={0.75}>
         <View style={styles.cardHeader}>
           <Text style={styles.familia}>{p.familia}</Text>
           {p.externo && (
@@ -144,11 +174,13 @@ export default function SearchHStVtScreen({ navigation }) {
           <Text style={styles.value}>{p.version}</Text>
           <Text style={[styles.label, { marginLeft: 12 }]}>Destino: </Text>
           <Text style={styles.value}>{p.destino || '—'}</Text>
+          {p.pins && <View style={styles.pinsBadge}><Text style={styles.pinsText}>{p.pins}</Text></View>}
+          {p.mic  && <View style={styles.micBadge}><Text style={styles.micText}>{p.mic}</Text></View>}
         </View>
         {p.externo && p.modeloExterno && (
           <Text style={styles.modeloExterno}>Externo: {p.modeloExterno}</Text>
         )}
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -157,29 +189,13 @@ export default function SearchHStVtScreen({ navigation }) {
       <LinearGradient colors={['#1A237E', '#0F0F0F']} style={styles.gradient} />
       <SafeAreaView style={styles.safe}>
 
-        <View style={styles.topBar}>
-          <View style={styles.topBtns}>
-            <TouchableOpacity
-              style={styles.modelosBtn}
-              onPress={() => navigation.navigate('ModeloLidera')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modelosBtnText}>📋 Cantidades</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.modelosBtn, { backgroundColor: '#2E7D32', marginLeft: 8 }]}
-              onPress={() => navigation.navigate('AsignacionLinea')}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.modelosBtnText}>👥 Asignación</Text>
-            </TouchableOpacity>
-          </View>
-          {showLogout && (
+        {showLogout && (
+          <View style={styles.topBar}>
             <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
               <Text style={styles.logoutText}>Cerrar sesión</Text>
             </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
 
         {/* Búsqueda */}
         <TextInput
@@ -250,6 +266,70 @@ export default function SearchHStVtScreen({ navigation }) {
           />
         )}
       </SafeAreaView>
+
+      {/* Modal detalle */}
+      <Modal
+        visible={!!selectedScript}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedScript(null)}
+      >
+        <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setSelectedScript(null)}>
+          <TouchableOpacity style={styles.modalCard} activeOpacity={1}>
+            {selectedScript && (() => {
+              const { p, filename } = selectedScript;
+              return (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalFamilia}>{p.familia}</Text>
+                    {p.externo && (
+                      <View style={styles.externoBadge}>
+                        <Text style={styles.externoText}>EXTERNO</Text>
+                      </View>
+                    )}
+                    {p.fecha && <Text style={styles.modalFecha}>{formatFecha(p.fecha)}</Text>}
+                  </View>
+
+                  <Text style={styles.modalModelo}>{p.modelo}</Text>
+
+                  <Divider style={{ backgroundColor: '#333', marginVertical: 12 }} />
+
+                  <DetailRow label="Versión"  value={p.version} />
+                  <DetailRow label="Destino"  value={p.destino || '—'} />
+                  {p.pins && <DetailRow label="Pines" value={p.pins} highlight />}
+                  {p.mic  && <DetailRow label="Micrófono" value={p.mic} highlight />}
+                  {p.externo && p.modeloExterno && (
+                    <DetailRow label="Modelo externo" value={p.modeloExterno} orange />
+                  )}
+
+                  <Divider style={{ backgroundColor: '#333', marginVertical: 12 }} />
+
+                  <Text style={styles.modalFilename}>{filename}</Text>
+
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={() => handleShare(p, filename)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.shareBtnText}>Compartir</Text>
+                  </TouchableOpacity>
+                </>
+              );
+            })()}
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+    </View>
+  );
+}
+
+function DetailRow({ label, value, highlight, orange }) {
+  return (
+    <View style={styles.detailRow}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={[styles.detailValue, highlight && { color: '#90CAF9' }, orange && { color: '#FF9800' }]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -318,6 +398,33 @@ const styles = StyleSheet.create({
   label: { color: '#888', fontSize: 12 },
   value: { color: '#DDD', fontSize: 12 },
   modeloExterno: { color: '#FF9800', fontSize: 12, marginTop: 4 },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'flex-end' },
+  modalCard: {
+    backgroundColor: '#1A1A1A',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  modalFamilia: { color: '#2196F3', fontWeight: 'bold', fontSize: 15 },
+  modalFecha: { color: '#666', fontSize: 12, marginLeft: 'auto' },
+  modalModelo: { color: '#FFF', fontSize: 26, fontWeight: 'bold', marginBottom: 4 },
+  modalFilename: { color: '#555', fontSize: 11, marginBottom: 16 },
+  detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 },
+  detailLabel: { color: '#888', fontSize: 14 },
+  detailValue: { color: '#DDD', fontSize: 14, fontWeight: '600' },
+  shareBtn: {
+    backgroundColor: '#1565C0',
+    borderRadius: 10,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  shareBtnText: { color: '#FFF', fontSize: 15, fontWeight: 'bold' },
+  pinsBadge: { backgroundColor: '#1E3A5F', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 8 },
+  pinsText: { color: '#90CAF9', fontSize: 10, fontWeight: 'bold' },
+  micBadge: { backgroundColor: '#1B3A2F', borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1, marginLeft: 4 },
+  micText: { color: '#80CBC4', fontSize: 10, fontWeight: 'bold' },
   error: { color: '#F44336', textAlign: 'center', marginTop: 40 },
   topBar: {
     flexDirection: 'row',

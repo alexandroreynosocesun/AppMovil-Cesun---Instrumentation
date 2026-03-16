@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, StyleSheet, ScrollView, RefreshControl,
-  TouchableOpacity, Text
+  TouchableOpacity, Text, TextInput
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -15,9 +15,12 @@ export default function ModeloLideraScreen() {
   const [lineas, setLineas] = useState([]);
   const [lineaSeleccionada, setLineaSeleccionada] = useState(null);
   const [modelos, setModelos] = useState([]);
+  const [estacionesCount, setEstacionesCount] = useState(0);
   const [loadingLineas, setLoadingLineas] = useState(true);
   const [loadingModelos, setLoadingModelos] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [search, setSearch] = useState('');
+  const [modeloActivo, setModeloActivo] = useState(null);
 
   const cargarLineas = useCallback(async () => {
     const result = await uphService.getLineas();
@@ -34,8 +37,14 @@ export default function ModeloLideraScreen() {
     if (!linea) return;
     if (isRefresh) setRefreshing(true);
     else setLoadingModelos(true);
-    const result = await uphService.getModelosPorLinea(linea.nombre);
-    if (result.success) setModelos(result.data);
+
+    const [rMod, rEst] = await Promise.all([
+      uphService.getModelosPorLinea(linea.nombre),
+      uphService.getEstacionesPorLinea(linea.nombre),
+    ]);
+    if (rMod.success) setModelos(rMod.data);
+    if (rEst.success) setEstacionesCount((rEst.data.estaciones || []).length);
+
     setLoadingModelos(false);
     setRefreshing(false);
   }, []);
@@ -43,8 +52,17 @@ export default function ModeloLideraScreen() {
   useEffect(() => { cargarLineas(); }, [cargarLineas]);
 
   useEffect(() => {
-    if (lineaSeleccionada) cargarModelos(lineaSeleccionada);
+    if (lineaSeleccionada) {
+      setModeloActivo(null);
+      cargarModelos(lineaSeleccionada);
+    }
   }, [lineaSeleccionada, cargarModelos]);
+
+  const operadoresNecesarios = estacionesCount > 0 ? Math.ceil(estacionesCount / 3) : null;
+
+  const modelosFiltrados = modelos.filter(m =>
+    m.nombre.toLowerCase().includes(search.toLowerCase())
+  );
 
   if (loadingLineas) {
     return (
@@ -79,6 +97,36 @@ export default function ModeloLideraScreen() {
           ))}
         </ScrollView>
 
+        {/* Info de línea */}
+        {lineaSeleccionada && operadoresNecesarios != null && (
+          <View style={styles.lineaInfo}>
+            <Text style={styles.lineaInfoText}>
+              {estacionesCount} estaciones  ·  {operadoresNecesarios} operadores necesarios
+            </Text>
+            {modeloActivo && (
+              <View style={styles.activoBadge}>
+                <Text style={styles.activoBadgeText}>Activo: {modeloActivo.nombre}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Búsqueda */}
+        <View style={styles.searchContainer}>
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Buscar modelo..."
+            placeholderTextColor="#616161"
+            value={search}
+            onChangeText={setSearch}
+          />
+          {search.length > 0 && (
+            <TouchableOpacity onPress={() => setSearch('')} style={styles.clearBtn}>
+              <Text style={styles.clearBtnText}>✕</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         <ScrollView
           contentContainerStyle={[
             styles.scroll,
@@ -92,29 +140,31 @@ export default function ModeloLideraScreen() {
             />
           }
         >
-          {lineaSeleccionada && (
-            <Text style={styles.lineaTitulo}>
-              Modelos disponibles · {lineaSeleccionada.nombre}
-            </Text>
-          )}
-
           {loadingModelos ? (
             <View style={styles.center}>
               <ActivityIndicator size="small" color="#2196F3" />
             </View>
-          ) : modelos.length === 0 ? (
+          ) : modelosFiltrados.length === 0 ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyText}>Sin modelos para esta línea</Text>
-              <Text style={styles.emptyHint}>
-                Pide al administrador o ingeniero que configure los modelos
+              <Text style={styles.emptyText}>
+                {search ? 'Sin resultados' : 'Sin modelos para esta línea'}
               </Text>
+              {!search && (
+                <Text style={styles.emptyHint}>
+                  Pide al administrador o ingeniero que configure los modelos
+                </Text>
+              )}
             </View>
           ) : (
-            modelos.map(m => {
+            modelosFiltrados.map(m => {
+              const isActivo = modeloActivo?.id === m.id;
+              const uphPorOp = operadoresNecesarios
+                ? Math.round(m.uph_total / operadoresNecesarios)
+                : null;
               return (
-                <View key={m.id} style={styles.card}>
-                  {/* Header del modelo */}
+                <View key={m.id} style={[styles.card, isActivo && styles.cardActivo]}>
+                  {/* Header */}
                   <View style={styles.cardHeader}>
                     <Text style={styles.modeloNombre}>{m.nombre}</Text>
                     <View style={styles.lineaBadge}>
@@ -143,20 +193,33 @@ export default function ModeloLideraScreen() {
                     <View style={styles.cantidadSep} />
 
                     <View style={styles.cantidadBloque}>
-                      <Text style={styles.cantidadLabel}>Por hora (est.)</Text>
+                      <Text style={styles.cantidadLabel}>UPH / op.</Text>
                       <Text style={[styles.cantidadValor, { color: '#2196F3' }]}>
-                        {m.uph_total}
+                        {uphPorOp ?? m.uph_total}
                       </Text>
-                      <Text style={styles.cantidadUnidad}>UPH meta</Text>
+                      <Text style={styles.cantidadUnidad}>pzs/hr</Text>
                     </View>
                   </View>
 
-                  {/* Información adicional */}
-                  <View style={styles.infoRow}>
-                    <Text style={styles.infoTexto}>
-                      Meta diaria completa (12h): <Text style={styles.infoValor}>{Math.round(m.uph_total * 12)} piezas</Text>
+                  {/* Info estaciones */}
+                  {operadoresNecesarios != null && (
+                    <View style={styles.infoRow}>
+                      <Text style={styles.infoTexto}>
+                        {estacionesCount} est. · {operadoresNecesarios} ops · meta {Math.round(m.uph_total * 12)} pzs/turno
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Botón activar */}
+                  <TouchableOpacity
+                    style={[styles.activarBtn, isActivo && styles.activarBtnActivo]}
+                    onPress={() => setModeloActivo(isActivo ? null : m)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={[styles.activarBtnText, isActivo && styles.activarBtnTextActivo]}>
+                      {isActivo ? 'Modelo activo del turno ✓' : 'Usar este modelo'}
                     </Text>
-                  </View>
+                  </TouchableOpacity>
                 </View>
               );
             })
@@ -172,7 +235,6 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
-  // Selector de línea
   lineaRow: { paddingHorizontal: 12, paddingVertical: 10, maxHeight: 52 },
   lineaChip: {
     paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20,
@@ -182,18 +244,37 @@ const styles = StyleSheet.create({
   lineaChipText: { color: '#9E9E9E', fontSize: 14 },
   lineaChipTextActivo: { color: '#FFFFFF', fontWeight: 'bold' },
 
-  scroll: { padding: 14 },
-  lineaTitulo: {
-    color: '#757575', fontSize: 12, letterSpacing: 1,
-    marginBottom: 12, textTransform: 'uppercase',
+  lineaInfo: {
+    flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap',
+    paddingHorizontal: 16, marginBottom: 8, gap: 8,
   },
+  lineaInfoText: { color: '#757575', fontSize: 12 },
+  activoBadge: {
+    backgroundColor: '#1B5E2033', borderWidth: 1, borderColor: '#4CAF50',
+    borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3,
+  },
+  activoBadgeText: { color: '#4CAF50', fontSize: 11, fontWeight: 'bold' },
 
-  // Cards
+  searchContainer: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 14, marginBottom: 10,
+    backgroundColor: '#1A1A1A', borderRadius: 10,
+    borderWidth: 1, borderColor: '#333',
+    paddingHorizontal: 14,
+  },
+  searchInput: { flex: 1, color: '#FFF', fontSize: 14, paddingVertical: 10 },
+  clearBtn: { padding: 4 },
+  clearBtnText: { color: '#616161', fontSize: 14 },
+
+  scroll: { padding: 14 },
+
   card: {
     backgroundColor: '#1A1A1A', borderRadius: 14,
     marginBottom: 14, borderWidth: 1, borderColor: '#2D2D2D',
     overflow: 'hidden',
   },
+  cardActivo: { borderColor: '#4CAF50', borderWidth: 2 },
+
   cardHeader: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: 16, borderBottomWidth: 1, borderBottomColor: '#2D2D2D',
@@ -205,25 +286,27 @@ const styles = StyleSheet.create({
   },
   lineaBadgeText: { color: '#2196F3', fontSize: 12, fontWeight: 'bold' },
 
-  // Cantidades
-  cantidadesRow: {
-    flexDirection: 'row', padding: 16, alignItems: 'center',
-  },
+  cantidadesRow: { flexDirection: 'row', padding: 16, alignItems: 'center' },
   cantidadBloque: { flex: 1, alignItems: 'center' },
   cantidadLabel: { color: '#757575', fontSize: 11, marginBottom: 4, textAlign: 'center' },
   cantidadValor: { color: '#FFFFFF', fontSize: 24, fontWeight: 'bold' },
   cantidadUnidad: { color: '#616161', fontSize: 10, marginTop: 2 },
   cantidadSep: { width: 1, height: 50, backgroundColor: '#2D2D2D', marginHorizontal: 8 },
 
-  // Info
   infoRow: {
-    backgroundColor: '#0F0F0F', paddingHorizontal: 16, paddingVertical: 10,
+    backgroundColor: '#0F0F0F', paddingHorizontal: 16, paddingVertical: 8,
     borderTopWidth: 1, borderTopColor: '#2D2D2D',
   },
   infoTexto: { color: '#757575', fontSize: 12 },
-  infoValor: { color: '#BDBDBD', fontWeight: 'bold' },
 
-  // Empty
+  activarBtn: {
+    margin: 12, borderRadius: 10, paddingVertical: 12,
+    alignItems: 'center', borderWidth: 1, borderColor: '#333', backgroundColor: '#0F0F0F',
+  },
+  activarBtnActivo: { backgroundColor: '#1B5E20', borderColor: '#4CAF50' },
+  activarBtnText: { color: '#616161', fontSize: 14, fontWeight: 'bold' },
+  activarBtnTextActivo: { color: '#4CAF50' },
+
   emptyContainer: { alignItems: 'center', marginTop: 60, paddingHorizontal: 40 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyText: { color: '#9E9E9E', fontSize: 16, marginBottom: 8, textAlign: 'center' },
