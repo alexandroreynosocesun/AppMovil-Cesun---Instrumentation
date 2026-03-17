@@ -64,18 +64,18 @@ class UPHService {
     }
   }
 
-  async crearModelo(nombre, uph_total, linea_id) {
+  async crearModelo(nombre, num_placa, modelo_interno, uph_total) {
     try {
-      const response = await apiClient.post('/uph/modelos', { nombre, uph_total, linea_id });
+      const response = await apiClient.post('/uph/modelos', { nombre, num_placa, modelo_interno, uph_total });
       return { success: true, data: response.data };
     } catch (error) {
       return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
     }
   }
 
-  async actualizarModelo(id, nombre, uph_total, linea_id) {
+  async actualizarModelo(id, nombre, num_placa, modelo_interno, uph_total) {
     try {
-      const response = await apiClient.put(`/uph/modelos/${id}`, { nombre, uph_total, linea_id });
+      const response = await apiClient.put(`/uph/modelos/${id}`, { nombre, num_placa, modelo_interno, uph_total });
       return { success: true, data: response.data };
     } catch (error) {
       return { success: false, error: error.response?.data?.detail || 'Error de conexión' };

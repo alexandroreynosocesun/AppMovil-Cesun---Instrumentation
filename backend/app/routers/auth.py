@@ -396,6 +396,17 @@ async def update_user_profile(
             current_user.turno_actual = turno_nuevo
             print(f"Turno actualizado a: {current_user.turno_actual}")
         
+        # Actualizar línea UPH (para lider_linea)
+        if "linea_uph" in update_dict:
+            lineas_validas = [f"HI-{i}" for i in range(1, 7)] + [None, ""]
+            linea_nueva = update_dict["linea_uph"]
+            if linea_nueva not in lineas_validas:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Línea inválida. Debe ser HI-1 a HI-6"
+                )
+            current_user.linea_uph = linea_nueva or None
+
         # Guardar cambios en la base de datos
         db.commit()
         db.refresh(current_user)

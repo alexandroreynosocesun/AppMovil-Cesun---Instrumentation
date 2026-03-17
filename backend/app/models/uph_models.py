@@ -10,6 +10,7 @@ class Operador(UphBase):
     num_empleado = Column(String, primary_key=True, index=True)
     nombre = Column(String, nullable=False)
     foto_url = Column(String, nullable=True)
+    turno = Column(String, nullable=True)   # A, B, C
     activo = Column(Boolean, default=True)
 
     asignaciones = relationship("Asignacion", back_populates="operador")
@@ -29,9 +30,11 @@ class ModeloUPH(UphBase):
     __tablename__ = "modelos_uph"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String, nullable=False)       # ej. 43A45NV
-    uph_total = Column(Float, nullable=False)     # meta total del modelo
-    linea_id = Column(Integer, ForeignKey("lineas.id"), nullable=False)
+    nombre = Column(String, nullable=False)           # modelo comercial ej. 43A45NV
+    num_placa = Column(String, nullable=True)          # número de placa PCB
+    modelo_interno = Column(String, nullable=True)     # modelo interno
+    uph_total = Column(Float, nullable=False)          # meta UPH por línea
+    linea_id = Column(Integer, ForeignKey("lineas.id"), nullable=True)
 
     linea = relationship("Linea", back_populates="modelos")
     asignaciones = relationship("Asignacion", back_populates="modelo")

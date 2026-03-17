@@ -30,6 +30,59 @@ models.Base.metadata.create_all(bind=engine)
 # Crear tablas de la base de datos UPH
 uph_models.UphBase.metadata.create_all(bind=uph_engine)
 
+# Migración: agregar linea_uph a tecnicos si no existe
+from app.database import engine as _main_engine
+try:
+    with _main_engine.connect() as _conn:
+        try:
+            _conn.execute(_text("ALTER TABLE tecnicos ADD COLUMN linea_uph VARCHAR(20)"))
+            _conn.commit()
+        except Exception:
+            _conn.rollback()
+except Exception:
+    pass
+
+# Migración: agregar columnas nuevas a modelos_uph si no existen
+from sqlalchemy import text as _text
+from app.database_uph import UphSessionLocal as _UphSession
+try:
+    with uph_engine.connect() as _conn:
+        # Hacer linea_id nullable
+        try:
+            _conn.execute(_text("ALTER TABLE modelos_uph ALTER COLUMN linea_id DROP NOT NULL"))
+            _conn.commit()
+        except Exception:
+            _conn.rollback()
+        # Agregar num_placa
+        try:
+            _conn.execute(_text("ALTER TABLE modelos_uph ADD COLUMN num_placa VARCHAR"))
+            _conn.commit()
+        except Exception:
+            _conn.rollback()
+        # Agregar modelo_interno
+        try:
+            _conn.execute(_text("ALTER TABLE modelos_uph ADD COLUMN modelo_interno VARCHAR"))
+            _conn.commit()
+        except Exception:
+            _conn.rollback()
+        # Agregar turno a operadores
+        try:
+            _conn.execute(_text("ALTER TABLE operadores ADD COLUMN turno VARCHAR"))
+            _conn.commit()
+        except Exception:
+            _conn.rollback()
+except Exception as _e:
+    pass
+
+# Seed líneas HI-1 a HI-6
+from app.routers.uph import seed_lineas as _seed_lineas
+try:
+    _db = _UphSession()
+    _seed_lineas(_db)
+    _db.close()
+except Exception as _e:
+    pass
+
 app = FastAPI(
     title="Hisense CheckApp",
     description="""

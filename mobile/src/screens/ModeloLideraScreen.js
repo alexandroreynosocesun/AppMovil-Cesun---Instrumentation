@@ -9,9 +9,12 @@ import { ActivityIndicator } from 'react-native-paper';
 import { usePlatform } from '../hooks/usePlatform';
 import { webStyles } from '../utils/webStyles';
 import { uphService } from '../services/UPHService';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function ModeloLideraScreen() {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
+  const { user } = useAuth();
+  const lineaUsuario = user?.linea_uph;  // "HI-3" etc., null si no configuró
   const [lineas, setLineas] = useState([]);
   const [lineaSeleccionada, setLineaSeleccionada] = useState(null);
   const [modelos, setModelos] = useState([]);
@@ -27,11 +30,14 @@ export default function ModeloLideraScreen() {
     if (result.success) {
       setLineas(result.data);
       if (result.data.length > 0 && !lineaSeleccionada) {
-        setLineaSeleccionada(result.data[0]);
+        const linea = lineaUsuario
+          ? result.data.find(l => l.nombre === lineaUsuario) || result.data[0]
+          : result.data[0];
+        setLineaSeleccionada(linea);
       }
     }
     setLoadingLineas(false);
-  }, []);
+  }, [lineaUsuario]);
 
   const cargarModelos = useCallback(async (linea, isRefresh = false) => {
     if (!linea) return;
@@ -82,23 +88,36 @@ export default function ModeloLideraScreen() {
       />
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 
-        {/* Selector de línea */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.lineaRow}>
-          {lineas.map(l => (
-            <TouchableOpacity
-              key={l.id}
-              style={[styles.lineaChip, lineaSeleccionada?.id === l.id && styles.lineaChipActivo]}
-              onPress={() => setLineaSeleccionada(l)}
-            >
-              <Text style={[styles.lineaChipText, lineaSeleccionada?.id === l.id && styles.lineaChipTextActivo]}>
-                {l.nombre}
+        {/* Selector de línea — fijo si el lider tiene su línea configurada */}
+        {lineaUsuario ? (
+          <View style={styles.lineaFijaRow}>
+            <View style={styles.lineaChipActivo}>
+              <Text style={styles.lineaChipTextActivo}>{lineaSeleccionada?.nombre || lineaUsuario}</Text>
+            </View>
+            {estacionesCount > 0 && (
+              <Text style={styles.lineaInfoInline}>
+                {estacionesCount} est. · {operadoresNecesarios} ops
               </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+            )}
+          </View>
+        ) : (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.lineaRow}>
+            {lineas.map(l => (
+              <TouchableOpacity
+                key={l.id}
+                style={[styles.lineaChip, lineaSeleccionada?.id === l.id && styles.lineaChipActivo]}
+                onPress={() => setLineaSeleccionada(l)}
+              >
+                <Text style={[styles.lineaChipText, lineaSeleccionada?.id === l.id && styles.lineaChipTextActivo]}>
+                  {l.nombre}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
 
-        {/* Info de línea */}
-        {lineaSeleccionada && operadoresNecesarios != null && (
+        {/* Info de línea — solo cuando no hay línea fija del lider */}
+        {!lineaUsuario && lineaSeleccionada && operadoresNecesarios != null && (
           <View style={styles.lineaInfo}>
             <Text style={styles.lineaInfoText}>
               {estacionesCount} estaciones  ·  {operadoresNecesarios} operadores necesarios
@@ -235,6 +254,11 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
+  lineaFijaRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingVertical: 10,
+  },
+  lineaInfoInline: { color: '#757575', fontSize: 12 },
   lineaRow: { paddingHorizontal: 12, paddingVertical: 10, maxHeight: 52 },
   lineaChip: {
     paddingHorizontal: 16, paddingVertical: 7, borderRadius: 20,

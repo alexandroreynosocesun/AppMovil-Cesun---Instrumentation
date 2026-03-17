@@ -36,7 +36,8 @@ class TecnicoUpdate(BaseModel):
     firma_digital: Optional[str] = None
     turno_actual: Optional[str] = None
     tipo_usuario: Optional[str] = None
-    
+    linea_uph: Optional[str] = None
+
     @validator('turno_actual')
     def validate_turno_actual(cls, v):
         if v is not None and v not in ['A', 'B', 'C', 'mañana', 'noche', 'fines']:
@@ -47,6 +48,7 @@ class Tecnico(TecnicoBase):
     id: int
     firma_digital: Optional[str] = None
     turno_actual: str
+    linea_uph: Optional[str] = None
     tipo_tecnico: str
     tipo_usuario: str
     activo: bool
