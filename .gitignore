@@ -11,6 +11,9 @@ venv/
 # Environment variables
 .env
 .env.local
+.env.vps
+mobile/.env
+mobile/.env.production
 
 # IDE
 .vscode/

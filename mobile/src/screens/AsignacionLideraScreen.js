@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity, Text,
   Modal, TextInput, FlatList, KeyboardAvoidingView, Platform
@@ -100,7 +100,10 @@ export default function AsignacionLideraScreen() {
         uphService.getTurnos(),
         uphService.getOperadores(),
       ]);
-      if (rLineas.success) setLineas(rLineas.data);
+      if (rLineas.success) {
+        setLineas(rLineas.data);
+        if (rLineas.data.length > 0) setLineaSeleccionada(rLineas.data[0]);
+      }
       if (rTurnos.success) {
         setTurnos(rTurnos.data);
         // Auto-detectar turno actual
@@ -184,6 +187,12 @@ export default function AsignacionLideraScreen() {
 
   const asignados = estaciones.filter(e => asignacion[e]).length;
 
+  // Agrupa estaciones en grupos de 3 (3 estaciones = 1 operador)
+  const grupos = [];
+  for (let i = 0; i < estaciones.length; i += 3) {
+    grupos.push(estaciones.slice(i, i + 3));
+  }
+
   if (loading) {
     return (
       <View style={styles.center}>
@@ -202,24 +211,15 @@ export default function AsignacionLideraScreen() {
       />
       <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
 
-        {/* Fecha */}
-        <Text style={styles.fechaLabel}>📅 {hoy}</Text>
-
-        {/* Selector de línea */}
-        <Text style={styles.sectionLabel}>LÍNEA</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          {lineas.map(l => (
-            <TouchableOpacity
-              key={l.id}
-              style={[styles.chip, lineaSeleccionada?.id === l.id && styles.chipActivo]}
-              onPress={() => setLineaSeleccionada(l)}
-            >
-              <Text style={[styles.chipText, lineaSeleccionada?.id === l.id && styles.chipTextActivo]}>
-                {l.nombre}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        {/* Fecha + línea */}
+        <View style={styles.headerRow}>
+          <Text style={styles.fechaLabel}>📅 {hoy}</Text>
+          {lineaSeleccionada && (
+            <View style={styles.lineaActivaBadge}>
+              <Text style={styles.lineaActivaText}>{lineaSeleccionada.nombre}</Text>
+            </View>
+          )}
+        </View>
 
         {/* Selector de turno */}
         <Text style={styles.sectionLabel}>TURNO</Text>
@@ -275,38 +275,42 @@ export default function AsignacionLideraScreen() {
           ) : estaciones.length === 0 ? (
             <Text style={styles.hint}>Sin estaciones configuradas para {lineaSeleccionada.nombre}</Text>
           ) : (
-            estaciones.map(est => {
-              const op = asignacion[est];
-              return (
-                <View key={est} style={styles.estRow}>
-                  <View style={styles.estBadge}>
-                    <Text style={styles.estNumero}>{est}</Text>
-                  </View>
-
-                  {op ? (
-                    <TouchableOpacity
-                      style={styles.opAsignado}
-                      onPress={() => setEstacionModal(est)}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.opAsignadoNombre}>{op.nombre}</Text>
-                        <Text style={styles.opAsignadoNum}>#{op.num_empleado}</Text>
+            grupos.map((grupo, gi) => (
+              <View key={gi} style={styles.grupoContainer}>
+                <Text style={styles.grupoLabel}>Operador {gi + 1}</Text>
+                {grupo.map(est => {
+                  const op = asignacion[est];
+                  return (
+                    <View key={est} style={styles.estRow}>
+                      <View style={styles.estBadge}>
+                        <Text style={styles.estNumero}>{est}</Text>
                       </View>
-                      <TouchableOpacity style={styles.quitarBtn} onPress={() => handleQuitar(est)}>
-                        <Text style={styles.quitarText}>✕</Text>
-                      </TouchableOpacity>
-                    </TouchableOpacity>
-                  ) : (
-                    <TouchableOpacity
-                      style={styles.asignarBtn}
-                      onPress={() => setEstacionModal(est)}
-                    >
-                      <Text style={styles.asignarBtnText}>+ Asignar operador</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            })
+                      {op ? (
+                        <TouchableOpacity
+                          style={styles.opAsignado}
+                          onPress={() => setEstacionModal(est)}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.opAsignadoNombre}>{op.nombre}</Text>
+                            <Text style={styles.opAsignadoNum}>#{op.num_empleado}</Text>
+                          </View>
+                          <TouchableOpacity style={styles.quitarBtn} onPress={() => handleQuitar(est)}>
+                            <Text style={styles.quitarText}>✕</Text>
+                          </TouchableOpacity>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.asignarBtn}
+                          onPress={() => setEstacionModal(est)}
+                        >
+                          <Text style={styles.asignarBtnText}>+ Asignar operador</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ))
           )}
         </ScrollView>
 
@@ -342,7 +346,10 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0F0F' },
-  fechaLabel: { color: '#9E9E9E', fontSize: 12, paddingHorizontal: 16, paddingTop: 8, marginBottom: 4 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, marginBottom: 4 },
+  fechaLabel: { color: '#9E9E9E', fontSize: 12 },
+  lineaActivaBadge: { backgroundColor: '#1565C033', borderWidth: 1, borderColor: '#2196F3', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
+  lineaActivaText: { color: '#2196F3', fontSize: 12, fontWeight: 'bold' },
   sectionLabel: { color: '#2196F3', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, paddingHorizontal: 16, marginBottom: 6 },
   chipRow: { paddingHorizontal: 12, marginBottom: 12, maxHeight: 44 },
   chip: {
@@ -356,6 +363,20 @@ const styles = StyleSheet.create({
   estHeader: { paddingHorizontal: 16, marginBottom: 6 },
   scroll: { paddingHorizontal: 14, paddingBottom: 100 },
   hint: { color: '#616161', textAlign: 'center', marginTop: 24, fontSize: 14 },
+
+  // Grupo de estaciones
+  grupoContainer: {
+    marginBottom: 16,
+    backgroundColor: '#141414',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2D2D2D',
+    padding: 10,
+  },
+  grupoLabel: {
+    color: '#2196F3', fontSize: 11, fontWeight: 'bold',
+    letterSpacing: 1, marginBottom: 8,
+  },
 
   // Fila de estación
   estRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
