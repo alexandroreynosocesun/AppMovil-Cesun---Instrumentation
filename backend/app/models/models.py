@@ -15,6 +15,7 @@ class Tecnico(Base):
     password_hash = Column(String(255), nullable=False)
     firma_digital = Column(Text, nullable=True)  # Base64 de la imagen de firma
     turno_actual = Column(String(20), default="A")  # A(Día), B(Noche), C(Fines)
+    linea_uph = Column(String(20), nullable=True)   # HI-1 … HI-6, para lider_linea
     tipo_tecnico = Column(String(50), default="Técnico de Instrumentación")
     tipo_usuario = Column(String(20), default="tecnico")  # ingeniero, tecnico, inventario
     activo = Column(Boolean, default=True)

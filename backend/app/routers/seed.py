@@ -151,10 +151,10 @@ def parse_pcb_csv(csv_content: str):
 
         modelo_interno = row[1].strip() if row[1] else ""
         modelo_mainboard = row[4].strip() if row[4] else ""
-        iface_conector = row[16].strip() if row[16] else ""                    # LCD interface type (pin description)
-        tool_type = row[17].strip() if len(row) > 17 and row[17] else ""       # TOOL (ej: MINI LVDS, SKD)
-        tool_sw = row[18].strip() if len(row) > 18 and row[18] else ""         # TOOL SW (ej: Mini08, Mini18)
-        converter_raw = row[19].strip() if len(row) > 19 and row[19] else ""   # 转接板/Converter (ej: ZH_MINI_HD_3)
+        iface_conector = row[15].strip() if row[15] else ""                    # LCD interface type (pin description)
+        tool_type = row[16].strip() if len(row) > 16 and row[16] else ""       # TOOL (ej: MINI LVDS, SKD)
+        tool_sw = row[17].strip() if len(row) > 17 and row[17] else ""         # TOOL SW (ej: Mini08, Mini18)
+        converter_raw = row[18].strip() if len(row) > 18 and row[18] else ""   # 转接板/Converter (ej: ZH_MINI_HD_3)
 
         converter_codigo = _normalize_converter_code(converter_raw)
         nombre_conector = converter_codigo if converter_codigo else iface_conector
@@ -277,7 +277,7 @@ async def seed_mainboard_info(
     except Exception:
         db.rollback()  # Ya son TEXT, ignorar
 
-    csv_path = _find_csv("New PCB information for HI-2025-12-3 (1)(New Pcb).csv")
+    csv_path = _find_csv("New PCB information for HI-2026-02-171(New Pcb).csv")
     if not csv_path:
         raise HTTPException(status_code=404, detail="No se encontró el CSV de PCB information")
 
@@ -371,7 +371,7 @@ async def seed_all(
 
     # Seed Mainboard info
     try:
-        csv_path = _find_csv("New PCB information for HI-2025-12-3 (1)(New Pcb).csv")
+        csv_path = _find_csv("New PCB information for HI-2026-02-171(New Pcb).csv")
         if csv_path:
             with open(csv_path, 'r', encoding='utf-8-sig') as f:
                 content = f.read()

@@ -69,8 +69,10 @@ class OperadorIn(BaseModel):
 
 class ModeloUPHIn(BaseModel):
     nombre: str
+    num_placa: Optional[str] = None
+    modelo_interno: Optional[str] = None
     uph_total: float
-    linea_id: int
+    linea_id: Optional[int] = None
 
 
 class AsignacionItemIn(BaseModel):
@@ -119,6 +121,27 @@ def _uph_ultima_hora(db: Session, linea: str, estacion: Optional[str] = None) ->
 def _ensure_admin_or_jefa(current_user: Tecnico):
     if current_user.tipo_usuario not in ("admin", "superadmin", "ingeniero", "lider_linea"):
         raise HTTPException(status_code=403, detail="Sin permisos")
+
+
+def _ensure_admin_only(current_user: Tecnico):
+    """Solo admin/superadmin pueden gestionar operadores."""
+    if current_user.tipo_usuario not in ("admin", "superadmin"):
+        raise HTTPException(status_code=403, detail="Solo administradores pueden gestionar operadores")
+
+
+def _ensure_modelos(current_user: Tecnico):
+    """Admin, superadmin e ingeniero pueden gestionar modelos UPH."""
+    if current_user.tipo_usuario not in ("admin", "superadmin", "ingeniero"):
+        raise HTTPException(status_code=403, detail="Sin permisos para gestionar modelos")
+
+
+def seed_lineas(db):
+    """Crea las líneas HI-1 a HI-6 si no existen."""
+    nombres = ["HI-1", "HI-2", "HI-3", "HI-4", "HI-5", "HI-6"]
+    for nombre in nombres:
+        if not db.query(Linea).filter(Linea.nombre == nombre).first():
+            db.add(Linea(nombre=nombre))
+    db.commit()
 
 
 def _ensure_gerencia(current_user: Tecnico):
@@ -281,12 +304,13 @@ def listar_operadores(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    operadores = db.query(Operador).filter(Operador.activo == True).all()
+    operadores = db.query(Operador).filter(Operador.activo == True).order_by(Operador.turno, Operador.nombre).all()
     return [
         {
             "num_empleado": o.num_empleado,
             "nombre": o.nombre,
             "foto_url": o.foto_url,
+            "turno": o.turno,
             "activo": o.activo,
         }
         for o in operadores
@@ -299,7 +323,7 @@ def crear_operador(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    _ensure_admin_or_jefa(current_user)
+    _ensure_admin_only(current_user)
     existente = db.query(Operador).filter(Operador.num_empleado == data.num_empleado).first()
     if existente:
         # Actualizar si ya existe
@@ -319,11 +343,13 @@ def listar_modelos(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    modelos = db.query(ModeloUPH).all()
+    modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
     return [
         {
             "id": m.id,
             "nombre": m.nombre,
+            "num_placa": m.num_placa,
+            "modelo_interno": m.modelo_interno,
             "uph_total": m.uph_total,
             "linea_id": m.linea_id,
             "linea": m.linea.nombre if m.linea else None,
@@ -338,12 +364,14 @@ def crear_modelo(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    _ensure_admin_or_jefa(current_user)
-    linea = db.query(Linea).filter(Linea.id == data.linea_id).first()
-    if not linea:
-        raise HTTPException(status_code=404, detail="Línea no encontrada")
-
-    modelo = ModeloUPH(**data.model_dump())
+    _ensure_modelos(current_user)
+    modelo = ModeloUPH(
+        nombre=data.nombre,
+        num_placa=data.num_placa,
+        modelo_interno=data.modelo_interno,
+        uph_total=data.uph_total,
+        linea_id=data.linea_id,
+    )
     db.add(modelo)
     db.commit()
     db.refresh(modelo)
@@ -357,12 +385,13 @@ def actualizar_modelo(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    """Actualiza nombre y UPH de un modelo."""
-    _ensure_admin_or_jefa(current_user)
+    _ensure_modelos(current_user)
     modelo = db.query(ModeloUPH).filter(ModeloUPH.id == modelo_id).first()
     if not modelo:
         raise HTTPException(status_code=404, detail="Modelo no encontrado")
     modelo.nombre = data.nombre
+    modelo.num_placa = data.num_placa
+    modelo.modelo_interno = data.modelo_interno
     modelo.uph_total = data.uph_total
     modelo.linea_id = data.linea_id
     db.commit()
@@ -375,8 +404,7 @@ def eliminar_modelo(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    """Elimina un modelo UPH."""
-    _ensure_admin_or_jefa(current_user)
+    _ensure_modelos(current_user)
     modelo = db.query(ModeloUPH).filter(ModeloUPH.id == modelo_id).first()
     if not modelo:
         raise HTTPException(status_code=404, detail="Modelo no encontrado")
@@ -390,19 +418,25 @@ def modelos_por_linea(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    """Lista modelos disponibles para una línea específica."""
+    """Lista modelos disponibles. Si linea_nombre es 'all', devuelve todos."""
     _ensure_gerencia(current_user)
-    linea = db.query(Linea).filter(Linea.nombre == linea_nombre).first()
-    if not linea:
-        raise HTTPException(status_code=404, detail="Línea no encontrada")
-    modelos = db.query(ModeloUPH).filter(ModeloUPH.linea_id == linea.id).all()
+    if linea_nombre == "all":
+        modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
+    else:
+        linea = db.query(Linea).filter(Linea.nombre == linea_nombre).first()
+        if not linea:
+            modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
+        else:
+            modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
     return [
         {
             "id": m.id,
             "nombre": m.nombre,
+            "num_placa": m.num_placa,
+            "modelo_interno": m.modelo_interno,
             "uph_total": m.uph_total,
-            "linea": linea.nombre,
-            "linea_id": linea.id,
+            "linea_id": m.linea_id,
+            "linea": m.linea.nombre if m.linea else None,
         }
         for m in modelos
     ]

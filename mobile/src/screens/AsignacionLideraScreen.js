@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity, Text,
-  Modal, TextInput, FlatList, KeyboardAvoidingView, Platform
+  Modal, TextInput, SectionList, KeyboardAvoidingView, Platform, RefreshControl
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -10,31 +10,65 @@ import { usePlatform } from '../hooks/usePlatform';
 import { webStyles } from '../utils/webStyles';
 import { showAlert } from '../utils/alertUtils';
 import { uphService } from '../services/UPHService';
+import { useAuth } from '../contexts/AuthContext';
 
-// ── Modal selector de operador ────────────────────────────────
-function ModalOperador({ visible, operadores, onSelect, onClose }) {
+// ── Avatar con iniciales ──────────────────────────────────────
+function Iniciales({ nombre, size = 40 }) {
+  const parts = nombre.trim().split(' ');
+  const text = (parts[0]?.[0] || '') + (parts[1]?.[0] || '');
+  return (
+    <View style={[av.circle, { width: size, height: size, borderRadius: size / 2 }]}>
+      <Text style={[av.text, { fontSize: size * 0.33 }]}>{text.toUpperCase()}</Text>
+    </View>
+  );
+}
+const av = StyleSheet.create({
+  circle: { backgroundColor: '#1565C044', borderWidth: 1, borderColor: '#1565C0', justifyContent: 'center', alignItems: 'center' },
+  text: { color: '#90CAF9', fontWeight: 'bold' },
+});
+
+// ── Modal selector de operador (agrupado por turno) ──────────
+function ModalOperador({ visible, operadores, turnoActivo, onSelect, onClose }) {
   const [busqueda, setBusqueda] = useState('');
 
-  const filtrados = useMemo(() => {
+  const secciones = useMemo(() => {
     const q = busqueda.toLowerCase();
-    return operadores.filter(
-      o => o.nombre.toLowerCase().includes(q) || o.num_empleado.includes(q)
-    );
-  }, [busqueda, operadores]);
+    const todos = q
+      ? operadores.filter(o =>
+          o.nombre.toLowerCase().includes(q) || o.num_empleado.includes(q)
+        )
+      : operadores;
+
+    const grupos = {};
+    todos.forEach(o => {
+      const t = o.turno || 'Sin turno';
+      if (!grupos[t]) grupos[t] = [];
+      grupos[t].push(o);
+    });
+
+    const orden = ['A', 'B', 'C', 'Sin turno'];
+    const claves = Object.keys(grupos).sort((a, b) => {
+      const ia = a === turnoActivo ? -1 : orden.indexOf(a);
+      const ib = b === turnoActivo ? -1 : orden.indexOf(b);
+      return ia - ib;
+    });
+
+    return claves.map(t => ({ title: t, esActivo: t === turnoActivo, data: grupos[t] }));
+  }, [busqueda, operadores, turnoActivo]);
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitulo}>Seleccionar operador</Text>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.modalOverlay}>
+        <View style={s.modalCard}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalTitulo}>Seleccionar operador</Text>
             <TouchableOpacity onPress={onClose}>
-              <Text style={styles.modalCerrar}>✕</Text>
+              <Text style={s.modalCerrar}>✕</Text>
             </TouchableOpacity>
           </View>
 
           <TextInput
-            style={styles.busquedaInput}
+            style={s.busquedaInput}
             placeholder="Buscar por nombre o #empleado..."
             placeholderTextColor="#616161"
             value={busqueda}
@@ -42,20 +76,35 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
             autoFocus
           />
 
-          <FlatList
-            data={filtrados}
+          <SectionList
+            sections={secciones}
             keyExtractor={item => item.num_empleado}
-            style={{ maxHeight: 360 }}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>Sin resultados</Text>
-            }
+            style={{ maxHeight: 380 }}
+            stickySectionHeadersEnabled={false}
+            ListEmptyComponent={<Text style={s.emptyText}>Sin resultados</Text>}
+            renderSectionHeader={({ section }) => (
+              <View style={[s.turnoHeader, section.esActivo && s.turnoHeaderActivo]}>
+                <Text style={[s.turnoHeaderText, section.esActivo && s.turnoHeaderTextActivo]}>
+                  Turno {section.title}{section.esActivo ? '  ★ tu turno' : ''}
+                </Text>
+                <Text style={s.turnoHeaderCount}>{section.data.length}</Text>
+              </View>
+            )}
             renderItem={({ item }) => (
               <TouchableOpacity
-                style={styles.opItem}
+                style={s.opCard}
                 onPress={() => { onSelect(item); setBusqueda(''); }}
               >
-                <Text style={styles.opNombre}>{item.nombre}</Text>
-                <Text style={styles.opNum}>#{item.num_empleado}</Text>
+                <Iniciales nombre={item.nombre} />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.opNombre}>{item.nombre}</Text>
+                  <Text style={s.opNum}>#{item.num_empleado}</Text>
+                </View>
+                {item.turno && (
+                  <View style={s.opTurnoBadge}>
+                    <Text style={s.opTurnoBadgeText}>{item.turno}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             )}
           />
@@ -68,67 +117,69 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
 // ── Pantalla principal ────────────────────────────────────────
 export default function AsignacionLideraScreen() {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
+  const { user } = useAuth();
+  const lineaUsuario = user?.linea_uph;
+  const turnoUsuario = user?.turno_actual;
 
-  // Datos del servidor
-  const [lineas, setLineas] = useState([]);
   const [turnos, setTurnos] = useState([]);
   const [operadores, setOperadores] = useState([]);
   const [modelos, setModelos] = useState([]);
 
-  // Selección actual
   const [lineaSeleccionada, setLineaSeleccionada] = useState(null);
   const [turnoSeleccionado, setTurnoSeleccionado] = useState(null);
   const [modeloSeleccionado, setModeloSeleccionado] = useState(null);
   const [estaciones, setEstaciones] = useState([]);
 
-  // Mapa estacion → operador asignado
-  const [asignacion, setAsignacion] = useState({}); // { "601": { num_empleado, nombre }, ... }
+  // Asignación por slot de operador (índice del grupo)
+  const [asignacion, setAsignacion] = useState({}); // { 0: op, 1: op, ... }
+  const [slotModal, setSlotModal] = useState(null);
 
-  // UI state
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadingLinea, setLoadingLinea] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [estacionModal, setEstacionModal] = useState(null); // estación que se está asignando
-  const [loadingEstaciones, setLoadingEstaciones] = useState(false);
 
   const hoy = new Date().toISOString().split('T')[0];
 
-  // Carga inicial
-  useEffect(() => {
-    async function init() {
-      const [rLineas, rTurnos, rOps] = await Promise.all([
-        uphService.getLineas(),
-        uphService.getTurnos(),
-        uphService.getOperadores(),
-      ]);
-      if (rLineas.success) {
-        setLineas(rLineas.data);
-        if (rLineas.data.length > 0) setLineaSeleccionada(rLineas.data[0]);
-      }
-      if (rTurnos.success) {
-        setTurnos(rTurnos.data);
-        // Auto-detectar turno actual
-        const rTurnoActual = await uphService.getTurnoActual();
-        if (rTurnoActual.success?.turno || rTurnoActual.data?.turno) {
-          setTurnoSeleccionado(rTurnoActual.data?.turno || rTurnos.data[0]);
-        } else if (rTurnos.data.length > 0) {
-          setTurnoSeleccionado(rTurnos.data[0]);
-        }
-      }
-      if (rOps.success) setOperadores(rOps.data);
-      setLoading(false);
+  // ── Carga inicial ─────────────────────────────────────────
+  const cargarInicial = useCallback(async () => {
+    const [rLineas, rTurnos, rOps] = await Promise.all([
+      uphService.getLineas(),
+      uphService.getTurnos(),
+      uphService.getOperadores(),
+    ]);
+    if (rLineas.success && rLineas.data.length > 0) {
+      const linea = lineaUsuario
+        ? rLineas.data.find(l => l.nombre === lineaUsuario) || rLineas.data[0]
+        : rLineas.data[0];
+      setLineaSeleccionada(linea);
     }
-    init();
-  }, []);
+    if (rTurnos.success) {
+      setTurnos(rTurnos.data);
+      let elegido = turnoUsuario
+        ? rTurnos.data.find(t => t.nombre === turnoUsuario) || null
+        : null;
+      if (!elegido) {
+        const rActual = await uphService.getTurnoActual();
+        elegido = rActual.data?.turno || rTurnos.data[0] || null;
+      }
+      setTurnoSeleccionado(elegido);
+    }
+    if (rOps.success) setOperadores(rOps.data);
+    setLoading(false);
+    setRefreshing(false);
+  }, [lineaUsuario, turnoUsuario]);
 
-  // Cuando cambia la línea: cargar estaciones y modelos
+  useEffect(() => { cargarInicial(); }, [cargarInicial]);
+
+  // ── Carga datos de línea ──────────────────────────────────
   useEffect(() => {
     if (!lineaSeleccionada) return;
-    async function cargarLineaData() {
-      setLoadingEstaciones(true);
+    async function cargarLinea() {
+      setLoadingLinea(true);
       setEstaciones([]);
       setAsignacion({});
       setModeloSeleccionado(null);
-
       const [rEst, rMod] = await Promise.all([
         uphService.getEstacionesPorLinea(lineaSeleccionada.nombre),
         uphService.getModelosPorLinea(lineaSeleccionada.nombre),
@@ -138,220 +189,263 @@ export default function AsignacionLideraScreen() {
         setModelos(rMod.data);
         if (rMod.data.length > 0) setModeloSeleccionado(rMod.data[0]);
       }
-      setLoadingEstaciones(false);
+      setLoadingLinea(false);
     }
-    cargarLineaData();
+    cargarLinea();
   }, [lineaSeleccionada]);
 
-  const handleAsignar = (operador) => {
-    setAsignacion(prev => ({ ...prev, [estacionModal]: operador }));
-    setEstacionModal(null);
-  };
+  // ── Grupos de estaciones (3 estaciones = 1 operador) ──────
+  const grupos = useMemo(() => {
+    const g = [];
+    for (let i = 0; i < estaciones.length; i += 3) g.push(estaciones.slice(i, i + 3));
+    return g;
+  }, [estaciones]);
 
-  const handleQuitar = (estacion) => {
-    setAsignacion(prev => {
-      const next = { ...prev };
-      delete next[estacion];
-      return next;
-    });
-  };
+  const numOps = grupos.length;
+  const opsAsignados = Object.keys(asignacion).length;
+  const uphPorOp = modeloSeleccionado && numOps > 0
+    ? Math.round(modeloSeleccionado.uph_total / numOps)
+    : null;
+  const metaTurno = modeloSeleccionado ? Math.round(modeloSeleccionado.uph_total * 12) : null;
 
+  // ── Guardar ───────────────────────────────────────────────
   const handleGuardar = async () => {
-    if (!lineaSeleccionada) return showAlert('Falta línea', 'Selecciona una línea.');
+    if (!lineaSeleccionada) return showAlert('Falta línea', 'Configura tu línea en Inicio.');
     if (!turnoSeleccionado) return showAlert('Falta turno', 'Selecciona un turno.');
+    if (opsAsignados === 0) return showAlert('Sin operadores', 'Asigna al menos un operador.');
 
-    const items = estaciones
-      .filter(est => asignacion[est])
-      .map(est => ({ estacion: est, num_empleado: asignacion[est].num_empleado }));
-
-    if (items.length === 0) {
-      return showAlert('Sin asignaciones', 'Asigna al menos un operador a una estación.');
-    }
+    // Cada operador se asigna a todas las estaciones de su grupo
+    const items = [];
+    grupos.forEach((grupo, idx) => {
+      const op = asignacion[idx];
+      if (op) grupo.forEach(est => items.push({ estacion: est, num_empleado: op.num_empleado }));
+    });
 
     setGuardando(true);
     const result = await uphService.asignarBulk(
-      lineaSeleccionada.nombre,
-      hoy,
-      turnoSeleccionado.id,
-      modeloSeleccionado?.id || null,
-      items,
+      lineaSeleccionada.nombre, hoy,
+      turnoSeleccionado.id, modeloSeleccionado?.id || null, items,
     );
     setGuardando(false);
-
     if (result.success) {
-      showAlert('✅ Asignación guardada', `${result.data.creadas} operadores asignados en ${lineaSeleccionada.nombre}.`);
+      showAlert('✅ Listo', `${opsAsignados} operador(es) asignados en ${lineaSeleccionada.nombre}.`);
     } else {
       showAlert('Error', result.error);
     }
   };
 
-  const asignados = estaciones.filter(e => asignacion[e]).length;
-
-  // Agrupa estaciones en grupos de 3 (3 estaciones = 1 operador)
-  const grupos = [];
-  for (let i = 0; i < estaciones.length; i += 3) {
-    grupos.push(estaciones.slice(i, i + 3));
-  }
-
   if (loading) {
     return (
-      <View style={styles.center}>
+      <View style={s.center}>
         <ActivityIndicator size="large" color="#2196F3" />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, isWeb && webStyles.container]}>
-      <LinearGradient
-        colors={['#1A237E', '#0F0F0F']}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 0.35 }}
-      />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <View style={[s.container, isWeb && webStyles.container]}>
+      <LinearGradient colors={['#1A237E', '#0F0F0F']} style={StyleSheet.absoluteFill}
+        start={{ x: 0, y: 0 }} end={{ x: 0, y: 0.35 }} />
 
-        {/* Fecha + línea */}
-        <View style={styles.headerRow}>
-          <Text style={styles.fechaLabel}>📅 {hoy}</Text>
-          {lineaSeleccionada && (
-            <View style={styles.lineaActivaBadge}>
-              <Text style={styles.lineaActivaText}>{lineaSeleccionada.nombre}</Text>
+      <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
+
+        {/* ── Header ─────────────────────────────────────── */}
+        <View style={s.header}>
+          <View>
+            <Text style={s.headerFecha}>📅 {hoy}</Text>
+            {lineaUsuario
+              ? <Text style={s.headerLinea}>{lineaSeleccionada?.nombre || lineaUsuario}</Text>
+              : <Text style={[s.headerLinea, { color: '#EF9A9A' }]}>⚠️ Sin línea</Text>
+            }
+          </View>
+          {turnoSeleccionado && (
+            <View style={s.turnoBadge}>
+              <Text style={s.turnoBadgeLabel}>TURNO</Text>
+              <Text style={s.turnoBadgeValor}>{turnoSeleccionado.nombre}</Text>
+              <Text style={s.turnoBadgeHora}>{turnoSeleccionado.hora_inicio}–{turnoSeleccionado.hora_fin}</Text>
             </View>
           )}
         </View>
 
-        {/* Selector de turno */}
-        <Text style={styles.sectionLabel}>TURNO</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-          {turnos.map(t => (
-            <TouchableOpacity
-              key={t.id}
-              style={[styles.chip, turnoSeleccionado?.id === t.id && styles.chipActivo]}
-              onPress={() => setTurnoSeleccionado(t)}
-            >
-              <Text style={[styles.chipText, turnoSeleccionado?.id === t.id && styles.chipTextActivo]}>
-                {t.nombre}  {t.hora_inicio}–{t.hora_fin}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        {/* Selector de modelo */}
-        {modelos.length > 0 && (
-          <>
-            <Text style={styles.sectionLabel}>MODELO</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-              {modelos.map(m => (
-                <TouchableOpacity
-                  key={m.id}
-                  style={[styles.chip, modeloSeleccionado?.id === m.id && styles.chipModelo]}
-                  onPress={() => setModeloSeleccionado(m)}
-                >
-                  <Text style={[styles.chipText, modeloSeleccionado?.id === m.id && styles.chipTextActivo]}>
-                    {m.nombre}  ({m.uph_total} UPH)
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </>
+        {!lineaUsuario && (
+          <Text style={s.configHint}>Configura tu línea en la pestaña Inicio</Text>
         )}
-
-        {/* Lista de estaciones */}
-        <View style={styles.estHeader}>
-          <Text style={styles.sectionLabel}>ESTACIONES  ({asignados}/{estaciones.length})</Text>
-        </View>
 
         <ScrollView
           contentContainerStyle={[
-            styles.scroll,
+            s.scroll,
             isWeb && { maxWidth, alignSelf: 'center', width: '100%', paddingHorizontal: containerPadding },
           ]}
+          refreshControl={
+            <RefreshControl refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); cargarInicial(); }}
+              tintColor="#2196F3" />
+          }
         >
-          {!lineaSeleccionada ? (
-            <Text style={styles.hint}>Selecciona una línea para ver las estaciones</Text>
-          ) : loadingEstaciones ? (
-            <ActivityIndicator size="small" color="#2196F3" style={{ marginTop: 20 }} />
-          ) : estaciones.length === 0 ? (
-            <Text style={styles.hint}>Sin estaciones configuradas para {lineaSeleccionada.nombre}</Text>
-          ) : (
-            grupos.map((grupo, gi) => (
-              <View key={gi} style={styles.grupoContainer}>
-                <Text style={styles.grupoLabel}>Operador {gi + 1}</Text>
-                {grupo.map(est => {
-                  const op = asignacion[est];
-                  return (
-                    <View key={est} style={styles.estRow}>
-                      <View style={styles.estBadge}>
-                        <Text style={styles.estNumero}>{est}</Text>
-                      </View>
-                      {op ? (
-                        <TouchableOpacity
-                          style={styles.opAsignado}
-                          onPress={() => setEstacionModal(est)}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.opAsignadoNombre}>{op.nombre}</Text>
-                            <Text style={styles.opAsignadoNum}>#{op.num_empleado}</Text>
-                          </View>
-                          <TouchableOpacity style={styles.quitarBtn} onPress={() => handleQuitar(est)}>
-                            <Text style={styles.quitarText}>✕</Text>
-                          </TouchableOpacity>
-                        </TouchableOpacity>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.asignarBtn}
-                          onPress={() => setEstacionModal(est)}
-                        >
-                          <Text style={styles.asignarBtnText}>+ Asignar operador</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  );
-                })}
+          {/* ── Selector de turno ──────────────────────────── */}
+          <Text style={s.secLabel}>TURNO</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
+            {turnos.map(t => (
+              <TouchableOpacity key={t.id}
+                style={[s.chip, turnoSeleccionado?.id === t.id && s.chipActivo]}
+                onPress={() => setTurnoSeleccionado(t)}
+              >
+                <Text style={[s.chipText, turnoSeleccionado?.id === t.id && s.chipTextActivo]}>
+                  {t.nombre}  {t.hora_inicio}–{t.hora_fin}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+
+          {/* ── Selector de modelo ─────────────────────────── */}
+          {loadingLinea ? (
+            <ActivityIndicator size="small" color="#2196F3" style={{ marginVertical: 16 }} />
+          ) : modelos.length > 0 ? (
+            <>
+              <Text style={s.secLabel}>MODELO</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
+                {modelos.map(m => (
+                  <TouchableOpacity key={m.id}
+                    style={[s.chip, modeloSeleccionado?.id === m.id && s.chipModelo]}
+                    onPress={() => setModeloSeleccionado(m)}
+                  >
+                    <Text style={[s.chipText, modeloSeleccionado?.id === m.id && s.chipTextActivo]}>
+                      {m.nombre}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* ── Card UPH ───────────────────────────────── */}
+              {modeloSeleccionado && (
+                <View style={s.uphCard}>
+                  <View style={s.uphBloque}>
+                    <Text style={s.uphLabel}>UPH línea</Text>
+                    <Text style={s.uphValor}>{modeloSeleccionado.uph_total}</Text>
+                    <Text style={s.uphUnidad}>pzs/hr</Text>
+                  </View>
+                  <View style={s.uphSep} />
+                  <View style={s.uphBloque}>
+                    <Text style={s.uphLabel}>UPH / op</Text>
+                    <Text style={[s.uphValor, { color: '#2196F3' }]}>{uphPorOp ?? '—'}</Text>
+                    <Text style={s.uphUnidad}>pzs/hr</Text>
+                  </View>
+                  <View style={s.uphSep} />
+                  <View style={s.uphBloque}>
+                    <Text style={s.uphLabel}>Meta turno</Text>
+                    <Text style={[s.uphValor, { color: '#4CAF50' }]}>{metaTurno}</Text>
+                    <Text style={s.uphUnidad}>pzs</Text>
+                  </View>
+                </View>
+              )}
+            </>
+          ) : null}
+
+          {/* ── Slots de operadores ────────────────────────── */}
+          {estaciones.length > 0 && (
+            <>
+              <View style={s.opsHeader}>
+                <Text style={s.secLabel}>OPERADORES</Text>
+                <Text style={s.opsCount}>{opsAsignados}/{numOps} asignados</Text>
               </View>
-            ))
+
+              {grupos.map((_grupo, idx) => {
+                const op = asignacion[idx];
+                return (
+                  <View key={idx} style={[s.opSlot, op && s.opSlotAsignado]}>
+                    <View style={s.opSlotNumero}>
+                      <Text style={s.opSlotNumeroText}>{idx + 1}</Text>
+                    </View>
+
+                    {op ? (
+                      <View style={s.opSlotInfo}>
+                        <Iniciales nombre={op.nombre} size={38} />
+                        <View style={{ flex: 1, marginLeft: 10 }}>
+                          <Text style={s.opSlotNombre}>{op.nombre}</Text>
+                          <Text style={s.opSlotSub}>
+                            #{op.num_empleado}
+                            {uphPorOp ? `  ·  ${uphPorOp} pzs/hr` : ''}
+                          </Text>
+                        </View>
+                        <TouchableOpacity style={s.opSlotCambiar}
+                          onPress={() => setSlotModal(idx)}>
+                          <Text style={s.opSlotCambiarText}>Cambiar</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={s.opSlotQuitar}
+                          onPress={() => setAsignacion(prev => { const n = { ...prev }; delete n[idx]; return n; })}>
+                          <Text style={s.opSlotQuitarText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <TouchableOpacity style={s.opSlotVacio}
+                        onPress={() => setSlotModal(idx)}>
+                        <Text style={s.opSlotVacioText}>+ Asignar operador</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                );
+              })}
+            </>
           )}
         </ScrollView>
 
-        {/* Botón guardar */}
-        {lineaSeleccionada && estaciones.length > 0 && (
+        {/* ── Botón guardar ──────────────────────────────── */}
+        {estaciones.length > 0 && (
           <TouchableOpacity
-            style={[styles.guardarBtn, guardando && styles.guardarBtnDisabled]}
+            style={[s.guardarBtn, (guardando || opsAsignados === 0) && s.guardarBtnDisabled]}
             onPress={handleGuardar}
-            disabled={guardando}
+            disabled={guardando || opsAsignados === 0}
           >
             {guardando
               ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={styles.guardarBtnText}>
-                  Guardar asignación · {asignados} operadores
+              : <Text style={s.guardarBtnText}>
+                  Guardar asignación · {opsAsignados} operador{opsAsignados !== 1 ? 'es' : ''}
                 </Text>
             }
           </TouchableOpacity>
         )}
 
-        {/* Modal selector */}
         <ModalOperador
-          visible={!!estacionModal}
+          visible={slotModal !== null}
           operadores={operadores}
-          onSelect={handleAsignar}
-          onClose={() => setEstacionModal(null)}
+          turnoActivo={turnoSeleccionado?.nombre}
+          onSelect={(op) => {
+            setAsignacion(prev => ({ ...prev, [slotModal]: op }));
+            setSlotModal(null);
+          }}
+          onClose={() => setSlotModal(null)}
         />
       </SafeAreaView>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0F0F' },
-  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingTop: 8, marginBottom: 4 },
-  fechaLabel: { color: '#9E9E9E', fontSize: 12 },
-  lineaActivaBadge: { backgroundColor: '#1565C033', borderWidth: 1, borderColor: '#2196F3', borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3 },
-  lineaActivaText: { color: '#2196F3', fontSize: 12, fontWeight: 'bold' },
-  sectionLabel: { color: '#2196F3', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, paddingHorizontal: 16, marginBottom: 6 },
-  chipRow: { paddingHorizontal: 12, marginBottom: 12, maxHeight: 44 },
+
+  // Header
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
+    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8,
+  },
+  headerFecha: { color: '#9E9E9E', fontSize: 12, marginBottom: 2 },
+  headerLinea: { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold' },
+  turnoBadge: {
+    backgroundColor: '#1A237E55', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8,
+    borderWidth: 1, borderColor: '#3949AB', alignItems: 'center',
+  },
+  turnoBadgeLabel: { color: '#9FA8DA', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
+  turnoBadgeValor: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
+  turnoBadgeHora: { color: '#9FA8DA', fontSize: 10 },
+  configHint: { color: '#EF9A9A', fontSize: 11, paddingHorizontal: 16, marginBottom: 6 },
+
+  scroll: { paddingHorizontal: 14, paddingBottom: 90 },
+
+  // Sections
+  secLabel: { color: '#2196F3', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 6, marginTop: 12 },
+  chipRow: { marginBottom: 4, maxHeight: 44 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
     backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', marginRight: 8,
@@ -360,48 +454,48 @@ const styles = StyleSheet.create({
   chipModelo: { backgroundColor: '#4A148C', borderColor: '#7B1FA2' },
   chipText: { color: '#9E9E9E', fontSize: 13 },
   chipTextActivo: { color: '#FFFFFF', fontWeight: 'bold' },
-  estHeader: { paddingHorizontal: 16, marginBottom: 6 },
-  scroll: { paddingHorizontal: 14, paddingBottom: 100 },
-  hint: { color: '#616161', textAlign: 'center', marginTop: 24, fontSize: 14 },
 
-  // Grupo de estaciones
-  grupoContainer: {
-    marginBottom: 16,
-    backgroundColor: '#141414',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2D2D2D',
-    padding: 10,
+  // UPH card
+  uphCard: {
+    flexDirection: 'row', backgroundColor: '#111827',
+    borderRadius: 12, padding: 16, marginTop: 10, marginBottom: 4,
+    borderWidth: 1, borderColor: '#1E3A5F',
   },
-  grupoLabel: {
-    color: '#2196F3', fontSize: 11, fontWeight: 'bold',
-    letterSpacing: 1, marginBottom: 8,
-  },
+  uphBloque: { flex: 1, alignItems: 'center' },
+  uphLabel: { color: '#757575', fontSize: 10, marginBottom: 4, textAlign: 'center' },
+  uphValor: { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold' },
+  uphUnidad: { color: '#616161', fontSize: 10, marginTop: 2 },
+  uphSep: { width: 1, height: 44, backgroundColor: '#1E3A5F', marginHorizontal: 4, alignSelf: 'center' },
 
-  // Fila de estación
-  estRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  estBadge: {
-    width: 52, height: 52, borderRadius: 10, backgroundColor: '#1A1A1A',
-    borderWidth: 1, borderColor: '#333', justifyContent: 'center', alignItems: 'center',
-    marginRight: 10,
-  },
-  estNumero: { color: '#BDBDBD', fontSize: 14, fontWeight: 'bold' },
+  // Operadores
+  opsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 6 },
+  opsCount: { color: '#616161', fontSize: 12 },
 
-  opAsignado: {
-    flex: 1, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#1B5E2033', borderWidth: 1, borderColor: '#4CAF50',
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10,
+  opSlot: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#141414', borderRadius: 12,
+    borderWidth: 1, borderColor: '#2D2D2D',
+    marginBottom: 10, padding: 12, minHeight: 64,
   },
-  opAsignadoNombre: { color: '#FFFFFF', fontSize: 14, fontWeight: 'bold' },
-  opAsignadoNum: { color: '#9E9E9E', fontSize: 11, marginTop: 2 },
-  quitarBtn: { padding: 4 },
-  quitarText: { color: '#F44336', fontSize: 16 },
-
-  asignarBtn: {
-    flex: 1, borderRadius: 10, borderWidth: 1, borderColor: '#333',
-    borderStyle: 'dashed', paddingVertical: 14, alignItems: 'center',
+  opSlotAsignado: { borderColor: '#2E7D32', backgroundColor: '#0A1F0A' },
+  opSlotNumero: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333',
+    justifyContent: 'center', alignItems: 'center', marginRight: 10,
   },
-  asignarBtnText: { color: '#616161', fontSize: 13 },
+  opSlotNumeroText: { color: '#616161', fontSize: 12, fontWeight: 'bold' },
+  opSlotInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  opSlotNombre: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  opSlotSub: { color: '#757575', fontSize: 11, marginTop: 2 },
+  opSlotCambiar: {
+    backgroundColor: '#1A237E33', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
+    borderWidth: 1, borderColor: '#3949AB', marginLeft: 6,
+  },
+  opSlotCambiarText: { color: '#90CAF9', fontSize: 11 },
+  opSlotQuitar: { padding: 6, marginLeft: 4 },
+  opSlotQuitarText: { color: '#F44336', fontSize: 16 },
+  opSlotVacio: { flex: 1, alignItems: 'center', paddingVertical: 6 },
+  opSlotVacioText: { color: '#424242', fontSize: 14 },
 
   // Guardar
   guardarBtn: {
@@ -409,16 +503,13 @@ const styles = StyleSheet.create({
     paddingVertical: 16, alignItems: 'center',
   },
   guardarBtnDisabled: { backgroundColor: '#1A1A1A' },
-  guardarBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  guardarBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
 
   // Modal
-  modalOverlay: {
-    flex: 1, backgroundColor: '#000000CC',
-    justifyContent: 'flex-end',
-  },
+  modalOverlay: { flex: 1, backgroundColor: '#000000CC', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: '#1A1A1A', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, maxHeight: '80%',
+    padding: 20, maxHeight: '85%',
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   modalTitulo: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
@@ -427,12 +518,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#0F0F0F', color: '#FFFFFF', borderWidth: 1, borderColor: '#333',
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, marginBottom: 12,
   },
-  opItem: {
-    paddingVertical: 14, paddingHorizontal: 4,
-    borderBottomWidth: 1, borderBottomColor: '#2D2D2D',
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-  },
-  opNombre: { color: '#FFFFFF', fontSize: 15 },
-  opNum: { color: '#757575', fontSize: 12 },
+  opCard: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#1E1E1E' },
+  opNombre: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  opNum: { color: '#757575', fontSize: 11, marginTop: 1 },
+  opTurnoBadge: { backgroundColor: '#1A237E44', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#3949AB' },
+  opTurnoBadgeText: { color: '#90CAF9', fontSize: 11, fontWeight: 'bold' },
   emptyText: { color: '#616161', textAlign: 'center', padding: 20 },
+  turnoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, paddingVertical: 6, marginTop: 4, borderBottomWidth: 1, borderBottomColor: '#2D2D2D' },
+  turnoHeaderActivo: { borderBottomColor: '#2196F3' },
+  turnoHeaderText: { color: '#616161', fontSize: 11, fontWeight: 'bold', letterSpacing: 0.8 },
+  turnoHeaderTextActivo: { color: '#2196F3' },
+  turnoHeaderCount: { color: '#444', fontSize: 11 },
 });

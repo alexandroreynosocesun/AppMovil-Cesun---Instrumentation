@@ -4,18 +4,16 @@ import { Text } from 'react-native';
 
 import LiderDashboardScreen from '../screens/LiderDashboardScreen';
 import UPHDashboardLiderScreen from '../screens/UPHDashboardLiderScreen';
-import ModeloLideraScreen from '../screens/ModeloLideraScreen';
 import AsignacionLideraScreen from '../screens/AsignacionLideraScreen';
 import SearchHStVtScreen from '../screens/SearchHStVtScreen';
 
 const Tab = createBottomTabNavigator();
 
 const TAB_ICON = {
-  Inicio:      '🏠',
-  Dashboard:   '📊',
-  Cantidades:  '📋',
-  Asignacion:  '👥',
-  Modelos:     '🔍',
+  Asignacion: '👥',
+  Dashboard:  '📊',
+  Inicio:     '🏠',
+  Modelos:    '🔍',
 };
 
 function TabIcon({ name, focused }) {
@@ -45,9 +43,8 @@ export default function LiderTabNavigator() {
       })}
     >
       <Tab.Screen name="Inicio"     component={LiderDashboardScreen}    options={{ title: 'Inicio' }} />
-      <Tab.Screen name="Dashboard"  component={UPHDashboardLiderScreen} options={{ title: 'Dashboard' }} />
-      <Tab.Screen name="Cantidades" component={ModeloLideraScreen}      options={{ title: 'Cantidades' }} />
       <Tab.Screen name="Asignacion" component={AsignacionLideraScreen}  options={{ title: 'Asignación' }} />
+      <Tab.Screen name="Dashboard"  component={UPHDashboardLiderScreen} options={{ title: 'Dashboard' }} />
       <Tab.Screen name="Modelos"    component={SearchHStVtScreen}       options={{ title: 'Modelos' }} />
     </Tab.Navigator>
   );
