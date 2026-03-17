@@ -74,11 +74,22 @@ try:
 except Exception as _e:
     pass
 
-# Seed líneas HI-1 a HI-6
+# Seed líneas HI-1 a HI-6 y turnos A/B/C
 from app.routers.uph import seed_lineas as _seed_lineas
+from app.models.uph_models import Turno as _Turno
 try:
     _db = _UphSession()
     _seed_lineas(_db)
+    # Seed turnos A, B, C si no existen
+    _turnos_default = [
+        {"nombre": "A", "hora_inicio": "06:00", "hora_fin": "18:00", "dias": "Lunes-Sábado"},
+        {"nombre": "B", "hora_inicio": "18:00", "hora_fin": "06:00", "dias": "Lunes-Sábado"},
+        {"nombre": "C", "hora_inicio": "08:00", "hora_fin": "20:00", "dias": "Lunes-Viernes"},
+    ]
+    for _td in _turnos_default:
+        if not _db.query(_Turno).filter(_Turno.nombre == _td["nombre"]).first():
+            _db.add(_Turno(**_td))
+    _db.commit()
     _db.close()
 except Exception as _e:
     pass

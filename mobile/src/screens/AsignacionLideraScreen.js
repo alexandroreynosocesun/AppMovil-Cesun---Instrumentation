@@ -154,17 +154,23 @@ export default function AsignacionLideraScreen() {
         : rLineas.data[0];
       setLineaSeleccionada(linea);
     }
-    if (rTurnos.success) {
-      setTurnos(rTurnos.data);
-      let elegido = turnoUsuario
-        ? rTurnos.data.find(t => t.nombre === turnoUsuario) || null
-        : null;
-      if (!elegido) {
-        const rActual = await uphService.getTurnoActual();
-        elegido = rActual.data?.turno || rTurnos.data[0] || null;
-      }
-      setTurnoSeleccionado(elegido);
+    const turnosData = (rTurnos.success && rTurnos.data?.length > 0)
+      ? rTurnos.data
+      : [
+          { id: 'A', nombre: 'A', hora_inicio: '06:00', hora_fin: '18:00' },
+          { id: 'B', nombre: 'B', hora_inicio: '18:00', hora_fin: '06:00' },
+          { id: 'C', nombre: 'C', hora_inicio: '08:00', hora_fin: '20:00' },
+        ];
+    setTurnos(turnosData);
+    let elegido = turnoUsuario
+      ? turnosData.find(t => t.nombre === turnoUsuario) || null
+      : null;
+    if (!elegido) {
+      const rActual = await uphService.getTurnoActual();
+      elegido = rActual.success ? rActual.data : null;
+      if (!elegido) elegido = turnosData[0];
     }
+    setTurnoSeleccionado(elegido);
     if (rOps.success) setOperadores(rOps.data);
     setLoading(false);
     setRefreshing(false);
@@ -222,9 +228,10 @@ export default function AsignacionLideraScreen() {
     });
 
     setGuardando(true);
+    const turnoId = typeof turnoSeleccionado.id === 'number' ? turnoSeleccionado.id : null;
     const result = await uphService.asignarBulk(
       lineaSeleccionada.nombre, hoy,
-      turnoSeleccionado.id, modeloSeleccionado?.id || null, items,
+      turnoId, modeloSeleccionado?.id || null, items,
     );
     setGuardando(false);
     if (result.success) {
