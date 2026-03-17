@@ -64,6 +64,8 @@ import ModeloLideraScreen from '../screens/ModeloLideraScreen';
 // Pantallas Asignación / Operadores
 import AsignacionLideraScreen from '../screens/AsignacionLideraScreen';
 import OperadoresAdminScreen from '../screens/OperadoresAdminScreen';
+// Tab Navigator Líder de Línea
+import LiderTabNavigator from '../navigators/LiderTabNavigator';
 
 const Stack = createStackNavigator();
 
@@ -74,7 +76,7 @@ export default function AuthNavigator() {
   const getInitialRoute = () => {
     const role = user?.tipo_usuario;
     if (role === 'gerencia') return 'UPHDashboard';
-    if (role === 'lider_linea') return 'SearchHStVt';
+    if (role === 'lider_linea') return 'LiderTabs';
     if (role === 'balances') return 'SearchMainboard';
     return 'ModuleSelection';
   };
@@ -341,6 +343,11 @@ export default function AuthNavigator() {
             name="ModelosUPHAdmin"
             component={ModelosUPHAdminScreen}
             options={{ title: 'Gestión de Modelos UPH' }}
+          />
+          <Stack.Screen
+            name="LiderTabs"
+            component={LiderTabNavigator}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="ModeloLidera"
