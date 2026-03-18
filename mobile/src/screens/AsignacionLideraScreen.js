@@ -316,41 +316,56 @@ export default function AsignacionLideraScreen() {
             <>
               <TextInput
                 style={s.modeloSearch}
-                placeholder="Buscar modelo..."
+                placeholder="Buscar para cambiar modelo..."
                 placeholderTextColor="#37474F"
                 value={busquedaModelo}
                 onChangeText={setBusquedaModelo}
               />
-              {modelos
-                .filter(m => !busquedaModelo || m.nombre.toLowerCase().includes(busquedaModelo.toLowerCase()))
-                .map(m => {
-                  const activo = modeloSeleccionado?.id === m.id;
-                  return (
-                    <TouchableOpacity key={m.id}
-                      style={[s.modeloItem, activo && s.modeloItemActivo]}
-                      onPress={() => {
-                        if (activo) return;
-                        showAlert(
-                          'Cambiar modelo',
-                          `¿Cambiar a "${m.nombre}"? Las estaciones asignadas se mantendrán.`,
-                          [
-                            { text: 'Cancelar', style: 'cancel' },
-                            { text: 'Cambiar', onPress: () => setModeloSeleccionado(m) },
-                          ],
-                        );
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[s.modeloItemNombre, activo && s.modeloItemNombreActivo]}>{m.nombre}</Text>
-                        {(m.num_placa || m.modelo_interno) && (
-                          <Text style={s.modeloItemSub}>{[m.num_placa, m.modelo_interno].filter(Boolean).join(' · ')}</Text>
-                        )}
-                      </View>
-                      <Text style={[s.modeloItemUph, activo && { color: '#66BB6A' }]}>{m.uph_total} pzs/hr</Text>
-                      {activo && <Text style={s.modeloItemCheck}>✓</Text>}
-                    </TouchableOpacity>
-                  );
-                })}
+              {busquedaModelo ? (
+                /* Resultados de búsqueda */
+                modelos
+                  .filter(m => m.nombre.toLowerCase().includes(busquedaModelo.toLowerCase()))
+                  .map(m => {
+                    const activo = modeloSeleccionado?.id === m.id;
+                    return (
+                      <TouchableOpacity key={m.id}
+                        style={[s.modeloItem, activo && s.modeloItemActivo]}
+                        onPress={() => {
+                          if (activo) { setBusquedaModelo(''); return; }
+                          showAlert(
+                            'Cambiar modelo',
+                            `¿Cambiar a "${m.nombre}"?`,
+                            [
+                              { text: 'Cancelar', style: 'cancel' },
+                              { text: 'Cambiar', onPress: () => { setModeloSeleccionado(m); setBusquedaModelo(''); } },
+                            ],
+                          );
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.modeloItemNombre, activo && s.modeloItemNombreActivo]}>{m.nombre}</Text>
+                          {(m.num_placa || m.modelo_interno) && (
+                            <Text style={s.modeloItemSub}>{[m.num_placa, m.modelo_interno].filter(Boolean).join(' · ')}</Text>
+                          )}
+                        </View>
+                        <Text style={[s.modeloItemUph, activo && { color: '#66BB6A' }]}>{m.uph_total} pzs/hr</Text>
+                        {activo && <Text style={s.modeloItemCheck}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  })
+              ) : modeloSeleccionado ? (
+                /* Solo el modelo activo */
+                <View style={[s.modeloItem, s.modeloItemActivo]}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.modeloItemNombreActivo}>{modeloSeleccionado.nombre}</Text>
+                    {(modeloSeleccionado.num_placa || modeloSeleccionado.modelo_interno) && (
+                      <Text style={s.modeloItemSub}>{[modeloSeleccionado.num_placa, modeloSeleccionado.modelo_interno].filter(Boolean).join(' · ')}</Text>
+                    )}
+                  </View>
+                  <Text style={{ color: '#66BB6A', fontSize: 12, fontWeight: 'bold', marginRight: 8 }}>{modeloSeleccionado.uph_total} pzs/hr</Text>
+                  <Text style={s.modeloItemCheck}>✓</Text>
+                </View>
+              ) : null}
               {modeloSeleccionado && (
                 <View style={s.uphCard}>
                   <LinearGradient colors={['#0D2137', '#0A1628']} style={StyleSheet.absoluteFill}
