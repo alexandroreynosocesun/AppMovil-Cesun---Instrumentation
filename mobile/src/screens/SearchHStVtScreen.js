@@ -40,7 +40,7 @@ function getFecha(item) {
 }
 
 const PINS_RE = /^\d+(\+\d+)?p$/i;
-const MIC_RE = /^Mic\(/i;
+const MIC_RE = /^MIC/i;
 
 function parseScript(item) {
   const filename = getName(item);
