@@ -300,21 +300,26 @@ export default function AsignacionLideraScreen() {
               {/* ── Card UPH ─────────────────────────────── */}
               {modeloSeleccionado && (
                 <View style={s.uphCard}>
+                  <LinearGradient
+                    colors={['#0D2137', '#0A1628']}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                  />
                   <View style={s.uphBloque}>
-                    <Text style={s.uphLabel}>UPH línea</Text>
+                    <Text style={s.uphLabel}>UPH LÍNEA</Text>
                     <Text style={s.uphValor}>{modeloSeleccionado.uph_total}</Text>
-                    <Text style={s.uphUnidad}>pzs/hr</Text>
+                    <Text style={s.uphUnidad}>pzs / hr</Text>
                   </View>
                   <View style={s.uphSep} />
                   <View style={s.uphBloque}>
-                    <Text style={s.uphLabel}>UPH / op</Text>
-                    <Text style={[s.uphValor, { color: '#2196F3' }]}>{uphPorOp ?? '—'}</Text>
-                    <Text style={s.uphUnidad}>pzs/hr</Text>
+                    <Text style={s.uphLabel}>UPH / OP</Text>
+                    <Text style={[s.uphValor, { color: '#42A5F5' }]}>{uphPorOp ?? '—'}</Text>
+                    <Text style={s.uphUnidad}>pzs / hr</Text>
                   </View>
                   <View style={s.uphSep} />
                   <View style={s.uphBloque}>
-                    <Text style={s.uphLabel}>Meta turno</Text>
-                    <Text style={[s.uphValor, { color: '#4CAF50' }]}>{metaTurno ?? '—'}</Text>
+                    <Text style={s.uphLabel}>META TURNO</Text>
+                    <Text style={[s.uphValor, { color: '#66BB6A' }]}>{metaTurno ?? '—'}</Text>
                     <Text style={s.uphUnidad}>pzs</Text>
                   </View>
                 </View>
@@ -322,56 +327,60 @@ export default function AsignacionLideraScreen() {
             </>
           ) : (
             <View style={s.sinModeloCard}>
-              <Text style={s.sinModeloText}>Sin modelos para esta línea</Text>
-              <Text style={s.sinModeloHint}>El administrador debe configurar los modelos</Text>
+              <Text style={s.sinModeloIcon}>🔧</Text>
+              <Text style={s.sinModeloText}>Sin modelos configurados</Text>
+              <Text style={s.sinModeloHint}>El administrador debe configurar los modelos para esta línea</Text>
             </View>
           )}
 
           {/* ── Slots de operadores ──────────────────────── */}
           <View style={s.opsHeader}>
             <Text style={s.secLabel}>OPERADORES</Text>
-            <Text style={s.opsCount}>{opsAsignados}/{numSlots} asignados</Text>
+            <View style={s.opsPill}>
+              <Text style={s.opsPillText}>{opsAsignados} / {numSlots}</Text>
+            </View>
           </View>
 
           {Array.from({ length: numSlots }).map((_, idx) => {
             const op = asignacion[idx];
             return (
-              <View key={idx} style={[s.opSlot, op && s.opSlotAsignado]}>
+              <View key={idx} style={[s.opSlot, op ? s.opSlotAsignado : s.opSlotVacioStyle]}>
                 {/* Número del slot */}
-                <View style={s.opSlotNumero}>
-                  <Text style={s.opSlotNumeroText}>{idx + 1}</Text>
+                <View style={[s.opSlotNumero, op && s.opSlotNumeroAsignado]}>
+                  <Text style={[s.opSlotNumeroText, op && s.opSlotNumeroTextAsignado]}>{idx + 1}</Text>
                 </View>
 
                 {op ? (
                   /* Slot asignado */
                   <View style={s.opSlotInfo}>
-                    <Iniciales nombre={op.nombre} size={38} />
-                    <View style={{ flex: 1, marginLeft: 10 }}>
+                    <Iniciales nombre={op.nombre} size={42} />
+                    <View style={{ flex: 1, marginLeft: 12 }}>
                       <Text style={s.opSlotNombre}>{op.nombre}</Text>
-                      <Text style={s.opSlotSub}>
-                        #{op.num_empleado}
-                        {uphPorOp ? `  ·  ${uphPorOp} pzs/hr` : ''}
-                      </Text>
+                      <View style={s.opSlotSubRow}>
+                        <Text style={s.opSlotNumEmp}>#{op.num_empleado}</Text>
+                        {uphPorOp ? (
+                          <View style={s.uphMiniChip}>
+                            <Text style={s.uphMiniChipText}>{uphPorOp} pzs/hr</Text>
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
-                    <TouchableOpacity style={s.opSlotCambiar}
-                      onPress={() => setSlotModal(idx)}>
+                    <TouchableOpacity style={s.opSlotCambiar} onPress={() => setSlotModal(idx)}>
                       <Text style={s.opSlotCambiarText}>Cambiar</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={s.opSlotQuitar}
-                      onPress={() => removeSlot(idx)}>
+                    <TouchableOpacity style={s.opSlotQuitar} onPress={() => removeSlot(idx)}>
                       <Text style={s.opSlotQuitarText}>✕</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
                   /* Slot vacío */
                   <View style={s.opSlotVacioRow}>
-                    <TouchableOpacity style={s.opSlotVacio}
-                      onPress={() => setSlotModal(idx)}>
-                      <Text style={s.opSlotVacioText}>+ Asignar operador</Text>
+                    <TouchableOpacity style={s.opSlotVacio} onPress={() => setSlotModal(idx)}>
+                      <Text style={s.opSlotVacioIcon}>＋</Text>
+                      <Text style={s.opSlotVacioText}>Asignar operador</Text>
                     </TouchableOpacity>
                     {numSlots > 1 && (
-                      <TouchableOpacity style={s.opSlotEliminar}
-                        onPress={() => removeSlot(idx)}>
+                      <TouchableOpacity style={s.opSlotEliminar} onPress={() => removeSlot(idx)}>
                         <Text style={s.opSlotQuitarText}>✕</Text>
                       </TouchableOpacity>
                     )}
@@ -454,64 +463,84 @@ const s = StyleSheet.create({
 
   // Sin modelo
   sinModeloCard: {
-    backgroundColor: '#141414', borderRadius: 12, padding: 16,
-    alignItems: 'center', borderWidth: 1, borderColor: '#2D2D2D', marginBottom: 4,
+    backgroundColor: '#0F1923', borderRadius: 14, padding: 20,
+    alignItems: 'center', borderWidth: 1, borderColor: '#1E2D3D', marginBottom: 4,
   },
-  sinModeloText: { color: '#616161', fontSize: 14, fontWeight: '600', marginBottom: 4 },
-  sinModeloHint: { color: '#424242', fontSize: 12 },
+  sinModeloIcon: { fontSize: 28, marginBottom: 8 },
+  sinModeloText: { color: '#546E7A', fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  sinModeloHint: { color: '#37474F', fontSize: 12, textAlign: 'center' },
 
   // UPH card
   uphCard: {
-    flexDirection: 'row', backgroundColor: '#111827',
-    borderRadius: 12, padding: 16, marginTop: 10, marginBottom: 4,
-    borderWidth: 1, borderColor: '#1E3A5F',
+    flexDirection: 'row', borderRadius: 14, padding: 18,
+    marginTop: 10, marginBottom: 4,
+    borderWidth: 1, borderColor: '#1E3A5F', overflow: 'hidden',
   },
   uphBloque:  { flex: 1, alignItems: 'center' },
-  uphLabel:   { color: '#757575', fontSize: 10, marginBottom: 4, textAlign: 'center' },
-  uphValor:   { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold' },
-  uphUnidad:  { color: '#616161', fontSize: 10, marginTop: 2 },
-  uphSep:     { width: 1, height: 44, backgroundColor: '#1E3A5F', marginHorizontal: 4, alignSelf: 'center' },
+  uphLabel:   { color: '#546E7A', fontSize: 9, fontWeight: 'bold', letterSpacing: 1, marginBottom: 6, textAlign: 'center' },
+  uphValor:   { color: '#FFFFFF', fontSize: 26, fontWeight: 'bold' },
+  uphUnidad:  { color: '#37474F', fontSize: 10, marginTop: 3 },
+  uphSep:     { width: 1, height: 48, backgroundColor: '#1E3A5F88', marginHorizontal: 4, alignSelf: 'center' },
 
   // Operadores header
   opsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   opsCount:  { color: '#616161', fontSize: 12 },
+  opsPill: {
+    backgroundColor: '#1565C022', borderRadius: 10, borderWidth: 1, borderColor: '#1565C0',
+    paddingHorizontal: 10, paddingVertical: 3,
+  },
+  opsPillText: { color: '#42A5F5', fontSize: 12, fontWeight: 'bold' },
 
-  // Slot
+  // Slot base
   opSlot: {
     flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#141414', borderRadius: 12,
-    borderWidth: 1, borderColor: '#2D2D2D',
-    marginBottom: 10, padding: 12, minHeight: 64,
+    borderRadius: 14, borderWidth: 1,
+    marginBottom: 10, padding: 14, minHeight: 72,
+    overflow: 'hidden',
   },
-  opSlotAsignado: { borderColor: '#2E7D32', backgroundColor: '#0A1F0A' },
+  opSlotAsignado:  { borderColor: '#2E7D32', backgroundColor: '#071A0A' },
+  opSlotVacioStyle:{ borderColor: '#1E2D3D', backgroundColor: '#0A1422', borderStyle: 'dashed' },
+
   opSlotNumero: {
-    width: 28, height: 28, borderRadius: 14,
-    backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333',
-    justifyContent: 'center', alignItems: 'center', marginRight: 10,
+    width: 32, height: 32, borderRadius: 10,
+    backgroundColor: '#0D1B2A', borderWidth: 1, borderColor: '#1E3A5F',
+    justifyContent: 'center', alignItems: 'center', marginRight: 12,
   },
-  opSlotNumeroText: { color: '#616161', fontSize: 12, fontWeight: 'bold' },
-  opSlotInfo:       { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  opSlotNombre:     { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  opSlotSub:        { color: '#757575', fontSize: 11, marginTop: 2 },
+  opSlotNumeroAsignado:     { backgroundColor: '#1B5E2044', borderColor: '#2E7D32' },
+  opSlotNumeroText:         { color: '#546E7A', fontSize: 13, fontWeight: 'bold' },
+  opSlotNumeroTextAsignado: { color: '#66BB6A' },
+
+  opSlotInfo:    { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  opSlotNombre:  { color: '#ECEFF1', fontSize: 15, fontWeight: '700' },
+  opSlotSubRow:  { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 },
+  opSlotNumEmp:  { color: '#546E7A', fontSize: 11 },
+  uphMiniChip: {
+    backgroundColor: '#0D47A122', borderRadius: 6, borderWidth: 1, borderColor: '#1565C0',
+    paddingHorizontal: 7, paddingVertical: 2,
+  },
+  uphMiniChipText: { color: '#42A5F5', fontSize: 10, fontWeight: 'bold' },
+
   opSlotCambiar: {
-    backgroundColor: '#1A237E33', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
-    borderWidth: 1, borderColor: '#3949AB', marginLeft: 6,
+    backgroundColor: '#1A237E22', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6,
+    borderWidth: 1, borderColor: '#3949AB55', marginLeft: 6,
   },
-  opSlotCambiarText: { color: '#90CAF9', fontSize: 11 },
-  opSlotQuitar:      { padding: 6, marginLeft: 4 },
-  opSlotQuitarText:  { color: '#F44336', fontSize: 16 },
-  opSlotVacioRow:    { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  opSlotVacio:       { flex: 1, alignItems: 'center', paddingVertical: 6 },
-  opSlotVacioText:   { color: '#424242', fontSize: 14 },
-  opSlotEliminar:    { padding: 6 },
+  opSlotCambiarText: { color: '#7986CB', fontSize: 11, fontWeight: '600' },
+  opSlotQuitar:      { padding: 6, marginLeft: 2 },
+  opSlotQuitarText:  { color: '#EF5350', fontSize: 16 },
+
+  opSlotVacioRow:  { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  opSlotVacio:     { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 8, gap: 8 },
+  opSlotVacioIcon: { color: '#1E3A5F', fontSize: 20, fontWeight: 'bold' },
+  opSlotVacioText: { color: '#37474F', fontSize: 14, fontWeight: '600' },
+  opSlotEliminar:  { padding: 6 },
 
   // Add slot
   addSlotBtn: {
-    borderWidth: 1, borderColor: '#2D2D2D', borderStyle: 'dashed',
-    borderRadius: 12, paddingVertical: 14,
-    alignItems: 'center', marginBottom: 10,
+    borderWidth: 1.5, borderColor: '#1E3A5F', borderStyle: 'dashed',
+    borderRadius: 14, paddingVertical: 16,
+    alignItems: 'center', marginBottom: 10, backgroundColor: '#060E17',
   },
-  addSlotText: { color: '#2196F3', fontSize: 14 },
+  addSlotText: { color: '#1E88E5', fontSize: 14, fontWeight: '600' },
 
   // Guardar
   guardarBtn: {
