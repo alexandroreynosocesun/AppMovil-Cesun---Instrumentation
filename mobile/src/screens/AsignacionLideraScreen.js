@@ -232,8 +232,9 @@ export default function AsignacionLideraScreen() {
 
   // ── Métricas ────────────────────────────────────────────
   const opsConOp = Object.values(asignacion).filter(v => v?.op).length;
-  const uphPorOp = modeloSeleccionado && opsConOp > 0
-    ? Math.round(modeloSeleccionado.uph_total / opsConOp)
+  const numEstaciones = todasEstaciones.length;
+  const uphPorEst = modeloSeleccionado && numEstaciones > 0
+    ? Math.round(modeloSeleccionado.uph_total / numEstaciones)
     : null;
   const metaTurno = modeloSeleccionado ? Math.round(modeloSeleccionado.uph_total * 12) : null;
   const opsAsignados = opsConOp;
@@ -377,8 +378,8 @@ export default function AsignacionLideraScreen() {
                   </View>
                   <View style={s.uphSep} />
                   <View style={s.uphBloque}>
-                    <Text style={s.uphLabel}>UPH / OP</Text>
-                    <Text style={[s.uphValor, { color: '#42A5F5' }]}>{uphPorOp ?? '—'}</Text>
+                    <Text style={s.uphLabel}>UPH / EST</Text>
+                    <Text style={[s.uphValor, { color: '#42A5F5' }]}>{uphPorEst ?? '—'}</Text>
                     <Text style={s.uphUnidad}>pzs / hr</Text>
                   </View>
                   <View style={s.uphSep} />
@@ -440,9 +441,9 @@ export default function AsignacionLideraScreen() {
                                 <Text style={s.estBadgeText}>{estSlot.length} est.</Text>
                               </View>
                             )}
-                            {uphPorOp && (
+                            {uphPorEst && (
                               <View style={s.uphMiniChip}>
-                                <Text style={s.uphMiniChipText}>{uphPorOp} pzs/hr</Text>
+                                <Text style={s.uphMiniChipText}>{uphPorEst} pzs/hr</Text>
                               </View>
                             )}
                           </View>
