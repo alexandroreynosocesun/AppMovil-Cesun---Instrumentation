@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity, Text,
-  Modal, TextInput, SectionList, KeyboardAvoidingView, Platform, RefreshControl
+  Modal, FlatList, Platform, RefreshControl, KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,53 +12,31 @@ import { showAlert } from '../utils/alertUtils';
 import { uphService } from '../services/UPHService';
 import { useAuth } from '../contexts/AuthContext';
 
-// ── Avatar con iniciales ──────────────────────────────────────
+const MAX_SLOTS = 4;
+
+// ── Avatar con iniciales ────────────────────────────────────
 function Iniciales({ nombre, size = 40 }) {
-  const parts = nombre.trim().split(' ');
-  const text = (parts[0]?.[0] || '') + (parts[1]?.[0] || '');
+  const parts = (nombre || '?').trim().split(' ');
+  const text = ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
   return (
     <View style={[av.circle, { width: size, height: size, borderRadius: size / 2 }]}>
-      <Text style={[av.text, { fontSize: size * 0.33 }]}>{text.toUpperCase()}</Text>
+      <Text style={[av.text, { fontSize: size * 0.33 }]}>{text}</Text>
     </View>
   );
 }
 const av = StyleSheet.create({
   circle: { backgroundColor: '#1565C044', borderWidth: 1, borderColor: '#1565C0', justifyContent: 'center', alignItems: 'center' },
-  text: { color: '#90CAF9', fontWeight: 'bold' },
+  text:   { color: '#90CAF9', fontWeight: 'bold' },
 });
 
-// ── Modal selector de operador (agrupado por turno) ──────────
-function ModalOperador({ visible, operadores, turnoActivo, onSelect, onClose }) {
-  const [busqueda, setBusqueda] = useState('');
-
-  const secciones = useMemo(() => {
-    const q = busqueda.toLowerCase();
-    const todos = q
-      ? operadores.filter(o =>
-          o.nombre.toLowerCase().includes(q) || o.num_empleado.includes(q)
-        )
-      : operadores;
-
-    const grupos = {};
-    todos.forEach(o => {
-      const t = o.turno || 'Sin turno';
-      if (!grupos[t]) grupos[t] = [];
-      grupos[t].push(o);
-    });
-
-    const orden = ['A', 'B', 'C', 'Sin turno'];
-    const claves = Object.keys(grupos).sort((a, b) => {
-      const ia = a === turnoActivo ? -1 : orden.indexOf(a);
-      const ib = b === turnoActivo ? -1 : orden.indexOf(b);
-      return ia - ib;
-    });
-
-    return claves.map(t => ({ title: t, esActivo: t === turnoActivo, data: grupos[t] }));
-  }, [busqueda, operadores, turnoActivo]);
-
+// ── Modal selector de operador (lista simple sin filtros) ───
+function ModalOperador({ visible, operadores, onSelect, onClose }) {
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.modalOverlay}>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        style={s.modalOverlay}
+      >
         <View style={s.modalCard}>
           <View style={s.modalHeader}>
             <Text style={s.modalTitulo}>Seleccionar operador</Text>
@@ -67,44 +45,19 @@ function ModalOperador({ visible, operadores, turnoActivo, onSelect, onClose }) 
             </TouchableOpacity>
           </View>
 
-          <TextInput
-            style={s.busquedaInput}
-            placeholder="Buscar por nombre o #empleado..."
-            placeholderTextColor="#616161"
-            value={busqueda}
-            onChangeText={setBusqueda}
-            autoFocus
-          />
-
-          <SectionList
-            sections={secciones}
+          <FlatList
+            data={operadores}
             keyExtractor={item => item.num_empleado}
-            style={{ maxHeight: 380 }}
-            stickySectionHeadersEnabled={false}
-            ListEmptyComponent={<Text style={s.emptyText}>Sin resultados</Text>}
-            renderSectionHeader={({ section }) => (
-              <View style={[s.turnoHeader, section.esActivo && s.turnoHeaderActivo]}>
-                <Text style={[s.turnoHeaderText, section.esActivo && s.turnoHeaderTextActivo]}>
-                  Turno {section.title}{section.esActivo ? '  ★ tu turno' : ''}
-                </Text>
-                <Text style={s.turnoHeaderCount}>{section.data.length}</Text>
-              </View>
-            )}
+            style={{ maxHeight: 420 }}
+            ListEmptyComponent={<Text style={s.emptyText}>Sin operadores registrados</Text>}
+            ItemSeparatorComponent={() => <View style={s.itemSep} />}
             renderItem={({ item }) => (
-              <TouchableOpacity
-                style={s.opCard}
-                onPress={() => { onSelect(item); setBusqueda(''); }}
-              >
+              <TouchableOpacity style={s.opCard} onPress={() => onSelect(item)}>
                 <Iniciales nombre={item.nombre} />
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={s.opNombre}>{item.nombre}</Text>
                   <Text style={s.opNum}>#{item.num_empleado}</Text>
                 </View>
-                {item.turno && (
-                  <View style={s.opTurnoBadge}>
-                    <Text style={s.opTurnoBadgeText}>{item.turno}</Text>
-                  </View>
-                )}
               </TouchableOpacity>
             )}
           />
@@ -114,46 +67,47 @@ function ModalOperador({ visible, operadores, turnoActivo, onSelect, onClose }) 
   );
 }
 
-// ── Pantalla principal ────────────────────────────────────────
+// ── Pantalla principal ──────────────────────────────────────
 export default function AsignacionLideraScreen() {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user } = useAuth();
-  const lineaUsuario = user?.linea_uph;
-  const turnoUsuario = user?.turno_actual;
+  const lineaUsuario  = user?.linea_uph;
+  const turnoUsuario  = user?.turno_actual;
 
-  const [turnos, setTurnos] = useState([]);
-  const [operadores, setOperadores] = useState([]);
-  const [modelos, setModelos] = useState([]);
-
+  const [operadores,        setOperadores]        = useState([]);
+  const [modelos,           setModelos]           = useState([]);
   const [lineaSeleccionada, setLineaSeleccionada] = useState(null);
   const [turnoSeleccionado, setTurnoSeleccionado] = useState(null);
-  const [modeloSeleccionado, setModeloSeleccionado] = useState(null);
-  const [estaciones, setEstaciones] = useState([]);
+  const [modeloSeleccionado,setModeloSeleccionado]= useState(null);
 
-  // Asignación por slot de operador (índice del grupo)
-  const [asignacion, setAsignacion] = useState({}); // { 0: op, 1: op, ... }
+  // Slots de operadores: mínimo 2, máximo 4
+  const [numSlots,  setNumSlots]  = useState(2);
+  const [asignacion,setAsignacion]= useState({}); // { slotIdx: operador }
   const [slotModal, setSlotModal] = useState(null);
 
-  const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [loadingLinea, setLoadingLinea] = useState(false);
-  const [guardando, setGuardando] = useState(false);
+  const [loading,      setLoading]      = useState(true);
+  const [refreshing,   setRefreshing]   = useState(false);
+  const [loadingModelos,setLoadingModelos]=useState(false);
+  const [guardando,    setGuardando]    = useState(false);
 
   const hoy = new Date().toISOString().split('T')[0];
 
-  // ── Carga inicial ─────────────────────────────────────────
+  // ── Carga inicial ───────────────────────────────────────
   const cargarInicial = useCallback(async () => {
     const [rLineas, rTurnos, rOps] = await Promise.all([
       uphService.getLineas(),
       uphService.getTurnos(),
       uphService.getOperadores(),
     ]);
+
     if (rLineas.success && rLineas.data.length > 0) {
       const linea = lineaUsuario
         ? rLineas.data.find(l => l.nombre === lineaUsuario) || rLineas.data[0]
         : rLineas.data[0];
       setLineaSeleccionada(linea);
     }
+
+    // Turno del perfil o del servidor (solo para el header / bulk save)
     const turnosData = (rTurnos.success && rTurnos.data?.length > 0)
       ? rTurnos.data
       : [
@@ -161,16 +115,15 @@ export default function AsignacionLideraScreen() {
           { id: 'B', nombre: 'B', hora_inicio: '18:00', hora_fin: '06:00' },
           { id: 'C', nombre: 'C', hora_inicio: '08:00', hora_fin: '20:00' },
         ];
-    setTurnos(turnosData);
     let elegido = turnoUsuario
       ? turnosData.find(t => t.nombre === turnoUsuario) || null
       : null;
     if (!elegido) {
       const rActual = await uphService.getTurnoActual();
-      elegido = rActual.success ? rActual.data : null;
-      if (!elegido) elegido = turnosData[0];
+      elegido = rActual.success ? rActual.data : turnosData[0];
     }
     setTurnoSeleccionado(elegido);
+
     if (rOps.success) setOperadores(rOps.data);
     setLoading(false);
     setRefreshing(false);
@@ -178,57 +131,63 @@ export default function AsignacionLideraScreen() {
 
   useEffect(() => { cargarInicial(); }, [cargarInicial]);
 
-  // ── Carga datos de línea ──────────────────────────────────
+  // ── Carga modelos de la línea ───────────────────────────
   useEffect(() => {
     if (!lineaSeleccionada) return;
-    async function cargarLinea() {
-      setLoadingLinea(true);
-      setEstaciones([]);
-      setAsignacion({});
+    async function cargarModelos() {
+      setLoadingModelos(true);
       setModeloSeleccionado(null);
-      const [rEst, rMod] = await Promise.all([
-        uphService.getEstacionesPorLinea(lineaSeleccionada.nombre),
-        uphService.getModelosPorLinea(lineaSeleccionada.nombre),
-      ]);
-      if (rEst.success) setEstaciones(rEst.data.estaciones || []);
-      if (rMod.success) {
-        setModelos(rMod.data);
-        if (rMod.data.length > 0) setModeloSeleccionado(rMod.data[0]);
+      const r = await uphService.getModelosPorLinea(lineaSeleccionada.nombre);
+      if (r.success) {
+        setModelos(r.data);
+        if (r.data.length > 0) setModeloSeleccionado(r.data[0]);
+      } else {
+        setModelos([]);
       }
-      setLoadingLinea(false);
+      setLoadingModelos(false);
     }
-    cargarLinea();
+    cargarModelos();
   }, [lineaSeleccionada]);
 
-  // ── Grupos de estaciones (3 estaciones = 1 operador) ──────
-  const grupos = useMemo(() => {
-    const g = [];
-    for (let i = 0; i < estaciones.length; i += 3) g.push(estaciones.slice(i, i + 3));
-    return g;
-  }, [estaciones]);
-
-  const numOps = grupos.length;
-  const opsAsignados = Object.keys(asignacion).length;
-  const uphPorOp = modeloSeleccionado && numOps > 0
-    ? Math.round(modeloSeleccionado.uph_total / numOps)
+  // ── Métricas UPH ───────────────────────────────────────
+  const uphPorOp  = modeloSeleccionado && numSlots > 0
+    ? Math.round(modeloSeleccionado.uph_total / numSlots)
     : null;
-  const metaTurno = modeloSeleccionado ? Math.round(modeloSeleccionado.uph_total * 12) : null;
+  const metaTurno = modeloSeleccionado
+    ? Math.round(modeloSeleccionado.uph_total * 12)
+    : null;
 
-  // ── Guardar ───────────────────────────────────────────────
+  const opsAsignados = Object.keys(asignacion).length;
+
+  // ── Agregar / quitar slots ──────────────────────────────
+  const addSlot = () => setNumSlots(n => Math.min(n + 1, MAX_SLOTS));
+  const removeSlot = (idx) => {
+    setNumSlots(n => Math.max(n - 1, 1));
+    setAsignacion(prev => {
+      const next = {};
+      Object.entries(prev).forEach(([k, v]) => {
+        const ki = parseInt(k);
+        if (ki < idx) next[ki] = v;
+        else if (ki > idx) next[ki - 1] = v;
+      });
+      return next;
+    });
+  };
+
+  // ── Guardar ─────────────────────────────────────────────
   const handleGuardar = async () => {
     if (!lineaSeleccionada) return showAlert('Falta línea', 'Configura tu línea en Inicio.');
-    if (!turnoSeleccionado) return showAlert('Falta turno', 'Selecciona un turno.');
-    if (opsAsignados === 0) return showAlert('Sin operadores', 'Asigna al menos un operador.');
+    if (opsAsignados === 0)  return showAlert('Sin operadores', 'Asigna al menos un operador.');
 
-    // Cada operador se asigna a todas las estaciones de su grupo
     const items = [];
-    grupos.forEach((grupo, idx) => {
+    Array.from({ length: numSlots }).forEach((_, idx) => {
       const op = asignacion[idx];
-      if (op) grupo.forEach(est => items.push({ estacion: est, num_empleado: op.num_empleado }));
+      if (op) items.push({ estacion: `slot_${idx + 1}`, num_empleado: op.num_empleado });
     });
 
     setGuardando(true);
-    const turnoId = typeof turnoSeleccionado.id === 'number' ? turnoSeleccionado.id : null;
+    const turnoId = turnoSeleccionado && typeof turnoSeleccionado.id === 'number'
+      ? turnoSeleccionado.id : null;
     const result = await uphService.asignarBulk(
       lineaSeleccionada.nombre, hoy,
       turnoId, modeloSeleccionado?.id || null, items,
@@ -256,7 +215,7 @@ export default function AsignacionLideraScreen() {
 
       <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
 
-        {/* ── Header ─────────────────────────────────────── */}
+        {/* ── Header ──────────────────────────────────────── */}
         <View style={s.header}>
           <View>
             <Text style={s.headerFecha}>📅 {hoy}</Text>
@@ -269,7 +228,9 @@ export default function AsignacionLideraScreen() {
             <View style={s.turnoBadge}>
               <Text style={s.turnoBadgeLabel}>TURNO</Text>
               <Text style={s.turnoBadgeValor}>{turnoSeleccionado.nombre}</Text>
-              <Text style={s.turnoBadgeHora}>{turnoSeleccionado.hora_inicio}–{turnoSeleccionado.hora_fin}</Text>
+              <Text style={s.turnoBadgeHora}>
+                {turnoSeleccionado.hora_inicio}–{turnoSeleccionado.hora_fin}
+              </Text>
             </View>
           )}
         </View>
@@ -289,27 +250,12 @@ export default function AsignacionLideraScreen() {
               tintColor="#2196F3" />
           }
         >
-          {/* ── Selector de turno ──────────────────────────── */}
-          <Text style={s.secLabel}>TURNO</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
-            {turnos.map(t => (
-              <TouchableOpacity key={t.id}
-                style={[s.chip, turnoSeleccionado?.id === t.id && s.chipActivo]}
-                onPress={() => setTurnoSeleccionado(t)}
-              >
-                <Text style={[s.chipText, turnoSeleccionado?.id === t.id && s.chipTextActivo]}>
-                  {t.nombre}  {t.hora_inicio}–{t.hora_fin}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-
-          {/* ── Selector de modelo ─────────────────────────── */}
-          {loadingLinea ? (
-            <ActivityIndicator size="small" color="#2196F3" style={{ marginVertical: 16 }} />
+          {/* ── Selector de modelo ──────────────────────── */}
+          <Text style={s.secLabel}>MODELO</Text>
+          {loadingModelos ? (
+            <ActivityIndicator size="small" color="#2196F3" style={{ marginBottom: 12 }} />
           ) : modelos.length > 0 ? (
             <>
-              <Text style={s.secLabel}>MODELO</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
                 {modelos.map(m => (
                   <TouchableOpacity key={m.id}
@@ -323,7 +269,7 @@ export default function AsignacionLideraScreen() {
                 ))}
               </ScrollView>
 
-              {/* ── Card UPH ───────────────────────────────── */}
+              {/* ── Card UPH ─────────────────────────────── */}
               {modeloSeleccionado && (
                 <View style={s.uphCard}>
                   <View style={s.uphBloque}>
@@ -340,82 +286,99 @@ export default function AsignacionLideraScreen() {
                   <View style={s.uphSep} />
                   <View style={s.uphBloque}>
                     <Text style={s.uphLabel}>Meta turno</Text>
-                    <Text style={[s.uphValor, { color: '#4CAF50' }]}>{metaTurno}</Text>
+                    <Text style={[s.uphValor, { color: '#4CAF50' }]}>{metaTurno ?? '—'}</Text>
                     <Text style={s.uphUnidad}>pzs</Text>
                   </View>
                 </View>
               )}
             </>
-          ) : null}
+          ) : (
+            <View style={s.sinModeloCard}>
+              <Text style={s.sinModeloText}>Sin modelos para esta línea</Text>
+              <Text style={s.sinModeloHint}>El administrador debe configurar los modelos</Text>
+            </View>
+          )}
 
-          {/* ── Slots de operadores ────────────────────────── */}
-          {estaciones.length > 0 && (
-            <>
-              <View style={s.opsHeader}>
-                <Text style={s.secLabel}>OPERADORES</Text>
-                <Text style={s.opsCount}>{opsAsignados}/{numOps} asignados</Text>
-              </View>
+          {/* ── Slots de operadores ──────────────────────── */}
+          <View style={s.opsHeader}>
+            <Text style={s.secLabel}>OPERADORES</Text>
+            <Text style={s.opsCount}>{opsAsignados}/{numSlots} asignados</Text>
+          </View>
 
-              {grupos.map((_grupo, idx) => {
-                const op = asignacion[idx];
-                return (
-                  <View key={idx} style={[s.opSlot, op && s.opSlotAsignado]}>
-                    <View style={s.opSlotNumero}>
-                      <Text style={s.opSlotNumeroText}>{idx + 1}</Text>
+          {Array.from({ length: numSlots }).map((_, idx) => {
+            const op = asignacion[idx];
+            return (
+              <View key={idx} style={[s.opSlot, op && s.opSlotAsignado]}>
+                {/* Número del slot */}
+                <View style={s.opSlotNumero}>
+                  <Text style={s.opSlotNumeroText}>{idx + 1}</Text>
+                </View>
+
+                {op ? (
+                  /* Slot asignado */
+                  <View style={s.opSlotInfo}>
+                    <Iniciales nombre={op.nombre} size={38} />
+                    <View style={{ flex: 1, marginLeft: 10 }}>
+                      <Text style={s.opSlotNombre}>{op.nombre}</Text>
+                      <Text style={s.opSlotSub}>
+                        #{op.num_empleado}
+                        {uphPorOp ? `  ·  ${uphPorOp} pzs/hr` : ''}
+                      </Text>
                     </View>
-
-                    {op ? (
-                      <View style={s.opSlotInfo}>
-                        <Iniciales nombre={op.nombre} size={38} />
-                        <View style={{ flex: 1, marginLeft: 10 }}>
-                          <Text style={s.opSlotNombre}>{op.nombre}</Text>
-                          <Text style={s.opSlotSub}>
-                            #{op.num_empleado}
-                            {uphPorOp ? `  ·  ${uphPorOp} pzs/hr` : ''}
-                          </Text>
-                        </View>
-                        <TouchableOpacity style={s.opSlotCambiar}
-                          onPress={() => setSlotModal(idx)}>
-                          <Text style={s.opSlotCambiarText}>Cambiar</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={s.opSlotQuitar}
-                          onPress={() => setAsignacion(prev => { const n = { ...prev }; delete n[idx]; return n; })}>
-                          <Text style={s.opSlotQuitarText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <TouchableOpacity style={s.opSlotVacio}
-                        onPress={() => setSlotModal(idx)}>
-                        <Text style={s.opSlotVacioText}>+ Asignar operador</Text>
+                    <TouchableOpacity style={s.opSlotCambiar}
+                      onPress={() => setSlotModal(idx)}>
+                      <Text style={s.opSlotCambiarText}>Cambiar</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={s.opSlotQuitar}
+                      onPress={() => removeSlot(idx)}>
+                      <Text style={s.opSlotQuitarText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  /* Slot vacío */
+                  <View style={s.opSlotVacioRow}>
+                    <TouchableOpacity style={s.opSlotVacio}
+                      onPress={() => setSlotModal(idx)}>
+                      <Text style={s.opSlotVacioText}>+ Asignar operador</Text>
+                    </TouchableOpacity>
+                    {numSlots > 1 && (
+                      <TouchableOpacity style={s.opSlotEliminar}
+                        onPress={() => removeSlot(idx)}>
+                        <Text style={s.opSlotQuitarText}>✕</Text>
                       </TouchableOpacity>
                     )}
                   </View>
-                );
-              })}
-            </>
+                )}
+              </View>
+            );
+          })}
+
+          {/* ── Botón agregar slot ──────────────────────── */}
+          {numSlots < MAX_SLOTS && (
+            <TouchableOpacity style={s.addSlotBtn} onPress={addSlot}>
+              <Text style={s.addSlotText}>＋  Agregar operador</Text>
+            </TouchableOpacity>
           )}
+
         </ScrollView>
 
-        {/* ── Botón guardar ──────────────────────────────── */}
-        {estaciones.length > 0 && (
-          <TouchableOpacity
-            style={[s.guardarBtn, (guardando || opsAsignados === 0) && s.guardarBtnDisabled]}
-            onPress={handleGuardar}
-            disabled={guardando || opsAsignados === 0}
-          >
-            {guardando
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={s.guardarBtnText}>
-                  Guardar asignación · {opsAsignados} operador{opsAsignados !== 1 ? 'es' : ''}
-                </Text>
-            }
-          </TouchableOpacity>
-        )}
+        {/* ── Botón guardar ───────────────────────────── */}
+        <TouchableOpacity
+          style={[s.guardarBtn, (guardando || opsAsignados === 0) && s.guardarBtnDisabled]}
+          onPress={handleGuardar}
+          disabled={guardando || opsAsignados === 0}
+        >
+          {guardando
+            ? <ActivityIndicator size="small" color="#fff" />
+            : <Text style={s.guardarBtnText}>
+                Guardar asignación · {opsAsignados} operador{opsAsignados !== 1 ? 'es' : ''}
+              </Text>
+          }
+        </TouchableOpacity>
 
         <ModalOperador
           visible={slotModal !== null}
           operadores={operadores}
-          turnoActivo={turnoSeleccionado?.nombre}
           onSelect={(op) => {
             setAsignacion(prev => ({ ...prev, [slotModal]: op }));
             setSlotModal(null);
@@ -429,8 +392,8 @@ export default function AsignacionLideraScreen() {
 
 const s = StyleSheet.create({
   container: { flex: 1 },
-  safeArea: { flex: 1 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0F0F' },
+  safeArea:  { flex: 1 },
+  center:    { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0F0F' },
 
   // Header
   header: {
@@ -445,22 +408,29 @@ const s = StyleSheet.create({
   },
   turnoBadgeLabel: { color: '#9FA8DA', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
   turnoBadgeValor: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  turnoBadgeHora: { color: '#9FA8DA', fontSize: 10 },
+  turnoBadgeHora:  { color: '#9FA8DA', fontSize: 10 },
   configHint: { color: '#EF9A9A', fontSize: 11, paddingHorizontal: 16, marginBottom: 6 },
 
   scroll: { paddingHorizontal: 14, paddingBottom: 90 },
 
-  // Sections
-  secLabel: { color: '#2196F3', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 6, marginTop: 12 },
-  chipRow: { marginBottom: 4, maxHeight: 44 },
+  // Labels / chips
+  secLabel: { color: '#2196F3', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8, marginTop: 14 },
+  chipRow:  { marginBottom: 4, maxHeight: 44 },
   chip: {
     paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
     backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', marginRight: 8,
   },
-  chipActivo: { backgroundColor: '#1565C0', borderColor: '#2196F3' },
-  chipModelo: { backgroundColor: '#4A148C', borderColor: '#7B1FA2' },
-  chipText: { color: '#9E9E9E', fontSize: 13 },
+  chipModelo:     { backgroundColor: '#4A148C', borderColor: '#7B1FA2' },
+  chipText:       { color: '#9E9E9E', fontSize: 13 },
   chipTextActivo: { color: '#FFFFFF', fontWeight: 'bold' },
+
+  // Sin modelo
+  sinModeloCard: {
+    backgroundColor: '#141414', borderRadius: 12, padding: 16,
+    alignItems: 'center', borderWidth: 1, borderColor: '#2D2D2D', marginBottom: 4,
+  },
+  sinModeloText: { color: '#616161', fontSize: 14, fontWeight: '600', marginBottom: 4 },
+  sinModeloHint: { color: '#424242', fontSize: 12 },
 
   // UPH card
   uphCard: {
@@ -468,16 +438,17 @@ const s = StyleSheet.create({
     borderRadius: 12, padding: 16, marginTop: 10, marginBottom: 4,
     borderWidth: 1, borderColor: '#1E3A5F',
   },
-  uphBloque: { flex: 1, alignItems: 'center' },
-  uphLabel: { color: '#757575', fontSize: 10, marginBottom: 4, textAlign: 'center' },
-  uphValor: { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold' },
-  uphUnidad: { color: '#616161', fontSize: 10, marginTop: 2 },
-  uphSep: { width: 1, height: 44, backgroundColor: '#1E3A5F', marginHorizontal: 4, alignSelf: 'center' },
+  uphBloque:  { flex: 1, alignItems: 'center' },
+  uphLabel:   { color: '#757575', fontSize: 10, marginBottom: 4, textAlign: 'center' },
+  uphValor:   { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold' },
+  uphUnidad:  { color: '#616161', fontSize: 10, marginTop: 2 },
+  uphSep:     { width: 1, height: 44, backgroundColor: '#1E3A5F', marginHorizontal: 4, alignSelf: 'center' },
 
-  // Operadores
-  opsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, marginBottom: 6 },
-  opsCount: { color: '#616161', fontSize: 12 },
+  // Operadores header
+  opsHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  opsCount:  { color: '#616161', fontSize: 12 },
 
+  // Slot
   opSlot: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#141414', borderRadius: 12,
@@ -491,18 +462,28 @@ const s = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', marginRight: 10,
   },
   opSlotNumeroText: { color: '#616161', fontSize: 12, fontWeight: 'bold' },
-  opSlotInfo: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  opSlotNombre: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  opSlotSub: { color: '#757575', fontSize: 11, marginTop: 2 },
+  opSlotInfo:       { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  opSlotNombre:     { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  opSlotSub:        { color: '#757575', fontSize: 11, marginTop: 2 },
   opSlotCambiar: {
     backgroundColor: '#1A237E33', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
     borderWidth: 1, borderColor: '#3949AB', marginLeft: 6,
   },
   opSlotCambiarText: { color: '#90CAF9', fontSize: 11 },
-  opSlotQuitar: { padding: 6, marginLeft: 4 },
-  opSlotQuitarText: { color: '#F44336', fontSize: 16 },
-  opSlotVacio: { flex: 1, alignItems: 'center', paddingVertical: 6 },
-  opSlotVacioText: { color: '#424242', fontSize: 14 },
+  opSlotQuitar:      { padding: 6, marginLeft: 4 },
+  opSlotQuitarText:  { color: '#F44336', fontSize: 16 },
+  opSlotVacioRow:    { flex: 1, flexDirection: 'row', alignItems: 'center' },
+  opSlotVacio:       { flex: 1, alignItems: 'center', paddingVertical: 6 },
+  opSlotVacioText:   { color: '#424242', fontSize: 14 },
+  opSlotEliminar:    { padding: 6 },
+
+  // Add slot
+  addSlotBtn: {
+    borderWidth: 1, borderColor: '#2D2D2D', borderStyle: 'dashed',
+    borderRadius: 12, paddingVertical: 14,
+    alignItems: 'center', marginBottom: 10,
+  },
+  addSlotText: { color: '#2196F3', fontSize: 14 },
 
   // Guardar
   guardarBtn: {
@@ -510,30 +491,20 @@ const s = StyleSheet.create({
     paddingVertical: 16, alignItems: 'center',
   },
   guardarBtnDisabled: { backgroundColor: '#1A1A1A' },
-  guardarBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
+  guardarBtnText:     { color: '#FFFFFF', fontSize: 15, fontWeight: 'bold' },
 
   // Modal
   modalOverlay: { flex: 1, backgroundColor: '#000000CC', justifyContent: 'flex-end' },
   modalCard: {
     backgroundColor: '#1A1A1A', borderTopLeftRadius: 20, borderTopRightRadius: 20,
-    padding: 20, maxHeight: '85%',
+    padding: 20, maxHeight: '75%',
   },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   modalTitulo: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
   modalCerrar: { color: '#9E9E9E', fontSize: 20 },
-  busquedaInput: {
-    backgroundColor: '#0F0F0F', color: '#FFFFFF', borderWidth: 1, borderColor: '#333',
-    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 15, marginBottom: 12,
-  },
-  opCard: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#1E1E1E' },
-  opNombre: { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
-  opNum: { color: '#757575', fontSize: 11, marginTop: 1 },
-  opTurnoBadge: { backgroundColor: '#1A237E44', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#3949AB' },
-  opTurnoBadgeText: { color: '#90CAF9', fontSize: 11, fontWeight: 'bold' },
+  opCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 4 },
+  opNombre:  { color: '#FFFFFF', fontSize: 14, fontWeight: '600' },
+  opNum:     { color: '#757575', fontSize: 11, marginTop: 1 },
+  itemSep:   { height: 1, backgroundColor: '#1E1E1E' },
   emptyText: { color: '#616161', textAlign: 'center', padding: 20 },
-  turnoHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 4, paddingVertical: 6, marginTop: 4, borderBottomWidth: 1, borderBottomColor: '#2D2D2D' },
-  turnoHeaderActivo: { borderBottomColor: '#2196F3' },
-  turnoHeaderText: { color: '#616161', fontSize: 11, fontWeight: 'bold', letterSpacing: 0.8 },
-  turnoHeaderTextActivo: { color: '#2196F3' },
-  turnoHeaderCount: { color: '#444', fontSize: 11 },
 });
