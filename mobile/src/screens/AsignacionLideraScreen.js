@@ -123,6 +123,7 @@ export default function AsignacionLideraScreen() {
   const [asignacion,   setAsignacion]   = useState({});
   const [expandedSlot, setExpandedSlot] = useState(null); // slot con estaciones expandidas
   const [slotModal,    setSlotModal]    = useState(null);  // slot esperando operador
+  const [busquedaModelo, setBusquedaModelo] = useState('');
 
   const [loading,        setLoading]        = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
@@ -313,17 +314,43 @@ export default function AsignacionLideraScreen() {
             <ActivityIndicator size="small" color="#2196F3" style={{ marginBottom: 12 }} />
           ) : modelos.length > 0 ? (
             <>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.chipRow}>
-                {modelos.map(m => (
-                  <TouchableOpacity key={m.id}
-                    style={[s.chip, modeloSeleccionado?.id === m.id && s.chipModelo]}
-                    onPress={() => setModeloSeleccionado(m)}>
-                    <Text style={[s.chipText, modeloSeleccionado?.id === m.id && s.chipTextActivo]}>
-                      {m.nombre}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+              <TextInput
+                style={s.modeloSearch}
+                placeholder="Buscar modelo..."
+                placeholderTextColor="#37474F"
+                value={busquedaModelo}
+                onChangeText={setBusquedaModelo}
+              />
+              {modelos
+                .filter(m => !busquedaModelo || m.nombre.toLowerCase().includes(busquedaModelo.toLowerCase()))
+                .map(m => {
+                  const activo = modeloSeleccionado?.id === m.id;
+                  return (
+                    <TouchableOpacity key={m.id}
+                      style={[s.modeloItem, activo && s.modeloItemActivo]}
+                      onPress={() => {
+                        if (activo) return;
+                        showAlert(
+                          'Cambiar modelo',
+                          `¿Cambiar a "${m.nombre}"? Las estaciones asignadas se mantendrán.`,
+                          [
+                            { text: 'Cancelar', style: 'cancel' },
+                            { text: 'Cambiar', onPress: () => setModeloSeleccionado(m) },
+                          ],
+                        );
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[s.modeloItemNombre, activo && s.modeloItemNombreActivo]}>{m.nombre}</Text>
+                        {(m.num_placa || m.modelo_interno) && (
+                          <Text style={s.modeloItemSub}>{[m.num_placa, m.modelo_interno].filter(Boolean).join(' · ')}</Text>
+                        )}
+                      </View>
+                      <Text style={[s.modeloItemUph, activo && { color: '#66BB6A' }]}>{m.uph_total} pzs/hr</Text>
+                      {activo && <Text style={s.modeloItemCheck}>✓</Text>}
+                    </TouchableOpacity>
+                  );
+                })}
               {modeloSeleccionado && (
                 <View style={s.uphCard}>
                   <LinearGradient colors={['#0D2137', '#0A1628']} style={StyleSheet.absoluteFill}
@@ -518,14 +545,22 @@ const s = StyleSheet.create({
   scroll: { paddingHorizontal: 14, paddingBottom: 90 },
 
   secLabel: { color: '#2196F3', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8, marginTop: 14 },
-  chipRow:  { marginBottom: 4, maxHeight: 44 },
-  chip: {
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
-    backgroundColor: '#1A1A1A', borderWidth: 1, borderColor: '#333', marginRight: 8,
+
+  modeloSearch: {
+    backgroundColor: '#0F1923', borderRadius: 10, borderWidth: 1, borderColor: '#1E3A5F',
+    color: '#ECEFF1', fontSize: 14, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 8,
   },
-  chipModelo:     { backgroundColor: '#4A148C', borderColor: '#7B1FA2' },
-  chipText:       { color: '#9E9E9E', fontSize: 13 },
-  chipTextActivo: { color: '#FFFFFF', fontWeight: 'bold' },
+  modeloItem: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#0A1422', borderRadius: 10, borderWidth: 1, borderColor: '#1E2D3D',
+    paddingHorizontal: 14, paddingVertical: 12, marginBottom: 6,
+  },
+  modeloItemActivo:        { borderColor: '#7B1FA2', backgroundColor: '#1A0533' },
+  modeloItemNombre:        { color: '#9E9E9E', fontSize: 14, fontWeight: '600' },
+  modeloItemNombreActivo:  { color: '#FFFFFF' },
+  modeloItemSub:           { color: '#37474F', fontSize: 11, marginTop: 2 },
+  modeloItemUph:           { color: '#37474F', fontSize: 12, fontWeight: 'bold', marginRight: 8 },
+  modeloItemCheck:         { color: '#CE93D8', fontSize: 16, fontWeight: 'bold' },
 
   sinModeloCard: {
     backgroundColor: '#0F1923', borderRadius: 14, padding: 20,
