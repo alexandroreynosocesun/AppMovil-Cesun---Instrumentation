@@ -36,7 +36,7 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
   const [busqueda, setBusqueda] = useState('');
 
   const lista = operadores.filter(o => {
-    const matchTurno = filtro === 'Todos' || (o.turno || '') === filtro;
+    const matchTurno = filtro === 'Todos' || !o.turno || o.turno === filtro;
     const q = busqueda.toLowerCase();
     const matchBusq = !q
       || (o.nombre || '').toLowerCase().includes(q)
