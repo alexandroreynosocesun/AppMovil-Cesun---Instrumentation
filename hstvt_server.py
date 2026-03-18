@@ -20,7 +20,11 @@ def application(environ, start_response):
     if path == "/scripts":
         if not os.path.exists(SCRIPTS_DIR):
             return json_response(start_response, {"error": "Carpeta no encontrada", "scripts": [], "total": 0})
-        files = [f for f in os.listdir(SCRIPTS_DIR) if f.lower().endswith(".hstvt")]
+        files = []
+        for f in os.listdir(SCRIPTS_DIR):
+            if f.lower().endswith(".hstvt"):
+                mtime = int(os.path.getmtime(os.path.join(SCRIPTS_DIR, f)))
+                files.append({"nombre": f, "fecha": mtime})
         return json_response(start_response, {"scripts": files, "total": len(files)})
 
     elif path == "/scripts/check":
