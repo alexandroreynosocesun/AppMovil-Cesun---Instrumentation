@@ -812,6 +812,14 @@ def scoreboard_hoy(
 # ─────────────────────────────────────────────
 
 ESTACIONES_POR_LINEA = {
+    # Líneas HI (producción principal)
+    "HI-1": [str(i) for i in range(101, 105)],   # 101-104
+    "HI-2": [str(i) for i in range(201, 208)],   # 201-207
+    "HI-3": [str(i) for i in range(301, 307)],   # 301-306
+    "HI-4": [str(i) for i in range(401, 409)],   # 401-408
+    "HI-5": [str(i) for i in range(501, 509)],   # 501-508
+    "HI-6": [str(i) for i in range(601, 609)],   # 601-608
+    # Líneas legacy
     "L6":  [str(i) for i in range(601, 609)],
     "L7":  [str(i) for i in range(701, 709)],
     "L8":  [str(i) for i in range(801, 809)],
