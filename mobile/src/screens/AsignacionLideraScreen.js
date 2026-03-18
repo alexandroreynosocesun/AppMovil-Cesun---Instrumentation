@@ -29,8 +29,16 @@ const av = StyleSheet.create({
   text:   { color: '#90CAF9', fontWeight: 'bold' },
 });
 
-// ── Modal selector de operador (lista simple sin filtros) ───
+const FILTROS_TURNO = ['Todos', 'A', 'B', 'C'];
+
+// ── Modal selector de operador con filtro por turno ─────────
 function ModalOperador({ visible, operadores, onSelect, onClose }) {
+  const [filtro, setFiltro] = useState('Todos');
+
+  const lista = filtro === 'Todos'
+    ? operadores
+    : operadores.filter(o => o.turno === filtro);
+
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
@@ -45,11 +53,26 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
             </TouchableOpacity>
           </View>
 
+          {/* Filtro por turno */}
+          <View style={s.filtroRow}>
+            {FILTROS_TURNO.map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[s.filtroChip, filtro === f && s.filtroChipActivo]}
+                onPress={() => setFiltro(f)}
+              >
+                <Text style={[s.filtroChipText, filtro === f && s.filtroChipTextActivo]}>
+                  {f === 'Todos' ? 'Todos' : `Turno ${f}`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
           <FlatList
-            data={operadores}
+            data={lista}
             keyExtractor={item => item.num_empleado}
-            style={{ maxHeight: 420 }}
-            ListEmptyComponent={<Text style={s.emptyText}>Sin operadores registrados</Text>}
+            style={{ maxHeight: 380 }}
+            ListEmptyComponent={<Text style={s.emptyText}>Sin operadores en este turno</Text>}
             ItemSeparatorComponent={() => <View style={s.itemSep} />}
             renderItem={({ item }) => (
               <TouchableOpacity style={s.opCard} onPress={() => onSelect(item)}>
@@ -58,6 +81,11 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
                   <Text style={s.opNombre}>{item.nombre}</Text>
                   <Text style={s.opNum}>#{item.num_empleado}</Text>
                 </View>
+                {item.turno && (
+                  <View style={s.opTurnoBadge}>
+                    <Text style={s.opTurnoBadgeText}>{item.turno}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             )}
           />
@@ -507,4 +535,13 @@ const s = StyleSheet.create({
   opNum:     { color: '#757575', fontSize: 11, marginTop: 1 },
   itemSep:   { height: 1, backgroundColor: '#1E1E1E' },
   emptyText: { color: '#616161', textAlign: 'center', padding: 20 },
+
+  // Filtro turno modal
+  filtroRow:           { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  filtroChip:          { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#0F0F0F', borderWidth: 1, borderColor: '#2D2D2D' },
+  filtroChipActivo:    { backgroundColor: '#1565C0', borderColor: '#2196F3' },
+  filtroChipText:      { color: '#757575', fontSize: 12, fontWeight: 'bold' },
+  filtroChipTextActivo:{ color: '#FFFFFF' },
+  opTurnoBadge:        { backgroundColor: '#1A237E44', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: '#3949AB' },
+  opTurnoBadgeText:    { color: '#90CAF9', fontSize: 11, fontWeight: 'bold' },
 });
