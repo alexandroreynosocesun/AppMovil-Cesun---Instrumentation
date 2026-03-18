@@ -3,7 +3,7 @@ from fastapi import APIRouter
 
 router = APIRouter()
 
-HSTVT_SERVER = "http://172.29.69.23:5001"
+HSTVT_SERVER = "http://172.29.69.94:5001"
 
 
 @router.get("/list")
