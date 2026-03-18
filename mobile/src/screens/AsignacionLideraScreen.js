@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity, Text,
-  Modal, FlatList, Platform, RefreshControl, KeyboardAvoidingView,
+  Modal, FlatList, Platform, RefreshControl, KeyboardAvoidingView, TextInput,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -33,18 +33,38 @@ const av = StyleSheet.create({
 // ── Modal selector de operador ──────────────────────────────
 function ModalOperador({ visible, operadores, onSelect, onClose }) {
   const [filtro, setFiltro] = useState('Todos');
-  const lista = filtro === 'Todos'
-    ? operadores
-    : operadores.filter(o => o.turno === filtro);
+  const [busqueda, setBusqueda] = useState('');
+
+  const lista = operadores.filter(o => {
+    const matchTurno = filtro === 'Todos' || (o.turno || '') === filtro;
+    const q = busqueda.toLowerCase();
+    const matchBusq = !q
+      || (o.nombre || '').toLowerCase().includes(q)
+      || (o.num_empleado || '').includes(q);
+    return matchTurno && matchBusq;
+  });
+
+  const handleClose = () => { setBusqueda(''); setFiltro('Todos'); onClose(); };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.modalOverlay}>
         <View style={s.modalCard}>
           <View style={s.modalHeader}>
             <Text style={s.modalTitulo}>Seleccionar operador</Text>
-            <TouchableOpacity onPress={onClose}><Text style={s.modalCerrar}>✕</Text></TouchableOpacity>
+            <TouchableOpacity onPress={handleClose}><Text style={s.modalCerrar}>✕</Text></TouchableOpacity>
           </View>
+
+          {/* Buscador */}
+          <TextInput
+            style={s.searchInput}
+            placeholder="Buscar por nombre o #empleado..."
+            placeholderTextColor="#37474F"
+            value={busqueda}
+            onChangeText={setBusqueda}
+          />
+
+          {/* Filtro turno */}
           <View style={s.filtroRow}>
             {FILTROS_TURNO.map(f => (
               <TouchableOpacity key={f}
@@ -56,14 +76,15 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
               </TouchableOpacity>
             ))}
           </View>
+
           <FlatList
             data={lista}
             keyExtractor={item => item.num_empleado}
-            style={{ maxHeight: 400 }}
-            ListEmptyComponent={<Text style={s.emptyText}>Sin operadores en este turno</Text>}
+            style={{ maxHeight: 360 }}
+            ListEmptyComponent={<Text style={s.emptyText}>Sin resultados</Text>}
             ItemSeparatorComponent={() => <View style={s.itemSep} />}
             renderItem={({ item }) => (
-              <TouchableOpacity style={s.opCard} onPress={() => onSelect(item)}>
+              <TouchableOpacity style={s.opCard} onPress={() => { setBusqueda(''); onSelect(item); }}>
                 <Iniciales nombre={item.nombre} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={s.opNombre}>{item.nombre}</Text>
@@ -257,21 +278,23 @@ export default function AsignacionLideraScreen() {
 
         {/* ── Header ──────────────────────────────────────── */}
         <View style={s.header}>
-          <View>
-            <Text style={s.headerFecha}>📅 {hoy}</Text>
-            {lineaUsuario
-              ? <Text style={s.headerLinea}>{lineaSeleccionada?.nombre || lineaUsuario}</Text>
-              : <Text style={[s.headerLinea, { color: '#EF9A9A' }]}>⚠️ Sin línea</Text>}
+          <View style={s.headerLeft}>
+            <Text style={s.headerFecha}>{hoy}</Text>
+            {lineaUsuario ? (
+              <View style={s.headerLineaRow}>
+                <View style={s.headerLineaDot} />
+                <Text style={s.headerLinea}>{lineaSeleccionada?.nombre || lineaUsuario}</Text>
+                {turnoSeleccionado && (
+                  <View style={s.headerTurnoPill}>
+                    <Text style={s.headerTurnoPillText}>T-{turnoSeleccionado.nombre}</Text>
+                  </View>
+                )}
+              </View>
+            ) : (
+              <Text style={s.headerSinLinea}>⚠️ Sin línea — configura en Inicio</Text>
+            )}
           </View>
-          {turnoSeleccionado && (
-            <View style={s.turnoBadge}>
-              <Text style={s.turnoBadgeLabel}>TURNO</Text>
-              <Text style={s.turnoBadgeValor}>{turnoSeleccionado.nombre}</Text>
-              <Text style={s.turnoBadgeHora}>{turnoSeleccionado.hora_inicio}–{turnoSeleccionado.hora_fin}</Text>
-            </View>
-          )}
         </View>
-        {!lineaUsuario && <Text style={s.configHint}>Configura tu línea en la pestaña Inicio</Text>}
 
         <ScrollView
           contentContainerStyle={[
@@ -476,18 +499,20 @@ const s = StyleSheet.create({
   center:    { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0F0F' },
 
   header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start',
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8,
+    paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+    borderBottomWidth: 1, borderBottomColor: '#0F1F3A',
   },
-  headerFecha:     { color: '#9E9E9E', fontSize: 12, marginBottom: 2 },
-  headerLinea:     { color: '#FFFFFF', fontSize: 22, fontWeight: 'bold' },
-  turnoBadge:      {
-    backgroundColor: '#1A237E55', borderRadius: 10, paddingHorizontal: 14, paddingVertical: 8,
-    borderWidth: 1, borderColor: '#3949AB', alignItems: 'center',
+  headerLeft:      { gap: 4 },
+  headerFecha:     { color: '#546E7A', fontSize: 11, letterSpacing: 0.5 },
+  headerLineaRow:  { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerLineaDot:  { width: 8, height: 8, borderRadius: 4, backgroundColor: '#2196F3' },
+  headerLinea:     { color: '#FFFFFF', fontSize: 28, fontWeight: 'bold', letterSpacing: -0.5 },
+  headerTurnoPill: {
+    backgroundColor: '#1A237E55', borderRadius: 8, borderWidth: 1, borderColor: '#3949AB',
+    paddingHorizontal: 10, paddingVertical: 3, marginTop: 2,
   },
-  turnoBadgeLabel: { color: '#9FA8DA', fontSize: 9, fontWeight: 'bold', letterSpacing: 1 },
-  turnoBadgeValor: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
-  turnoBadgeHora:  { color: '#9FA8DA', fontSize: 10 },
+  headerTurnoPillText: { color: '#90CAF9', fontSize: 12, fontWeight: 'bold' },
+  headerSinLinea:  { color: '#EF9A9A', fontSize: 13, marginTop: 2 },
   configHint:      { color: '#EF9A9A', fontSize: 11, paddingHorizontal: 16, marginBottom: 6 },
 
   scroll: { paddingHorizontal: 14, paddingBottom: 90 },
@@ -597,6 +622,10 @@ const s = StyleSheet.create({
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
   modalTitulo: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
   modalCerrar: { color: '#9E9E9E', fontSize: 20 },
+  searchInput: {
+    backgroundColor: '#0F1923', borderRadius: 10, borderWidth: 1, borderColor: '#1E3A5F',
+    color: '#ECEFF1', fontSize: 14, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12,
+  },
   filtroRow:            { flexDirection: 'row', gap: 8, marginBottom: 12 },
   filtroChip:           { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: '#0F0F0F', borderWidth: 1, borderColor: '#2D2D2D' },
   filtroChipActivo:     { backgroundColor: '#1565C0', borderColor: '#2196F3' },
