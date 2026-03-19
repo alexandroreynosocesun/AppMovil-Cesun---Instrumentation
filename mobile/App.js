@@ -3,6 +3,7 @@ import { NavigationContainer, DefaultTheme } from '@react-navigation/native';
 import { Provider as PaperProvider, MD3LightTheme } from 'react-native-paper';
 import { StatusBar } from 'expo-status-bar';
 import { Platform, StyleSheet, View, Text, TouchableOpacity, Animated } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 // Contextos
 import { LanguageProvider } from './src/contexts/LanguageContext';
@@ -287,6 +288,7 @@ export default function App() {
   }, []);
 
   return (
+    <SafeAreaProvider>
     <LanguageProvider>
       <PaperProvider theme={MD3LightTheme}>
         <AuthProvider>
@@ -318,6 +320,7 @@ export default function App() {
         </AuthProvider>
       </PaperProvider>
     </LanguageProvider>
+    </SafeAreaProvider>
   );
 }
 
