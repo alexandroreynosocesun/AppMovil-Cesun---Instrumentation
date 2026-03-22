@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard UPH · Hisense</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html, body {
+      height: 100%;
+      background: #040f0e;
+      color: #e0f7f5;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      overflow: hidden;
+    }
+    body { display: flex; flex-direction: column; }
+
+    /* ─── HEADER ──────────────────────────────────────── */
+    header {
+      height: 40px; flex-shrink: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 24px;
+      background: #061412;
+      border-bottom: 1px solid #0a2e2a;
+    }
+
+    .h-left { display: flex; align-items: center; gap: 14px; }
+
+    .h-logo {
+      font-size: 2rem; font-weight: 900; letter-spacing: 1px;
+      color: #00c8b8;
+      text-shadow: 0 0 28px #00c8b877;
+    }
+    .h-divider { width: 1px; height: 22px; background: #0a3030; }
+    .h-title { font-size: 0.78rem; font-weight: 600; color: #00856e; letter-spacing: 2px; text-transform: uppercase; }
+
+    .h-turnos { display: flex; gap: 8px; }
+    .t-pill {
+      padding: 4px 18px; border-radius: 20px;
+      font-size: 0.82rem; font-weight: 700; letter-spacing: 1px;
+      border: 1px solid #0a2e2a; color: #1a4040; background: #061412;
+      transition: all 0.4s;
+    }
+    .t-pill.act-A { background: #00877a; color: #fff; border-color: #00c8b8; box-shadow: 0 0 18px #00c8b855; }
+    .t-pill.act-B { background: #005544; color: #00ffcc; border-color: #00aa88; box-shadow: 0 0 18px #00aa8844; }
+    .t-pill.act-C { background: #003322; color: #66ffcc; border-color: #008866; box-shadow: 0 0 18px #00886644; }
+
+    .h-clock {
+      font-size: 1.8rem; font-weight: 200;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 3px; color: #00c8b8;
+      text-shadow: 0 0 30px #00c8b844;
+    }
+
+    /* ─── MAIN ────────────────────────────────────────── */
+    .main { flex: 1; min-height: 0; display: flex; }
+
+    /* ─── LÍNEAS ──────────────────────────────────────── */
+    .lines {
+      flex: 1; min-width: 0;
+      display: flex; gap: 16px;
+      padding: 8px 12px 8px 14px;
+    }
+
+    .card {
+      flex: 1; min-width: 0;
+      background: #061412;
+      border: 1px solid #0a2e2a;
+      border-radius: 12px;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 10px 8px 8px; gap: 4px;
+      transition: border-color 0.5s, box-shadow 0.5s;
+    }
+    .card.verde    { border-color: #00877a99; box-shadow: 0 0 22px #00877a22; }
+    .card.amarillo { border-color: #b8860066; box-shadow: 0 0 22px #b8860018; }
+    .card.rojo     { border-color: #cc333366; box-shadow: 0 0 22px #cc333318; }
+
+    .card-linea  { font-size: 1.4rem; font-weight: 900; color: #00e5d0; line-height: 1; }
+    .card-modelo { font-size: 0.7rem; color: #2a7a6a; letter-spacing: 1px; text-transform: uppercase; }
+    .card-op     { font-size: 0.82rem; font-weight: 700; color: #00c8a0; text-align: center; }
+
+    /* ─── BARRAS ──────────────────────────────────────── */
+    .bars-area {
+      flex: 1; min-height: 0;
+      display: flex; gap: 10px;
+      width: 100%; padding: 2px 4px 0;
+    }
+
+    .bar-col {
+      display: flex; flex-direction: column;
+      align-items: center; gap: 4px;
+    }
+    .bar-col.real { flex: 2; }   /* real más ancha */
+    .bar-col.std  { flex: 1; }   /* std más delgada */
+    .bar-col-label { font-size: 0.6rem; color: #0a3530; text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0; }
+
+    .bar-track {
+      flex: 1; min-height: 0; width: 100%;
+      background: #071a17;
+      border-radius: 7px;
+      display: flex; flex-direction: column;
+      overflow: hidden; position: relative; isolation: isolate;
+    }
+
+    .bar-spacer { flex-shrink: 0; }
+
+    .bar-fill { flex: 1; border-radius: 6px; min-height: 2px; }
+
+    /* Std: teal Hisense + franjas diagonales */
+    .bar-fill.std {
+      background:
+        repeating-linear-gradient(
+          45deg,
+          transparent, transparent 10px,
+          rgba(255,255,255,0.06) 10px, rgba(255,255,255,0.06) 20px
+        ),
+        linear-gradient(0deg, #004d44, #00877a, #00c8b8);
+      box-shadow: 0 0 20px #00c8b833 inset;
+    }
+
+    .bar-fill.verde    { background: linear-gradient(0deg, #003d1a, #00a040, #00e060, #80ffb0); box-shadow: 0 0 35px #00e06055 inset, 0 0 20px #00e06033; }
+    .bar-fill.amarillo { background: linear-gradient(0deg, #5c3d00, #c88a00, #ffc93c); box-shadow: 0 0 18px #c88a0044 inset; }
+    .bar-fill.rojo     { background: linear-gradient(0deg, #660000, #cc2222, #ff5555); box-shadow: 0 0 18px #cc222244 inset; animation: pulso-rojo 1.8s ease-in-out infinite; }
+
+    @keyframes pulso-rojo {
+      0%, 100% { box-shadow: 0 0 10px #ff000033 inset; }
+      50%       { box-shadow: 0 0 40px #ff000077 inset, 0 0 20px #ff000044; }
+    }
+
+    .std-line {
+      position: absolute; left: 0; right: 0;
+      height: 2px; background: rgba(0,200,184,0.3); border-radius: 1px;
+    }
+
+    /* ─── NÚMEROS ─────────────────────────────────────── */
+    .uph-num {
+      font-size: 1.8rem; font-weight: 900;
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .uph-num.verde    { color: #00e09a; }
+    .uph-num.amarillo { color: #ffc93c; }
+    .uph-num.rojo     { color: #ff5555; }
+
+    .uph-std { font-size: 0.6rem; color: #0a3530; }
+
+    .diff-badge {
+      font-size: 0.78rem; font-weight: 800;
+      letter-spacing: 0.5px;
+    }
+    .diff-badge.verde    { color: #00e09a; }
+    .diff-badge.amarillo { color: #ffc93c; }
+    .diff-badge.rojo     { color: #ff5555; }
+
+    .pct-badge {
+      font-size: 0.72rem; font-weight: 800;
+      padding: 1px 8px; border-radius: 10px;
+    }
+    .pct-badge.verde    { background: #00503044; color: #00e09a; }
+    .pct-badge.amarillo { background: #5c3d0044; color: #ffc93c; }
+    .pct-badge.rojo     { background: #66000044; color: #ff5555; }
+
+    /* ─── RANKING ─────────────────────────────────────── */
+    .ranking {
+      width: 260px; flex-shrink: 0;
+      background: linear-gradient(180deg, #071a16 0%, #050f0d 40%);
+      border-left: 1px solid #0a2e2a;
+      display: flex; flex-direction: column;
+      padding: 0 10px 10px; gap: 6px;
+      position: relative;
+      overflow: hidden;
+    }
+    /* glow teal de fondo arriba */
+    .ranking::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0; height: 200px;
+      background: radial-gradient(ellipse at 50% 0%, #00c8b822 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    /* Mascot — mix-blend-mode elimina fondo negro del jpg */
+    .mascot-wrap {
+      display: flex; flex-direction: column; align-items: center;
+      margin-bottom: 0; margin-top: 10px; position: relative; z-index: 1;
+    }
+    .mascot-wrap img {
+      height: 140px;
+      object-fit: contain;
+      mix-blend-mode: screen;
+      filter: drop-shadow(0 4px 20px #00c8b877) brightness(1.1);
+    }
+
+    /* Turno activo badge */
+    .turno-badge {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 5px 0; border-radius: 10px; margin-bottom: 2px;
+      font-size: 0.78rem; font-weight: 800; letter-spacing: 1px;
+    }
+    .turno-badge .t-letra {
+      font-size: 1.5rem; font-weight: 900; line-height: 1;
+    }
+    .turno-badge.A { color: #00c8b8; text-shadow: 0 0 16px #00c8b8aa; }
+    .turno-badge.B { color: #ffb86c; text-shadow: 0 0 16px #ffb86caa; }
+    .turno-badge.C { color: #c084fc; text-shadow: 0 0 16px #c084fcaa; }
+
+    .rank-title {
+      font-size: 0.65rem; font-weight: 700;
+      letter-spacing: 2px; color: #00877a;
+      text-transform: uppercase; text-align: center;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #0a2e2a;
+      flex-shrink: 0;
+    }
+
+    /* Separador top3 / resto */
+    .rank-separator {
+      height: 1px; background: #0a2e2a;
+      margin: 1px 0;
+    }
+
+    .rank-entry {
+      display: flex; align-items: center; gap: 7px;
+      padding: 6px 8px; border-radius: 10px;
+      background: #061412; border: 1px solid #0a2e2a;
+      flex-direction: column;
+    }
+    .rank-top-row { display: flex; align-items: center; gap: 7px; width: 100%; }
+
+    .rank-entry.r1 {
+      background: linear-gradient(135deg, #1a140088, #2a1e0044);
+      border-color: #9a7200bb;
+      animation: pulse-gold 2.5s ease-in-out infinite;
+    }
+    .rank-entry.r2 { background: #10121088; border-color: #44556688; }
+    .rank-entry.r3 { background: #100e0888; border-color: #5a4a2288; }
+
+    @keyframes pulse-gold {
+      0%, 100% { box-shadow: 0 0 8px #ffd70022; }
+      50%       { box-shadow: 0 0 22px #ffd70055, 0 0 40px #ffd70022; }
+    }
+
+    .rank-medal { font-size: 1.3rem; flex-shrink: 0; width: 26px; text-align: center; }
+    .rank-num   { font-size: 0.9rem; font-weight: 700; color: #1a4040; width: 18px; text-align: center; flex-shrink: 0; }
+
+    .rank-info  { flex: 1; min-width: 0; }
+    .rank-name  { font-size: 0.78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rank-sub   { font-size: 0.58rem; color: #0a4040; margin-top: 1px; }
+    .r1 .rank-name { color: #ffd700; }
+    .r2 .rank-name { color: #c0c0c0; }
+    .r3 .rank-name { color: #cd7f32; }
+    .rank-entry:not(.r1):not(.r2):not(.r3) .rank-name { color: #00a090; }
+
+    .rank-right { text-align: right; flex-shrink: 0; }
+    .rank-uph   { font-size: 1rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .rank-pct-txt { font-size: 0.58rem; color: #0a4040; }
+    .r1 .rank-uph { color: #ffd700; }
+    .r2 .rank-uph { color: #c0c0c0; }
+    .r3 .rank-uph { color: #cd7f32; }
+    .rank-entry:not(.r1):not(.r2):not(.r3) .rank-uph { color: #00a090; }
+
+    /* Mini barra de progreso por operador */
+    .rank-bar-wrap { width: 100%; height: 4px; background: #0a2020; border-radius: 3px; overflow: hidden; }
+    .rank-bar-fill { height: 100%; border-radius: 3px; transition: width 1s ease; }
+    .r1 .rank-bar-fill { background: linear-gradient(90deg, #9a7200, #ffd700); }
+    .r2 .rank-bar-fill { background: linear-gradient(90deg, #444, #c0c0c0); }
+    .r3 .rank-bar-fill { background: linear-gradient(90deg, #5a3010, #cd7f32); }
+    .rank-entry:not(.r1):not(.r2):not(.r3) .rank-bar-fill { background: linear-gradient(90deg, #005544, #00c8a0); }
+
+    /* ─── AVANCE DEL TURNO ───────────────────────────── */
+    .turno-avance {
+      margin-top: auto;
+      border-top: 1px solid #0a2e2a;
+      padding-top: 10px;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .ta-title {
+      font-size: 0.65rem; font-weight: 700;
+      letter-spacing: 2px; color: #00877a;
+      text-transform: uppercase; text-align: center;
+    }
+    .ta-row {
+      display: flex; align-items: baseline;
+      justify-content: center; gap: 4px;
+    }
+    .ta-num   { font-size: 1.6rem; font-weight: 900; font-variant-numeric: tabular-nums; color: #00e5d0; }
+    .ta-sep   { font-size: 1rem; color: #0a4040; }
+    .ta-meta  { font-size: 1rem; font-weight: 700; color: #0a6060; font-variant-numeric: tabular-nums; }
+    .ta-label { font-size: 0.65rem; color: #0a4040; margin-left: 2px; }
+
+    .ta-bar-track {
+      height: 18px; background: #071a17;
+      border-radius: 10px; position: relative; overflow: hidden;
+      border: 1px solid #0a2e2a;
+    }
+    .ta-bar-fill {
+      height: 100%; border-radius: 10px;
+      background: linear-gradient(90deg, #006655, #00c8a0, #00ffcc);
+      box-shadow: 0 0 12px #00c8a055 inset;
+      transition: width 1s ease;
+      position: relative;
+    }
+    .ta-bar-fill::after {
+      content: '';
+      position: absolute; top: 0; bottom: 0; right: 0; width: 30px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2));
+      border-radius: 0 10px 10px 0;
+    }
+    .ta-bar-pct {
+      position: absolute; right: 8px; top: 50%;
+      transform: translateY(-50%);
+      font-size: 0.72rem; font-weight: 800; color: #fff;
+      text-shadow: 0 0 6px #000;
+    }
+    .ta-sub {
+      font-size: 0.65rem; color: #0a5050;
+      text-align: center; letter-spacing: 1px;
+    }
+
+    /* ─── FOOTER ──────────────────────────────────────── */
+    footer {
+      height: 16px; flex-shrink: 0;
+      background: #050f0d; border-top: 1px solid #0a2e2a;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 18px; font-size: 0.58rem; color: #0a2e2a;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="h-left">
+    <div class="h-title">Dashboard UPH · Producción</div>
+    <div class="h-divider"></div>
+    <div class="h-logo">Hisense</div>
+  </div>
+  <div class="h-turnos">
+    <span class="t-pill" id="pill-A">Turno A</span>
+    <span class="t-pill" id="pill-B">Turno B</span>
+    <span class="t-pill" id="pill-C">Turno C</span>
+  </div>
+  <div class="h-clock" id="clock">--:--:--</div>
+</header>
+
+<div class="main">
+  <div class="lines" id="lines"></div>
+
+  <div class="ranking">
+    <div class="mascot-wrap">
+      <img src="monito.jpg" alt="" onerror="this.style.display='none'" />
+    </div>
+    <div class="rank-title">🏆 Ranking · Turno <span id="turno-letra" style="color:#00c8b8">A</span></div>
+    <div id="rank-list"></div>
+
+    <!-- Avance del turno -->
+    <div class="turno-avance">
+      <div class="ta-title">⏱ Avance del Turno</div>
+      <div class="ta-row">
+        <span class="ta-num" id="ta-actual">—</span>
+        <span class="ta-sep">/</span>
+        <span class="ta-meta" id="ta-meta">—</span>
+        <span class="ta-label">pzs</span>
+      </div>
+      <div class="ta-bar-track">
+        <div class="ta-bar-fill" id="ta-bar"></div>
+        <div class="ta-bar-pct" id="ta-pct">—%</div>
+      </div>
+      <div class="ta-sub" id="ta-tiempo">—</div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <span>MOCKUP · Hisense CESUN</span>
+  <span id="last-upd">--:--:--</span>
+  <span>UPH = piezas por hora</span>
+</footer>
+
+<script>
+  const LINEAS = [
+    { id:'L1', modelo:'43A45NV',   std:400, actual:320, op:'Ana García'   },
+    { id:'L2', modelo:'50Q65T',    std:400, actual:452, op:'Juan López'   },
+    { id:'L3', modelo:'55A70TH',   std:400, actual:210, op:'María Ruiz'   },
+    { id:'L4', modelo:'32LM5710',  std:300, actual:298, op:'Carlos Vega'  },
+    { id:'L5', modelo:'43UP75',    std:350, actual:155, op:'Rosa Méndez'  },
+    { id:'L6', modelo:'65NANO90',  std:400, actual:401, op:'Pedro Soto'   },
+  ];
+
+  function color(pct) {
+    return pct >= 100 ? 'verde' : pct >= 80 ? 'amarillo' : 'rojo';
+  }
+
+  const STD_FILL  = 98;
+  const STD_SPACE = 2;
+
+  function barFlex(actual, std) {
+    const ratio = Math.min(actual / std, 1.15);
+    const fill  = ratio * STD_FILL;
+    return { spacer: Math.max(0, 100 - fill), fill };
+  }
+
+  function renderLineas() {
+    const container = document.getElementById('lines');
+    container.innerHTML = '';
+    LINEAS.forEach(l => {
+      const pct = Math.round((l.actual / l.std) * 100);
+      const col = color(pct);
+      const bf  = barFlex(l.actual, l.std);
+      const stdLinePct = 82;
+
+      const card = document.createElement('div');
+      card.className = `card ${col}`;
+      const diff    = l.actual - l.std;
+      const diffTxt = diff >= 0 ? `▲ +${diff}` : `▼ ${diff}`;
+
+      card.innerHTML = `
+        <div class="card-linea">${l.id}</div>
+        <div class="card-modelo">${l.modelo}</div>
+        <div class="card-op">${l.op}</div>
+        <div class="bars-area">
+          <div class="bar-col real">
+            <div class="bar-track">
+              <div class="bar-spacer" style="flex:${bf.spacer.toFixed(1)}"></div>
+              <div class="bar-fill ${col}" style="flex:${bf.fill.toFixed(1)}"></div>
+              <div class="std-line" style="bottom:${STD_FILL}%"></div>
+            </div>
+          </div>
+          <div class="bar-col std">
+            <div class="bar-track">
+              <div class="bar-spacer" style="flex:${STD_SPACE}"></div>
+              <div class="bar-fill std" style="flex:${STD_FILL}"></div>
+            </div>
+          </div>
+        </div>
+        <div style="text-align:center">
+          <div class="uph-num ${col}">${l.actual}</div>
+          <div class="diff-badge ${col}">${diffTxt} pzs/hr</div>
+          <span class="pct-badge ${col}">${l.actual} / ${l.std}</span>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+  }
+
+  function renderRanking() {
+    const sorted = [...LINEAS]
+      .map(l => ({ ...l, pct: Math.round(l.actual / l.std * 100) }))
+      .sort((a, b) => b.pct - a.pct);
+
+    const list = document.getElementById('rank-list');
+    list.innerHTML = '';
+    sorted.forEach((l, i) => {
+      const pos   = i + 1;
+      const cls   = pos <= 3 ? `r${pos}` : '';
+      const medal = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '';
+      const barW  = Math.min(l.pct, 100);
+
+      // Separador entre top3 y resto
+      if (pos === 4) {
+        const sep = document.createElement('div');
+        sep.className = 'rank-separator';
+        list.appendChild(sep);
+      }
+
+      const entry = document.createElement('div');
+      entry.className = `rank-entry ${cls}`;
+      entry.innerHTML = `
+        <div class="rank-top-row">
+          ${medal
+            ? `<div class="rank-medal">${medal}</div>`
+            : `<div class="rank-num">${pos}</div>`}
+          <div class="rank-info">
+            <div class="rank-name">${l.op}</div>
+            <div class="rank-sub">${l.id} · ${l.modelo}</div>
+          </div>
+          <div class="rank-right">
+            <div class="rank-uph">${l.actual}</div>
+            <div class="rank-pct-txt">${l.pct}%</div>
+          </div>
+        </div>
+        <div class="rank-bar-wrap">
+          <div class="rank-bar-fill" style="width:${barW}%"></div>
+        </div>
+      `;
+      list.appendChild(entry);
+    });
+  }
+
+  function updateAvance() {
+    const now   = new Date();
+    const h     = now.getHours();
+    const m     = now.getMinutes();
+    const turno = h >= 6 && h < 14 ? 'A' : h >= 14 && h < 22 ? 'B' : 'C';
+
+    // Inicio y duración del turno activo
+    const inicios = { A: 6, B: 14, C: 22 };
+    const inicio  = inicios[turno];
+    const horasDuracion = 8;
+
+    // Horas transcurridas (con minutos)
+    const horasTranscurridas = Math.min((h - inicio) + m / 60, horasDuracion);
+    const horasRestantes = horasDuracion - horasTranscurridas;
+    const minRestantes = Math.round(horasRestantes * 60);
+
+    // Totales mock: UPH × horas transcurridas por cada línea
+    const totalActual = Math.round(LINEAS.reduce((s, l) => s + l.actual * horasTranscurridas, 0));
+    const totalMeta   = Math.round(LINEAS.reduce((s, l) => s + l.std   * horasDuracion,       0));
+    const pct         = Math.min(Math.round((totalActual / totalMeta) * 100), 100);
+
+    document.getElementById('ta-actual').textContent = totalActual.toLocaleString('es-MX');
+    document.getElementById('ta-meta').textContent   = totalMeta.toLocaleString('es-MX');
+    document.getElementById('ta-bar').style.width    = pct + '%';
+    document.getElementById('ta-pct').textContent    = pct + '%';
+
+    const hRest = Math.floor(minRestantes / 60);
+    const mRest = minRestantes % 60;
+    document.getElementById('ta-tiempo').textContent =
+      `Restan ${hRest}h ${String(mRest).padStart(2,'0')}m del turno`;
+  }
+
+  function tick() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const t = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    document.getElementById('clock').textContent = t;
+    document.getElementById('last-upd').textContent = t;
+    const h = now.getHours();
+    const turno = h >= 6 && h < 14 ? 'A' : h >= 14 && h < 22 ? 'B' : 'C';
+    ['A','B','C'].forEach(x => {
+      document.getElementById(`pill-${x}`).className =
+        `t-pill${turno === x ? ` act-${x}` : ''}`;
+    });
+    document.getElementById('turno-letra').textContent = turno;
+    updateAvance();
+  }
+
+  renderLineas();
+  renderRanking();
+  tick();
+  setInterval(tick, 1000);
+</script>
+</body>
+</html>
