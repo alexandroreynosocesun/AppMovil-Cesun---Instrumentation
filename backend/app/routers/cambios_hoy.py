@@ -3,7 +3,7 @@ Cambios de Hoy — analiza imagen del MES con Claude Vision y extrae
 las columnas del plan de producción.
 """
 import base64
-from fastapi import APIRouter, HTTPException, Depends, Request
+from fastapi import APIRouter, HTTPException, Depends, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from ..auth import get_current_user
 from ..models.models import Tecnico
@@ -77,11 +77,11 @@ async def debug_analizar(request: Request):
 
 
 @router.post("/analizar")
-def analizar_imagen(
-    body: ImagenRequest,
+async def analizar_imagen(
+    imagen: UploadFile = File(...),
     current_user: Tecnico = Depends(get_current_user)
 ):
-    print(f"[CAMBIOS-HOY] usuario={current_user.usuario} | campo_len={len(body.imagen_base64)} | inicio={body.imagen_base64[:30]!r}")
+    print(f"[CAMBIOS-HOY] usuario={current_user.usuario} | archivo={imagen.filename} | content_type={imagen.content_type}")
     roles_permitidos = {"tecnico", "ingeniero", "lider_linea", "admin", "superadmin", "asignaciones"}
     if current_user.tipo_usuario not in roles_permitidos:
         raise HTTPException(status_code=403, detail="Sin permiso")
@@ -92,18 +92,18 @@ def analizar_imagen(
             detail="API Key de Anthropic no configurada. Contacta al administrador."
         )
 
-    # Limpiar el prefijo data:image/...;base64, si viene
-    b64 = body.imagen_base64
-    if "," in b64:
-        b64 = b64.split(",", 1)[1]
+    # Leer el archivo y convertir a base64
+    import base64 as _b64
+    contenido = await imagen.read()
+    b64 = _b64.b64encode(contenido).decode("utf-8")
 
     # Detectar media type
-    raw = body.imagen_base64
-    if "image/png" in raw:
+    raw = imagen.content_type or "image/jpeg"
+    if "png" in raw:
         media_type = "image/png"
-    elif "image/webp" in raw:
+    elif "webp" in raw:
         media_type = "image/webp"
-    elif "image/gif" in raw:
+    elif "gif" in raw:
         media_type = "image/gif"
     else:
         media_type = "image/jpeg"
