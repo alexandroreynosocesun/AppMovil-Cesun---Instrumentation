@@ -113,8 +113,8 @@ async def analizar_imagen(
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         message = client.messages.create(
-            model="claude-opus-4-6",
-            max_tokens=4096,
+            model="claude-sonnet-4-6",
+            max_tokens=16000,
             messages=[
                 {
                     "role": "user",
@@ -136,19 +136,27 @@ async def analizar_imagen(
             ],
         )
 
-        import json
+        import json, re
         texto = message.content[0].text.strip()
-        # Quitar bloques ```json ... ``` si Claude los agrega
-        if texto.startswith("```"):
-            texto = texto.split("```")[1]
-            if texto.startswith("json"):
-                texto = texto[4:]
-        texto = texto.strip()
+        print(f"[CAMBIOS-HOY] respuesta Claude (primeros 200 chars): {texto[:200]}")
+
+        # Extraer JSON: buscar bloque ```json...``` o ```...``` o primer { ... }
+        m = re.search(r"```(?:json)?\s*([\s\S]*?)```", texto)
+        if m:
+            texto = m.group(1).strip()
+        else:
+            # Buscar desde primer { hasta ultimo }
+            inicio = texto.find("{")
+            fin = texto.rfind("}")
+            if inicio != -1 and fin != -1:
+                texto = texto[inicio:fin + 1]
 
         datos = json.loads(texto)
         return {"ok": True, "data": datos}
 
     except json.JSONDecodeError as e:
-        raise HTTPException(status_code=422, detail=f"Claude no devolvio JSON valido: {e}")
+        print(f"[CAMBIOS-HOY] JSONDecodeError: {e} | texto={texto[:300]}")
+        raise HTTPException(status_code=500, detail=f"Claude no devolvio JSON valido: {e}")
     except Exception as e:
+        print(f"[CAMBIOS-HOY] Exception: {type(e).__name__}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
