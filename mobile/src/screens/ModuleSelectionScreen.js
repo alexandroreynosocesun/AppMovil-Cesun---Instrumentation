@@ -31,6 +31,14 @@ export default function ModuleSelectionScreen({ navigation }) {
 
   const modules = [
     {
+      id: 'plan_produccion',
+      title: 'Plan Produccion',
+      description: 'Cambios de hoy, busqueda y cambio de modelos',
+      icon: '📋',
+      color: ['#1565C0', '#0D47A1'],
+      route: 'PlanProduccionHome',
+    },
+    {
       id: 'jigs',
       title: t('moduleJigs'),
       description: t('moduleJigsDesc'),
@@ -65,7 +73,9 @@ export default function ModuleSelectionScreen({ navigation }) {
   ];
 
   const handleModulePress = (module) => {
-    if (module.id === 'jigs') {
+    if (module.id === 'plan_produccion') {
+      navigation.navigate('PlanProduccionHome');
+    } else if (module.id === 'jigs') {
       navigation.navigate('Home');
     } else if (module.id === 'adaptadores') {
       navigation.navigate('AdaptadoresHome');

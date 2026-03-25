@@ -46,6 +46,8 @@ import AddAdaptadorScreen from '../screens/AddAdaptadorScreen';
 import SearchMainboardScreen from '../screens/SearchMainboardScreen';
 import SearchHStVtScreen from '../screens/SearchHStVtScreen';
 import ArduinoSequencesScreen from '../screens/ArduinoSequencesScreen';
+import PlanProduccionHomeScreen from '../screens/PlanProduccionHomeScreen';
+import CambiosHoyScreen from '../screens/CambiosHoyScreen';
 // Pantallas VByOne / Mini LVDS / 2K LVDS
 import VByOneHomeScreen from '../screens/VByOneHomeScreen';
 import QRScannerVByOne from '../screens/QRScannerVByOne';
@@ -290,6 +292,16 @@ export default function AuthNavigator() {
             name="ArduinoSequences"
             component={ArduinoSequencesScreen}
             options={{ title: 'Arduino' }}
+          />
+          <Stack.Screen
+            name="PlanProduccionHome"
+            component={PlanProduccionHomeScreen}
+            options={{ title: 'Plan Produccion', headerShown: false }}
+          />
+          <Stack.Screen
+            name="CambiosHoy"
+            component={CambiosHoyScreen}
+            options={{ title: 'Cambios de Hoy' }}
           />
           {/* Pantallas VByOne / Mini LVDS / 2K LVDS */}
           <Stack.Screen

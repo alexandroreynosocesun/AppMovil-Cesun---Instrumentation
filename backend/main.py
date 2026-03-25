@@ -12,7 +12,7 @@ import uvicorn
 
 from app.database import get_db, engine
 from app.models import models
-from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage, adaptadores, arduino_sequences, inventario, seed, modelo_observaciones, hstvt, uph
+from app.routers import auth, jigs, validations, admin, jigs_ng, registro, damaged_labels, auditoria, storage, adaptadores, arduino_sequences, inventario, seed, modelo_observaciones, hstvt, uph, cambios_hoy
 from app.database_uph import uph_engine
 from app.models import uph_models
 from app.config import CORS_ORIGINS, IS_PRODUCTION, FORCE_HTTPS, API_HOST, API_PORT
@@ -192,6 +192,7 @@ app.include_router(seed.router, prefix="/api/seed", tags=["seed"])
 app.include_router(modelo_observaciones.router, prefix="/api/modelo-observaciones", tags=["modelo-observaciones"])
 app.include_router(hstvt.router, prefix="/api/hstvt", tags=["hstvt"])
 app.include_router(uph.router, prefix="/api/uph", tags=["uph"])
+app.include_router(cambios_hoy.router)
 
 # Montar directorio de uploads para servir imágenes
 uploads_dir = Path(__file__).parent / "uploads"

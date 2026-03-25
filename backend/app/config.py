@@ -41,6 +41,9 @@ if not DATABASE_URL:
         "Ejemplo: postgresql+psycopg2://usuario:password@localhost:5432/jigs_validation"
     )
 
+# Anthropic / Claude Vision
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')
+
 # Almacenamiento
 REPORTS_DIR = os.getenv('REPORTS_DIR', 'reports')
 ARCHIVE_DIR = os.getenv('ARCHIVE_DIR', 'reports/archived')
