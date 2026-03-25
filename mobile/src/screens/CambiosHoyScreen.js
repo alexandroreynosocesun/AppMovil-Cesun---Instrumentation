@@ -35,7 +35,12 @@ export default function CambiosHoyScreen() {
     });
     if (result.canceled) return;
     const asset = result.assets[0];
-    analizar(`data:image/jpeg;base64,${asset.base64}`);
+    // En web, base64 puede ser null — usar uri (data URL) directamente
+    const imagen = asset.base64
+      ? `data:image/jpeg;base64,${asset.base64}`
+      : asset.uri;
+    if (!imagen) { Alert.alert('Error', 'No se pudo leer la imagen.'); return; }
+    analizar(imagen);
   };
 
   const takePhoto = async () => {
