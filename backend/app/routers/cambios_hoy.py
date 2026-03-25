@@ -3,7 +3,7 @@ Cambios de Hoy — analiza imagen del MES con Claude Vision y extrae
 las columnas del plan de producción.
 """
 import base64
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from pydantic import BaseModel
 from ..auth import get_current_user
 from ..models.models import Tecnico
@@ -56,6 +56,24 @@ Reglas:
 
 class ImagenRequest(BaseModel):
     imagen_base64: str = ""  # data:image/jpeg;base64,... o solo el base64
+
+
+@router.post("/debug-analizar")
+async def debug_analizar(request: Request):
+    """Endpoint debug — muestra que llega sin autenticacion."""
+    try:
+        raw = await request.body()
+        import json as _json
+        data = _json.loads(raw)
+        key = data.get("imagen_base64", "CAMPO AUSENTE")
+        return {
+            "body_size": len(raw),
+            "campo_presente": "imagen_base64" in data,
+            "valor_inicio": key[:50] if isinstance(key, str) else str(key),
+            "valor_tipo": type(key).__name__,
+        }
+    except Exception as e:
+        return {"error": str(e), "body_size": 0}
 
 
 @router.post("/analizar")
