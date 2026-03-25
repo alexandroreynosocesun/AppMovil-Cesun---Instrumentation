@@ -81,6 +81,7 @@ def analizar_imagen(
     body: ImagenRequest,
     current_user: Tecnico = Depends(get_current_user)
 ):
+    print(f"[CAMBIOS-HOY] usuario={current_user.usuario} | campo_len={len(body.imagen_base64)} | inicio={body.imagen_base64[:30]!r}")
     roles_permitidos = {"tecnico", "ingeniero", "lider_linea", "admin", "superadmin", "asignaciones"}
     if current_user.tipo_usuario not in roles_permitidos:
         raise HTTPException(status_code=403, detail="Sin permiso")
