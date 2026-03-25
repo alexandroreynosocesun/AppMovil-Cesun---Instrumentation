@@ -22,6 +22,18 @@ export default function CambiosHoyScreen() {
   const [filtro, setFiltro] = useState('Todos');
   const [expandido, setExpandido] = useState({});
 
+  const uriToBase64 = async (uri) => {
+    // En web, convertir blob URL o data URL a base64 puro via fetch
+    const res = await fetch(uri);
+    const blob = await res.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result); // data:image/...;base64,...
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
   const pickImage = async () => {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!perm.granted) {
@@ -30,15 +42,17 @@ export default function CambiosHoyScreen() {
     }
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: 0.9,
+      quality: 0.8,
       base64: true,
     });
     if (result.canceled) return;
     const asset = result.assets[0];
-    // En web, base64 puede ser null — usar uri (data URL) directamente
-    const imagen = asset.base64
-      ? `data:image/jpeg;base64,${asset.base64}`
-      : asset.uri;
+    let imagen;
+    if (asset.base64) {
+      imagen = `data:image/jpeg;base64,${asset.base64}`;
+    } else {
+      imagen = await uriToBase64(asset.uri);
+    }
     if (!imagen) { Alert.alert('Error', 'No se pudo leer la imagen.'); return; }
     analizar(imagen);
   };
