@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+a<!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8" />
@@ -72,12 +72,38 @@
       transition: border-color 0.5s, box-shadow 0.5s;
     }
     .card.verde    { border-color: #00877a99; box-shadow: 0 0 22px #00877a22; }
-    .card.amarillo { border-color: #b8860066; box-shadow: 0 0 22px #b8860018; }
+    .card.amarillo { border-color: #ff8c0066; box-shadow: 0 0 22px #ff8c0018; }
     .card.rojo     { border-color: #cc333366; box-shadow: 0 0 22px #cc333318; }
 
     .card-linea  { font-size: 1.4rem; font-weight: 900; color: #00e5d0; line-height: 1; }
     .card-modelo { font-size: 0.7rem; color: #2a7a6a; letter-spacing: 1px; text-transform: uppercase; }
     .card-op     { font-size: 0.82rem; font-weight: 700; color: #00c8a0; text-align: center; }
+
+    /* Medallas en tarjetas */
+    .card-header-row { display: flex; align-items: center; justify-content: center; gap: 6px; width: 100%; }
+    .card-medal { font-size: 1.4rem; line-height: 1; }
+
+    /* Glow por ranking en tarjetas */
+    .card.rank-1 {
+      border-color: #ffd700 !important;
+      border-width: 2px;
+      animation: pulse-card-gold 1.8s ease-in-out infinite;
+    }
+    .card.rank-2 {
+      border-color: #c0c0c0bb !important;
+      box-shadow: 0 0 18px #c0c0c044, 0 0 36px #c0c0c022 !important;
+    }
+    .card.rank-3 {
+      border-color: #cd7f3277 !important;
+      box-shadow: 0 0 10px #cd7f3222 !important;
+    }
+    @keyframes pulse-card-gold {
+      0%, 100% { box-shadow: 0 0 25px #ffd70077, 0 0 55px #ffd70044, 0 0 90px #ffd70022; }
+      50%       { box-shadow: 0 0 50px #ffd700cc, 0 0 90px #ffd70088, 0 0 140px #ffd70044; }
+    }
+    .card.rank-1 .card-linea { color: #ffd700; text-shadow: 0 0 16px #ffd70099; }
+    .card.rank-2 .card-linea { color: #c0c0c0; text-shadow: 0 0 10px #c0c0c066; }
+    .card.rank-3 .card-linea { color: #cd7f32; text-shadow: 0 0 8px #cd7f3244; }
 
     /* ─── BARRAS ──────────────────────────────────────── */
     .bars-area {
@@ -112,15 +138,20 @@
         repeating-linear-gradient(
           45deg,
           transparent, transparent 10px,
-          rgba(255,255,255,0.06) 10px, rgba(255,255,255,0.06) 20px
+          rgba(255,255,255,0.08) 10px, rgba(255,255,255,0.08) 20px
         ),
-        linear-gradient(0deg, #004d44, #00877a, #00c8b8);
-      box-shadow: 0 0 20px #00c8b833 inset;
+        linear-gradient(0deg, #003a6e, #005fa8, #1a7fc8, #4aa8e0);
+      box-shadow: 0 0 20px #1a7fc844 inset;
     }
 
     .bar-fill.verde    { background: linear-gradient(0deg, #003d1a, #00a040, #00e060, #80ffb0); box-shadow: 0 0 35px #00e06055 inset, 0 0 20px #00e06033; }
-    .bar-fill.amarillo { background: linear-gradient(0deg, #5c3d00, #c88a00, #ffc93c); box-shadow: 0 0 18px #c88a0044 inset; }
+    .bar-fill.amarillo { background: linear-gradient(0deg, #5c2000, #d45f00, #ff8c00, #ffb347); box-shadow: 0 0 18px #ff8c0044 inset; }
     .bar-fill.rojo     { background: linear-gradient(0deg, #660000, #cc2222, #ff5555); box-shadow: 0 0 18px #cc222244 inset; animation: pulso-rojo 1.8s ease-in-out infinite; }
+
+    /* Colores de barra para ranking top 3 */
+    .bar-fill.rank-1 { background: linear-gradient(0deg, #7a5500, #c8a000, #ffd700, #ffe566); box-shadow: 0 0 35px #ffd70066 inset, 0 0 20px #ffd70033; }
+    .bar-fill.rank-2 { background: linear-gradient(0deg, #444, #888, #c0c0c0, #e8e8e8); box-shadow: 0 0 20px #c0c0c044 inset; }
+    .bar-fill.rank-3 { background: linear-gradient(0deg, #5a3010, #9a5a20, #cd7f32, #e8a050); box-shadow: 0 0 16px #cd7f3244 inset; }
 
     @keyframes pulso-rojo {
       0%, 100% { box-shadow: 0 0 10px #ff000033 inset; }
@@ -138,7 +169,7 @@
       font-variant-numeric: tabular-nums; line-height: 1;
     }
     .uph-num.verde    { color: #00e09a; }
-    .uph-num.amarillo { color: #ffc93c; }
+    .uph-num.amarillo { color: #ff8c00; }
     .uph-num.rojo     { color: #ff5555; }
 
     .uph-std { font-size: 0.6rem; color: #0a3530; }
@@ -148,7 +179,7 @@
       letter-spacing: 0.5px;
     }
     .diff-badge.verde    { color: #00e09a; }
-    .diff-badge.amarillo { color: #ffc93c; }
+    .diff-badge.amarillo { color: #ff8c00; }
     .diff-badge.rojo     { color: #ff5555; }
 
     .pct-badge {
@@ -156,12 +187,12 @@
       padding: 1px 8px; border-radius: 10px;
     }
     .pct-badge.verde    { background: #00503044; color: #00e09a; }
-    .pct-badge.amarillo { background: #5c3d0044; color: #ffc93c; }
+    .pct-badge.amarillo { background: #5c200044; color: #ff8c00; }
     .pct-badge.rojo     { background: #66000044; color: #ff5555; }
 
     /* ─── RANKING ─────────────────────────────────────── */
     .ranking {
-      width: 260px; flex-shrink: 0;
+      width: 320px; flex-shrink: 0;
       background: linear-gradient(180deg, #071a16 0%, #050f0d 40%);
       border-left: 1px solid #0a2e2a;
       display: flex; flex-direction: column;
@@ -183,7 +214,7 @@
       margin-bottom: 0; margin-top: 10px; position: relative; z-index: 1;
     }
     .mascot-wrap img {
-      height: 140px;
+      height: 160px;
       object-fit: contain;
       mix-blend-mode: screen;
       filter: drop-shadow(0 4px 20px #00c8b877) brightness(1.1);
@@ -219,38 +250,47 @@
 
     .rank-entry {
       display: flex; align-items: center; gap: 7px;
-      padding: 6px 8px; border-radius: 10px;
+      padding: 10px 12px; border-radius: 10px;
       background: #061412; border: 1px solid #0a2e2a;
       flex-direction: column;
     }
     .rank-top-row { display: flex; align-items: center; gap: 7px; width: 100%; }
 
     .rank-entry.r1 {
-      background: linear-gradient(135deg, #1a140088, #2a1e0044);
-      border-color: #9a7200bb;
-      animation: pulse-gold 2.5s ease-in-out infinite;
+      background: linear-gradient(135deg, #2a1e00cc, #3d2e0066);
+      border-color: #ffd700;
+      border-width: 2px;
+      animation: pulse-gold-rank 1.8s ease-in-out infinite;
     }
-    .rank-entry.r2 { background: #10121088; border-color: #44556688; }
-    .rank-entry.r3 { background: #100e0888; border-color: #5a4a2288; }
+    .rank-entry.r2 {
+      background: linear-gradient(135deg, #1a1a1ecc, #2a2a3044);
+      border-color: #c0c0c0aa;
+      box-shadow: 0 0 14px #c0c0c033, 0 0 28px #c0c0c011;
+    }
+    .rank-entry.r3 {
+      background: linear-gradient(135deg, #1a120888, #2a1a0444);
+      border-color: #cd7f3266;
+      box-shadow: 0 0 8px #cd7f3222;
+    }
 
-    @keyframes pulse-gold {
-      0%, 100% { box-shadow: 0 0 8px #ffd70022; }
-      50%       { box-shadow: 0 0 22px #ffd70055, 0 0 40px #ffd70022; }
+    @keyframes pulse-gold-rank {
+      0%, 100% { box-shadow: 0 0 18px #ffd70066, 0 0 40px #ffd70033, 0 0 70px #ffd70011; }
+      50%       { box-shadow: 0 0 35px #ffd700cc, 0 0 70px #ffd70066, 0 0 110px #ffd70033; }
     }
 
     .rank-medal { font-size: 1.3rem; flex-shrink: 0; width: 26px; text-align: center; }
     .rank-num   { font-size: 0.9rem; font-weight: 700; color: #1a4040; width: 18px; text-align: center; flex-shrink: 0; }
 
     .rank-info  { flex: 1; min-width: 0; }
-    .rank-name  { font-size: 0.78rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .rank-sub   { font-size: 0.58rem; color: #0a4040; margin-top: 1px; }
+    .rank-name  { font-size: 0.9rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rank-sub   { font-size: 0.65rem; color: #0a4040; margin-top: 2px; }
     .r1 .rank-name { color: #ffd700; }
     .r2 .rank-name { color: #c0c0c0; }
     .r3 .rank-name { color: #cd7f32; }
     .rank-entry:not(.r1):not(.r2):not(.r3) .rank-name { color: #00a090; }
 
     .rank-right { text-align: right; flex-shrink: 0; }
-    .rank-uph   { font-size: 1rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .rank-uph   { font-size: 1.2rem; font-weight: 900; font-variant-numeric: tabular-nums; }
     .rank-pct-txt { font-size: 0.58rem; color: #0a4040; }
     .r1 .rank-uph { color: #ffd700; }
     .r2 .rank-uph { color: #c0c0c0; }
@@ -264,6 +304,57 @@
     .r2 .rank-bar-fill { background: linear-gradient(90deg, #444, #c0c0c0); }
     .r3 .rank-bar-fill { background: linear-gradient(90deg, #5a3010, #cd7f32); }
     .rank-entry:not(.r1):not(.r2):not(.r3) .rank-bar-fill { background: linear-gradient(90deg, #005544, #00c8a0); }
+
+    /* ─── TENDENCIAS ─────────────────────────────────── */
+    .tendencias {
+      border-top: 1px solid #0a2e2a;
+      padding-top: 6px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .tend-title {
+      font-size: 0.62rem; font-weight: 700;
+      letter-spacing: 2px; color: #00877a;
+      text-transform: uppercase; text-align: center;
+      margin-bottom: 2px;
+    }
+    .tend-row {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 4px 8px; border-radius: 7px;
+      border: 2px solid transparent;
+    }
+    .tend-row.sube {
+      background: linear-gradient(135deg, #00200f66, #00401a33);
+      border-color: #00e09a;
+      box-shadow: 0 0 12px #00e09a44, inset 0 0 8px #00e09a11;
+    }
+    .tend-row.baja {
+      background: linear-gradient(135deg, #20000066, #40000033);
+      border-color: #ff5555;
+      box-shadow: 0 0 12px #ff555544, inset 0 0 8px #ff555511;
+    }
+    .tend-top   { display: flex; align-items: center; gap: 6px; width: 100%; }
+    .tend-linea { font-size: 0.72rem; font-weight: 700; color: #00a090; width: 24px; flex-shrink: 0; }
+    .tend-pzs   { font-size: 0.75rem; font-weight: 900; font-variant-numeric: tabular-nums; flex: 1; }
+    .tend-pzs.sube { color: #00e09a; }
+    .tend-pzs.baja { color: #ff5555; }
+    .tend-diff  { font-size: 0.68rem; font-weight: 700; }
+    .tend-diff.sube { color: #00e09a; }
+    .tend-diff.baja { color: #ff5555; }
+    .tend-bar-wrap { width: 100%; height: 3px; background: #0a2020; border-radius: 2px; overflow: hidden; }
+    .tend-bar-fill { height: 100%; border-radius: 2px; }
+    .tend-bar-fill.sube { background: linear-gradient(90deg, #005544, #00e09a); }
+    .tend-bar-fill.baja { background: linear-gradient(90deg, #660000, #ff5555); }
+
+    .tend-total {
+      border-top: 1px solid #0a2e2a;
+      margin-top: 6px; padding-top: 8px;
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .tend-total-row { display: flex; justify-content: space-between; align-items: baseline; }
+    .tend-total-label { font-size: 0.62rem; color: #0a5050; text-transform: uppercase; letter-spacing: 1px; }
+    .tend-total-val  { font-size: 1.3rem; font-weight: 900; color: #00e5d0; font-variant-numeric: tabular-nums; }
+    .tend-total-meta { font-size: 0.9rem; font-weight: 700; color: #0a6060; font-variant-numeric: tabular-nums; }
+    .tend-tiempo { font-size: 0.62rem; color: #0a5050; text-align: center; letter-spacing: 1px; margin-top: 2px; }
 
     /* ─── AVANCE DEL TURNO ───────────────────────────── */
     .turno-avance {
@@ -350,20 +441,26 @@
     <div class="rank-title">🏆 Ranking · Turno <span id="turno-letra" style="color:#00c8b8">A</span></div>
     <div id="rank-list"></div>
 
-    <!-- Avance del turno -->
-    <div class="turno-avance">
-      <div class="ta-title">⏱ Avance del Turno</div>
-      <div class="ta-row">
-        <span class="ta-num" id="ta-actual">—</span>
-        <span class="ta-sep">/</span>
-        <span class="ta-meta" id="ta-meta">—</span>
-        <span class="ta-label">pzs</span>
+    <!-- Piezas acumuladas expandido -->
+    <div class="tendencias">
+      <div class="tend-title">📦 Piezas acumuladas en turno</div>
+      <div id="tend-list"></div>
+      <!-- Total del turno -->
+      <div class="tend-total">
+        <div class="tend-total-row">
+          <span class="tend-total-label">Total producido</span>
+          <span class="tend-total-val" id="tend-total-pzs">—</span>
+        </div>
+        <div class="tend-total-row">
+          <span class="tend-total-label">Meta del turno</span>
+          <span class="tend-total-meta" id="tend-total-meta">—</span>
+        </div>
+        <div class="ta-bar-track" style="margin-top:4px">
+          <div class="ta-bar-fill" id="tend-bar"></div>
+          <div class="ta-bar-pct" id="tend-pct">—%</div>
+        </div>
+        <div class="tend-tiempo" id="tend-tiempo">—</div>
       </div>
-      <div class="ta-bar-track">
-        <div class="ta-bar-fill" id="ta-bar"></div>
-        <div class="ta-bar-pct" id="ta-pct">—%</div>
-      </div>
-      <div class="ta-sub" id="ta-tiempo">—</div>
     </div>
   </div>
 </div>
@@ -385,7 +482,7 @@
   ];
 
   function color(pct) {
-    return pct >= 100 ? 'verde' : pct >= 80 ? 'amarillo' : 'rojo';
+    return pct >= 100 ? 'verde' : pct >= 90 ? 'amarillo' : 'rojo';
   }
 
   const STD_FILL  = 98;
@@ -400,26 +497,40 @@
   function renderLineas() {
     const container = document.getElementById('lines');
     container.innerHTML = '';
+
+    // Calcular ranking por pct
+    const sorted = [...LINEAS]
+      .map(l => ({ id: l.id, pct: Math.round(l.actual / l.std * 100) }))
+      .sort((a, b) => b.pct - a.pct);
+    const rankMap = {};
+    sorted.forEach((l, i) => { rankMap[l.id] = i + 1; });
+
     LINEAS.forEach(l => {
-      const pct = Math.round((l.actual / l.std) * 100);
-      const col = color(pct);
-      const bf  = barFlex(l.actual, l.std);
-      const stdLinePct = 82;
+      const pct  = Math.round((l.actual / l.std) * 100);
+      const col  = color(pct);
+      const bf   = barFlex(l.actual, l.std);
+      const pos  = rankMap[l.id];
+      const rankCls  = pos <= 3 ? `rank-${pos}` : '';
+      const medal    = pos === 1 ? '🥇' : pos === 2 ? '🥈' : pos === 3 ? '🥉' : '';
+      const barClass = col;
 
       const card = document.createElement('div');
-      card.className = `card ${col}`;
+      card.className = `card ${col} ${rankCls}`;
       const diff    = l.actual - l.std;
       const diffTxt = diff >= 0 ? `▲ +${diff}` : `▼ ${diff}`;
 
       card.innerHTML = `
-        <div class="card-linea">${l.id}</div>
+        <div class="card-header-row">
+          ${medal ? `<span class="card-medal">${medal}</span>` : ''}
+          <div class="card-linea">${l.id}</div>
+        </div>
         <div class="card-modelo">${l.modelo}</div>
         <div class="card-op">${l.op}</div>
         <div class="bars-area">
           <div class="bar-col real">
             <div class="bar-track">
               <div class="bar-spacer" style="flex:${bf.spacer.toFixed(1)}"></div>
-              <div class="bar-fill ${col}" style="flex:${bf.fill.toFixed(1)}"></div>
+              <div class="bar-fill ${barClass}" style="flex:${bf.fill.toFixed(1)}"></div>
               <div class="std-line" style="bottom:${STD_FILL}%"></div>
             </div>
           </div>
@@ -529,11 +640,63 @@
         `t-pill${turno === x ? ` act-${x}` : ''}`;
     });
     document.getElementById('turno-letra').textContent = turno;
-    updateAvance();
+    renderTendencias();
+  }
+
+  // Tendencias mock: UPH anterior simulado
+  function renderTendencias() {
+    const now   = new Date();
+    const h = now.getHours(), m = now.getMinutes();
+    const turno = h >= 6 && h < 14 ? 'A' : h >= 14 && h < 22 ? 'B' : 'C';
+    const inicio = { A: 6, B: 14, C: 22 }[turno];
+    const horasT  = Math.max(0.1, Math.min((h - inicio) + m / 60, 8));
+    const horasR  = 8 - horasT;
+    const minR    = Math.round(horasR * 60);
+
+    const list = document.getElementById('tend-list');
+    list.innerHTML = '';
+    let totalAcum = 0, totalEsperado = 0, totalMeta = 0;
+
+    LINEAS.forEach(l => {
+      const acumulado = Math.round(l.actual * horasT);
+      const esperado  = Math.round(l.std   * horasT);
+      const diff      = acumulado - esperado;
+      const cls       = diff >= 0 ? 'sube' : 'baja';
+      const icon      = diff >= 0 ? '↑' : '↓';
+      const diffTxt   = diff >= 0 ? `${icon} +${diff}` : `${icon} ${diff}`;
+      const barW      = Math.min(Math.round((acumulado / esperado) * 100), 100);
+      totalAcum += acumulado;
+      totalEsperado += esperado;
+      totalMeta += l.std * 8;
+
+      const row = document.createElement('div');
+      row.className = `tend-row ${cls}`;
+      row.innerHTML = `
+        <div class="tend-top">
+          <span class="tend-linea">${l.id}</span>
+          <span class="tend-pzs ${cls}">${acumulado.toLocaleString('es-MX')} pzs</span>
+          <span class="tend-diff ${cls}">${diffTxt}</span>
+        </div>
+        <div class="tend-bar-wrap">
+          <div class="tend-bar-fill ${cls}" style="width:${barW}%"></div>
+        </div>
+      `;
+      list.appendChild(row);
+    });
+
+    // Total
+    const pct = Math.min(Math.round((totalAcum / totalMeta) * 100), 100);
+    const hR  = Math.floor(minR / 60), mR = minR % 60;
+    document.getElementById('tend-total-pzs').textContent  = totalAcum.toLocaleString('es-MX');
+    document.getElementById('tend-total-meta').textContent = `/ ${Math.round(totalMeta).toLocaleString('es-MX')} pzs`;
+    document.getElementById('tend-bar').style.width        = pct + '%';
+    document.getElementById('tend-pct').textContent        = pct + '%';
+    document.getElementById('tend-tiempo').textContent     = `Restan ${hR}h ${String(mR).padStart(2,'0')}m del turno`;
   }
 
   renderLineas();
   renderRanking();
+  renderTendencias();
   tick();
   setInterval(tick, 1000);
 </script>

@@ -1,7 +1,7 @@
 import React from 'react';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useAuth } from '../contexts/AuthContext';
-import { ActivityIndicator, View, Platform, StyleSheet } from 'react-native';
+import { ActivityIndicator, View, Platform, StyleSheet, TouchableOpacity, Text } from 'react-native';
 import { usePlatform } from '../hooks/usePlatform';
 import { webStyles } from '../utils/webStyles';
 
@@ -108,6 +108,15 @@ export default function AuthNavigator() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+          headerLeft: ({ canGoBack }) =>
+            isWeb && canGoBack ? (
+              <TouchableOpacity
+                onPress={() => window.history.back()}
+                style={{ paddingHorizontal: 16, paddingVertical: 8 }}
+              >
+                <Text style={{ color: '#fff', fontSize: 22 }}>{'←'}</Text>
+              </TouchableOpacity>
+            ) : null,
           ...(isWeb && {
             headerMode: 'screen',
             cardStyle: {

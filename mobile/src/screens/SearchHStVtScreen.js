@@ -4,8 +4,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput, ActivityIndicator, Divider } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { hstvtService } from '../services/HStVtService';
-import { useAuth } from '../contexts/AuthContext';
-import { showAlert } from '../utils/alertUtils';
 
 function getFamily(item) {
   const name = typeof item === 'string' ? item : item.nombre;
@@ -76,16 +74,6 @@ const SORT_OPTIONS = [
 ];
 
 export default function SearchHStVtScreen() {
-  const { user, logout } = useAuth();
-  const role = user?.tipo_usuario;
-  const showLogout = role === 'lider_linea' || role === 'balances';
-
-  const handleLogout = () => {
-    showAlert('Cerrar sesión', '¿Deseas cerrar sesión?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Salir', style: 'destructive', onPress: logout },
-    ]);
-  };
 
   const [scripts, setScripts] = useState([]);
   const [loading, setLoading] = useState(true);
