@@ -145,11 +145,14 @@ async def analizar_imagen(
         if m:
             texto = m.group(1).strip()
         else:
-            # Buscar desde primer { hasta ultimo }
             inicio = texto.find("{")
             fin = texto.rfind("}")
             if inicio != -1 and fin != -1:
                 texto = texto[inicio:fin + 1]
+
+        # Eliminar caracteres de control que rompen el parser JSON
+        # (excepto \n \r \t que son validos dentro de strings)
+        texto = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', texto)
 
         datos = json.loads(texto)
         return {"ok": True, "data": datos}
