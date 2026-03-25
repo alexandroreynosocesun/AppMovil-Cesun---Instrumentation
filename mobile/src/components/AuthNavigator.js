@@ -95,7 +95,7 @@ export default function AuthNavigator() {
     <View style={[styles.navigatorContainer, isWeb && webStyles.container]}>
       <Stack.Navigator
         initialRouteName={isAuthenticated ? getInitialRoute() : 'Login'}
-        screenOptions={{
+        screenOptions={({ navigation }) => ({
           headerStyle: {
             backgroundColor: '#1A1A1A',
             ...(isWeb && {
@@ -111,7 +111,7 @@ export default function AuthNavigator() {
           headerLeft: ({ canGoBack }) =>
             isWeb && canGoBack ? (
               <TouchableOpacity
-                onPress={() => window.history.back()}
+                onPress={() => navigation.goBack()}
                 style={{ paddingHorizontal: 16, paddingVertical: 8 }}
               >
                 <Text style={{ color: '#fff', fontSize: 22 }}>{'←'}</Text>
@@ -126,7 +126,7 @@ export default function AuthNavigator() {
               backgroundColor: '#0F0F0F',
             },
           }),
-        }}
+        })}
       >
       {isAuthenticated ? (
         // Pantallas cuando está autenticado

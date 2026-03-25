@@ -83,6 +83,8 @@ export default function SearchHStVtScreen() {
   const [familias, setFamilias] = useState([]);
   const [sortKey, setSortKey] = useState('nuevo');
   const [selectedScript, setSelectedScript] = useState(null);
+  const showLogout = false;
+  const handleLogout = () => {};
 
   const handleShare = (p, filename) => {
     const lines = [
