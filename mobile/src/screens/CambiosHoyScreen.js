@@ -81,8 +81,11 @@ export default function CambiosHoyScreen() {
       setFiltro('Todos');
       setExpandido({});
     } catch (e) {
-      const msg = e?.response?.data?.detail || e?.message || 'Error al analizar';
-      Alert.alert('Error', msg);
+      const detail = e?.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : detail ? JSON.stringify(detail) : (e?.message || 'Error al analizar');
+      Alert.alert('Error ' + (e?.response?.status || ''), msg);
     } finally {
       setCargando(false);
     }

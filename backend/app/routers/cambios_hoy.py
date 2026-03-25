@@ -55,7 +55,7 @@ Reglas:
 
 
 class ImagenRequest(BaseModel):
-    imagen_base64: str  # data:image/jpeg;base64,... o solo el base64
+    imagen_base64: str = ""  # data:image/jpeg;base64,... o solo el base64
 
 
 @router.post("/analizar")
@@ -94,7 +94,7 @@ def analizar_imagen(
         client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
         message = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-opus-4-6",
             max_tokens=4096,
             messages=[
                 {
