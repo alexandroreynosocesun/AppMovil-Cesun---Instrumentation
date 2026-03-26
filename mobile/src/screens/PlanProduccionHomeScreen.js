@@ -43,13 +43,12 @@ const OPCIONES = [
 ];
 
 export default function PlanProduccionHomeScreen({ navigation }) {
-  const { user } = useAuth();
+  useAuth();
   const [newScriptsCount, setNewScriptsCount] = useState(0);
 
-  const esIngeniero = user?.tipo_usuario === 'ingeniero' || user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin';
+  const esIngeniero = true; // Badge visible para todos los roles
 
   useEffect(() => {
-    if (!esIngeniero) return;
     checkNewScripts();
   }, []);
 
