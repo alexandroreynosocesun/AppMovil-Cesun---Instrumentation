@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { View, StyleSheet, Alert, Dimensions, TouchableOpacity } from 'react-native'
+import { View, StyleSheet, Alert, Dimensions, TouchableOpacity, Platform } from 'react-native'
 import { showAlert } from '../utils/alertUtils';;
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Button, Card, Title, Paragraph, ActivityIndicator, TextInput } from 'react-native-paper';
@@ -9,6 +9,9 @@ import { formatDateTime12Hour } from '../utils/dateUtils';
 import logger from '../utils/logger';
 
 const { width } = Dimensions.get('window');
+const IS_WEB = Platform.OS === 'web';
+const IS_MOBILE_WEB = IS_WEB && typeof navigator !== 'undefined' && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+const IS_DESKTOP_WEB = IS_WEB && !IS_MOBILE_WEB;
 
 export default function QRScannerVByOne({ navigation }) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -118,16 +121,29 @@ export default function QRScannerVByOne({ navigation }) {
     processCode(code);
   };
 
-  if (!hasPermission) {
+  if (!hasPermission || IS_DESKTOP_WEB) {
     return (
       <View style={styles.container}>
         <Card style={styles.card}>
           <Card.Content>
-            <Title>Permisos de Cámara</Title>
-            <Paragraph>Necesitamos permisos para usar la cámara</Paragraph>
-            <Button onPress={requestPermission} style={styles.button}>
-              Conceder Permisos
+            <Title>{IS_DESKTOP_WEB ? 'Ingresar código QR' : 'Permisos de Cámara'}</Title>
+            <Paragraph>{IS_DESKTOP_WEB ? 'Escribe o pega el código del adaptador VByOne' : 'Necesitamos permisos para usar la cámara'}</Paragraph>
+            <TextInput
+              label="Código QR"
+              value={manualCode}
+              onChangeText={setManualCode}
+              onSubmitEditing={handleManualSubmit}
+              autoFocus={IS_DESKTOP_WEB}
+              style={{ marginTop: 12, marginBottom: 8 }}
+            />
+            <Button mode="contained" onPress={handleManualSubmit} disabled={!manualCode.trim() || loading} style={styles.button}>
+              Buscar
             </Button>
+            {!IS_DESKTOP_WEB && (
+              <Button onPress={requestPermission} style={styles.button}>
+                Conceder Permisos
+              </Button>
+            )}
           </Card.Content>
         </Card>
       </View>
