@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Modal, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -86,6 +86,8 @@ export default function SearchHStVtScreen() {
   const [selectedScript, setSelectedScript] = useState(null);
   const showLogout = false;
   const handleLogout = () => {};
+  // Timestamp de última visita (en segundos Unix) para marcar NUEVO
+  const lastSeenRef = useRef(null);
 
   const handleShare = (p, filename) => {
     const lines = [
@@ -105,9 +107,15 @@ export default function SearchHStVtScreen() {
   };
 
   useEffect(() => {
+    // Leer last_seen ANTES de actualizarlo para poder marcar NUEVO
+    AsyncStorage.getItem('hstvt_last_seen').then((val) => {
+      if (val) lastSeenRef.current = Math.floor(new Date(val).getTime() / 1000);
+    }).catch(() => {});
     loadScripts();
-    // Guardar timestamp de última visita para el badge de notificaciones
-    AsyncStorage.setItem('hstvt_last_seen', new Date().toISOString()).catch(() => {});
+    // Actualizar timestamp al SALIR (cleanup)
+    return () => {
+      AsyncStorage.setItem('hstvt_last_seen', new Date().toISOString()).catch(() => {});
+    };
   }, []);
 
   const loadScripts = async () => {
@@ -150,10 +158,16 @@ export default function SearchHStVtScreen() {
   const renderItem = ({ item }) => {
     const p = parseScript(item);
     const filename = getName(item);
+    const isNuevo = lastSeenRef.current && p.fecha && p.fecha > lastSeenRef.current;
     return (
-      <TouchableOpacity style={styles.card} onPress={() => setSelectedScript({ p, filename })} activeOpacity={0.75}>
+      <TouchableOpacity style={[styles.card, isNuevo && styles.cardNuevo]} onPress={() => setSelectedScript({ p, filename })} activeOpacity={0.75}>
         <View style={styles.cardHeader}>
           <Text style={styles.familia}>{p.familia}</Text>
+          {isNuevo && (
+            <View style={styles.nuevoBadge}>
+              <Text style={styles.nuevoText}>NUEVO</Text>
+            </View>
+          )}
           {p.externo && (
             <View style={styles.externoBadge}>
               <Text style={styles.externoText}>EXTERNO</Text>
@@ -380,6 +394,14 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 2, flexWrap: 'wrap', gap: 6 },
   familia: { color: '#2196F3', fontWeight: 'bold', fontSize: 13 },
+  cardNuevo: { borderLeftColor: '#4CAF50', borderLeftWidth: 3 },
+  nuevoBadge: {
+    backgroundColor: '#4CAF50',
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  nuevoText: { color: '#FFF', fontSize: 10, fontWeight: 'bold' },
   externoBadge: {
     backgroundColor: '#FF9800',
     borderRadius: 4,
