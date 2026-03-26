@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput, ActivityIndicator, Divider } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
 import { hstvtService } from '../services/HStVtService';
+import { useAuth } from '../contexts/AuthContext';
 
 function getFamily(item) {
   const name = typeof item === 'string' ? item : item.nombre;
@@ -86,8 +87,17 @@ export default function SearchHStVtScreen() {
   const [selectedScript, setSelectedScript] = useState(null);
   const showLogout = false;
   const handleLogout = () => {};
+  const { user } = useAuth();
+  const esIngeniero = ['ingeniero', 'admin', 'superadmin'].includes(user?.tipo_usuario);
+  const [soloNuevos, setSoloNuevos] = useState(false);
   // Timestamp de última visita (en segundos Unix) para marcar NUEVO
   const lastSeenRef = useRef(null);
+
+  const limpiarNuevos = async () => {
+    lastSeenRef.current = Math.floor(Date.now() / 1000);
+    await AsyncStorage.setItem('hstvt_last_seen', new Date().toISOString()).catch(() => {});
+    setSoloNuevos(false);
+  };
 
   const handleShare = (p, filename) => {
     const lines = [
@@ -137,7 +147,10 @@ export default function SearchHStVtScreen() {
       const name = getName(s);
       const matchFamilia = familiaFiltro ? getFamily(s) === familiaFiltro : true;
       const matchSearch = search.trim() ? name.toLowerCase().includes(search.toLowerCase()) : true;
-      return matchFamilia && matchSearch;
+      const matchNuevo = soloNuevos
+        ? (lastSeenRef.current && getFecha(s) > lastSeenRef.current)
+        : true;
+      return matchFamilia && matchSearch && matchNuevo;
     })
     .sort((a, b) => {
       const na = getName(a).toLowerCase();
@@ -235,7 +248,25 @@ export default function SearchHStVtScreen() {
               </Text>
             </TouchableOpacity>
           ))}
+          {esIngeniero && (
+            <TouchableOpacity
+              style={[styles.sortBtn, soloNuevos && styles.sortBtnNuevo]}
+              onPress={() => setSoloNuevos(v => !v)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.sortText, soloNuevos && styles.sortTextActive]}>
+                🆕 Agregado recientemente
+              </Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
+
+        {/* Botón limpiar — solo cuando filtro activo */}
+        {esIngeniero && soloNuevos && (
+          <TouchableOpacity style={styles.limpiarBtn} onPress={limpiarNuevos} activeOpacity={0.8}>
+            <Text style={styles.limpiarTxt}>✕ Limpiar nuevos</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Filtros de familia */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.familiaRow} contentContainerStyle={styles.rowContent}>
@@ -394,6 +425,14 @@ const styles = StyleSheet.create({
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 2, flexWrap: 'wrap', gap: 6 },
   familia: { color: '#2196F3', fontWeight: 'bold', fontSize: 13 },
+  sortBtnNuevo: { backgroundColor: '#1B5E20', borderColor: '#4CAF50', borderWidth: 1 },
+  limpiarBtn: {
+    marginHorizontal: 12, marginBottom: 8,
+    backgroundColor: '#1B1B1B', borderRadius: 8,
+    borderWidth: 1, borderColor: '#4CAF50',
+    paddingVertical: 8, alignItems: 'center',
+  },
+  limpiarTxt: { color: '#4CAF50', fontSize: 13, fontWeight: 'bold' },
   cardNuevo: { borderLeftColor: '#4CAF50', borderLeftWidth: 3 },
   nuevoBadge: {
     backgroundColor: '#4CAF50',
