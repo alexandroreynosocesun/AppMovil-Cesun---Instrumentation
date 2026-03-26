@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, StyleSheet, FlatList, ScrollView, TouchableOpacity, Modal, Share } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput, ActivityIndicator, Divider } from 'react-native-paper';
@@ -103,7 +104,11 @@ export default function SearchHStVtScreen() {
     Share.share({ message: lines.join('\n') });
   };
 
-  useEffect(() => { loadScripts(); }, []);
+  useEffect(() => {
+    loadScripts();
+    // Guardar timestamp de última visita para el badge de notificaciones
+    AsyncStorage.setItem('hstvt_last_seen', new Date().toISOString()).catch(() => {});
+  }, []);
 
   const loadScripts = async () => {
     setLoading(true);
