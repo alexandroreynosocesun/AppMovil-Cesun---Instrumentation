@@ -9,8 +9,15 @@ import {
   Modal,
   TouchableOpacity,
   Text,
+  TextInput,
   Platform
 } from 'react-native';
+
+// PC desktop web = web pero NO móvil
+const IS_WEB = Platform.OS === 'web';
+const IS_MOBILE_WEB = IS_WEB && typeof navigator !== 'undefined' &&
+  /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+const IS_DESKTOP_WEB = IS_WEB && !IS_MOBILE_WEB;
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import {
@@ -54,6 +61,15 @@ export default function QRScannerScreen({ navigation, route }) {
   const alertLockRef = useRef(false);
 
   const hasPermission = permission?.granted;
+  const [manualCode, setManualCode] = useState('');
+
+  const handleManualSubmit = () => {
+    const code = manualCode.trim();
+    if (!code) return;
+    setManualCode('');
+    setLoading(true);
+    processQRCode(code);
+  };
 
   // Forzar re-render de la cámara cuando el contenedor esté listo (especialmente en Android)
   useEffect(() => {
@@ -411,18 +427,46 @@ export default function QRScannerScreen({ navigation, route }) {
     );
   }
 
-  if (hasPermission === false) {
+  if (hasPermission === false || IS_DESKTOP_WEB) {
     return (
       <View style={styles.container}>
         <Card style={styles.card}>
           <Card.Content>
-            <Title>{t('cameraPermissions')}</Title>
-            <Paragraph>
-              {t('cameraPermissionsDesc')}
+            <Title style={{ color: '#fff', marginBottom: 8 }}>
+              {IS_DESKTOP_WEB ? 'Ingresar código QR' : t('cameraPermissions')}
+            </Title>
+            <Paragraph style={{ color: '#aaa', marginBottom: 16 }}>
+              {IS_DESKTOP_WEB
+                ? 'Escribe o pega el código del QR manualmente'
+                : t('cameraPermissionsDesc')}
             </Paragraph>
-            <Button mode="contained" onPress={requestPermission} style={styles.button}>
-              {t('allowAccess')}
+
+            {/* Input manual (siempre visible en desktop, también en móvil sin permiso) */}
+            <TextInput
+              style={styles.manualInput}
+              placeholder="Ej: JIG-001 o código QR..."
+              placeholderTextColor="#555"
+              value={manualCode}
+              onChangeText={setManualCode}
+              onSubmitEditing={handleManualSubmit}
+              returnKeyType="search"
+              autoFocus={IS_DESKTOP_WEB}
+            />
+            <Button
+              mode="contained"
+              onPress={handleManualSubmit}
+              style={[styles.button, { marginBottom: 12 }]}
+              loading={loading}
+              disabled={!manualCode.trim() || loading}
+            >
+              Buscar
             </Button>
+
+            {!IS_DESKTOP_WEB && (
+              <Button mode="outlined" onPress={requestPermission} style={styles.button}>
+                {t('allowAccess')}
+              </Button>
+            )}
           </Card.Content>
         </Card>
       </View>
@@ -661,6 +705,18 @@ const styles = StyleSheet.create({
   card: {
     margin: 20,
     elevation: 4,
+    backgroundColor: '#1A1A1A',
+  },
+  manualInput: {
+    backgroundColor: '#2A2A2A',
+    color: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 15,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#444',
   },
   text: {
     textAlign: 'center',
