@@ -14,7 +14,14 @@ import { useAuth } from '../contexts/AuthContext';
 export default function ModeloLideraScreen() {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user } = useAuth();
-  const lineaUsuario = user?.linea_uph;  // "HI-3" etc., null si no configuró
+  const lineaUsuario = user?.linea_uph; // "HI-3" etc., null si no configuró
+
+  // Convierte "HI-3" → "uph_hi3"
+  const getUphKey = (lineaNombre) => {
+    if (!lineaNombre) return null;
+    const num = lineaNombre.replace(/[^0-9]/g, '');
+    return num ? `uph_hi${num}` : null;
+  };
   const [lineas, setLineas] = useState([]);
   const [lineaSeleccionada, setLineaSeleccionada] = useState(null);
   const [modelos, setModelos] = useState([]);
@@ -178,24 +185,33 @@ export default function ModeloLideraScreen() {
           ) : (
             modelosFiltrados.map(m => {
               const isActivo = modeloActivo?.id === m.id;
-              const uphPorOp = operadoresNecesarios
-                ? Math.round(m.uph_total / operadoresNecesarios)
+              const uphKey = getUphKey(lineaSeleccionada?.nombre);
+              const uphLinea = uphKey && m[uphKey] != null ? m[uphKey] : m.uph_total;
+              const uphPorOp = operadoresNecesarios && uphLinea
+                ? Math.round(uphLinea / operadoresNecesarios)
                 : null;
               return (
                 <View key={m.id} style={[styles.card, isActivo && styles.cardActivo]}>
                   {/* Header */}
                   <View style={styles.cardHeader}>
-                    <Text style={styles.modeloNombre}>{m.nombre}</Text>
-                    <View style={styles.lineaBadge}>
-                      <Text style={styles.lineaBadgeText}>{m.linea}</Text>
+                    <View>
+                      <Text style={styles.modeloNombre}>{m.nombre}</Text>
+                      {m.modelo_interno ? (
+                        <Text style={styles.modeloInterno}>{m.modelo_interno}</Text>
+                      ) : null}
                     </View>
+                    {m.tipo ? (
+                      <View style={styles.lineaBadge}>
+                        <Text style={styles.lineaBadgeText}>{m.tipo}</Text>
+                      </View>
+                    ) : null}
                   </View>
 
                   {/* Cantidades */}
                   <View style={styles.cantidadesRow}>
                     <View style={styles.cantidadBloque}>
-                      <Text style={styles.cantidadLabel}>UPH Línea</Text>
-                      <Text style={styles.cantidadValor}>{m.uph_total}</Text>
+                      <Text style={styles.cantidadLabel}>UPH {lineaSeleccionada?.nombre}</Text>
+                      <Text style={styles.cantidadValor}>{uphLinea ?? '—'}</Text>
                       <Text style={styles.cantidadUnidad}>pzs/hr</Text>
                     </View>
 
@@ -204,7 +220,7 @@ export default function ModeloLideraScreen() {
                     <View style={styles.cantidadBloque}>
                       <Text style={styles.cantidadLabel}>Por turno (12h)</Text>
                       <Text style={[styles.cantidadValor, { color: '#4CAF50' }]}>
-                        {Math.round(m.uph_total * 12)}
+                        {uphLinea ? Math.round(uphLinea * 12) : '—'}
                       </Text>
                       <Text style={styles.cantidadUnidad}>pzs</Text>
                     </View>
@@ -214,17 +230,17 @@ export default function ModeloLideraScreen() {
                     <View style={styles.cantidadBloque}>
                       <Text style={styles.cantidadLabel}>UPH / op.</Text>
                       <Text style={[styles.cantidadValor, { color: '#2196F3' }]}>
-                        {uphPorOp ?? m.uph_total}
+                        {uphPorOp ?? uphLinea ?? '—'}
                       </Text>
                       <Text style={styles.cantidadUnidad}>pzs/hr</Text>
                     </View>
                   </View>
 
                   {/* Info estaciones */}
-                  {operadoresNecesarios != null && (
+                  {operadoresNecesarios != null && uphLinea && (
                     <View style={styles.infoRow}>
                       <Text style={styles.infoTexto}>
-                        {estacionesCount} est. · {operadoresNecesarios} ops · meta {Math.round(m.uph_total * 12)} pzs/turno
+                        {estacionesCount} est. · {operadoresNecesarios} ops · meta {Math.round(uphLinea * 12)} pzs/turno
                       </Text>
                     </View>
                   )}
@@ -304,6 +320,7 @@ const styles = StyleSheet.create({
     padding: 16, borderBottomWidth: 1, borderBottomColor: '#2D2D2D',
   },
   modeloNombre: { color: '#FFFFFF', fontSize: 20, fontWeight: 'bold' },
+  modeloInterno: { color: '#757575', fontSize: 12, marginTop: 2 },
   lineaBadge: {
     backgroundColor: '#1565C033', borderWidth: 1, borderColor: '#2196F3',
     borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3,

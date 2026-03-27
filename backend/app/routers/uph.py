@@ -452,18 +452,7 @@ def modelos_por_linea(
             modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
         else:
             modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
-    return [
-        {
-            "id": m.id,
-            "nombre": m.nombre,
-            "num_placa": m.num_placa,
-            "modelo_interno": m.modelo_interno,
-            "uph_total": m.uph_total,
-            "linea_id": m.linea_id,
-            "linea": m.linea.nombre if m.linea else None,
-        }
-        for m in modelos
-    ]
+    return [_modelo_to_dict(m) for m in modelos]
 
 
 @router.get("/lineas")
