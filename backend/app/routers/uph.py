@@ -69,10 +69,15 @@ class OperadorIn(BaseModel):
 
 class ModeloUPHIn(BaseModel):
     nombre: str
-    num_placa: Optional[str] = None
     modelo_interno: Optional[str] = None
-    uph_total: float
-    linea_id: Optional[int] = None
+    tipo: Optional[str] = None
+    uph_hi1: Optional[float] = None
+    uph_hi2: Optional[float] = None
+    uph_hi3: Optional[float] = None
+    uph_hi4: Optional[float] = None
+    uph_hi5: Optional[float] = None
+    uph_hi6: Optional[float] = None
+    uph_hi7: Optional[float] = None
 
 
 class AsignacionItemIn(BaseModel):
@@ -338,24 +343,31 @@ def crear_operador(
     return {"num_empleado": op.num_empleado, "ok": True, "actualizado": False}
 
 
+def _modelo_to_dict(m):
+    return {
+        "id": m.id,
+        "nombre": m.nombre,
+        "modelo_interno": m.modelo_interno,
+        "tipo": m.tipo,
+        "uph_hi1": m.uph_hi1,
+        "uph_hi2": m.uph_hi2,
+        "uph_hi3": m.uph_hi3,
+        "uph_hi4": m.uph_hi4,
+        "uph_hi5": m.uph_hi5,
+        "uph_hi6": m.uph_hi6,
+        "uph_hi7": m.uph_hi7,
+        # compatibilidad: uph_total = promedio de los que tengan valor
+        "uph_total": m.uph_total,
+    }
+
+
 @router.get("/modelos")
 def listar_modelos(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
     modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
-    return [
-        {
-            "id": m.id,
-            "nombre": m.nombre,
-            "num_placa": m.num_placa,
-            "modelo_interno": m.modelo_interno,
-            "uph_total": m.uph_total,
-            "linea_id": m.linea_id,
-            "linea": m.linea.nombre if m.linea else None,
-        }
-        for m in modelos
-    ]
+    return [_modelo_to_dict(m) for m in modelos]
 
 
 @router.post("/modelos", status_code=201)
@@ -367,10 +379,16 @@ def crear_modelo(
     _ensure_modelos(current_user)
     modelo = ModeloUPH(
         nombre=data.nombre,
-        num_placa=data.num_placa,
         modelo_interno=data.modelo_interno,
-        uph_total=data.uph_total,
-        linea_id=data.linea_id,
+        tipo=data.tipo,
+        uph_hi1=data.uph_hi1,
+        uph_hi2=data.uph_hi2,
+        uph_hi3=data.uph_hi3,
+        uph_hi4=data.uph_hi4,
+        uph_hi5=data.uph_hi5,
+        uph_hi6=data.uph_hi6,
+        uph_hi7=data.uph_hi7,
+        uph_total=data.uph_hi1,  # compatibilidad: usar HI-1 como default
     )
     db.add(modelo)
     db.commit()
@@ -390,10 +408,16 @@ def actualizar_modelo(
     if not modelo:
         raise HTTPException(status_code=404, detail="Modelo no encontrado")
     modelo.nombre = data.nombre
-    modelo.num_placa = data.num_placa
     modelo.modelo_interno = data.modelo_interno
-    modelo.uph_total = data.uph_total
-    modelo.linea_id = data.linea_id
+    modelo.tipo = data.tipo
+    modelo.uph_hi1 = data.uph_hi1
+    modelo.uph_hi2 = data.uph_hi2
+    modelo.uph_hi3 = data.uph_hi3
+    modelo.uph_hi4 = data.uph_hi4
+    modelo.uph_hi5 = data.uph_hi5
+    modelo.uph_hi6 = data.uph_hi6
+    modelo.uph_hi7 = data.uph_hi7
+    modelo.uph_total = data.uph_hi1
     db.commit()
     return {"id": modelo.id, "ok": True}
 

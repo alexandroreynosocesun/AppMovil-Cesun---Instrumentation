@@ -12,100 +12,101 @@ import { showAlert } from '../utils/alertUtils';
 import { uphService } from '../services/UPHService';
 import { useAuth } from '../contexts/AuthContext';
 
+const LINEAS = ['HI-1', 'HI-2', 'HI-3', 'HI-4', 'HI-5', 'HI-6', 'HI-7'];
+const UPH_KEYS = ['uph_hi1', 'uph_hi2', 'uph_hi3', 'uph_hi4', 'uph_hi5', 'uph_hi6', 'uph_hi7'];
+
 function ModalFormulario({ visible, modelo, onClose, onGuardar }) {
   const [nombre, setNombre] = useState('');
-  const [numPlaca, setNumPlaca] = useState('');
   const [modeloInterno, setModeloInterno] = useState('');
-  const [uph, setUph] = useState('');
+  const [tipo, setTipo] = useState('');
+  const [uphValues, setUphValues] = useState({ uph_hi1: '', uph_hi2: '', uph_hi3: '', uph_hi4: '', uph_hi5: '', uph_hi6: '', uph_hi7: '' });
   const [guardando, setGuardando] = useState(false);
 
   useEffect(() => {
     if (modelo) {
       setNombre(modelo.nombre || '');
-      setNumPlaca(modelo.num_placa || '');
       setModeloInterno(modelo.modelo_interno || '');
-      setUph(String(modelo.uph_total));
+      setTipo(modelo.tipo || '');
+      const vals = {};
+      UPH_KEYS.forEach(k => { vals[k] = modelo[k] != null ? String(modelo[k]) : ''; });
+      setUphValues(vals);
     } else {
       setNombre('');
-      setNumPlaca('');
       setModeloInterno('');
-      setUph('');
+      setTipo('');
+      setUphValues({ uph_hi1: '', uph_hi2: '', uph_hi3: '', uph_hi4: '', uph_hi5: '', uph_hi6: '', uph_hi7: '' });
     }
   }, [modelo, visible]);
 
   const handleGuardar = async () => {
-    if (!nombre.trim() || !uph.trim()) {
-      showAlert('Campos requeridos', 'Completa nombre y UPH.');
+    if (!nombre.trim()) {
+      showAlert('Campo requerido', 'El nombre del modelo es obligatorio.');
       return;
     }
-    const uphNum = parseFloat(uph);
-    if (isNaN(uphNum) || uphNum <= 0) {
-      showAlert('UPH invalido', 'Ingresa un valor numerico mayor a 0.');
-      return;
+    const uphNums = {};
+    for (const k of UPH_KEYS) {
+      const v = uphValues[k];
+      uphNums[k] = v.trim() ? parseFloat(v) : null;
     }
     setGuardando(true);
-    await onGuardar(modelo?.id, nombre.trim(), numPlaca.trim() || null, modeloInterno.trim() || null, uphNum);
+    await onGuardar({
+      id: modelo?.id,
+      nombre: nombre.trim(),
+      modelo_interno: modeloInterno.trim() || null,
+      tipo: tipo.trim() || null,
+      ...uphNums,
+    });
     setGuardando(false);
   };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.modalOverlay}>
-        <View style={styles.modalCard}>
-          <Text style={styles.modalTitulo}>{modelo ? 'Editar modelo' : 'Nuevo modelo'}</Text>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.modalOverlay}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', padding: 20 }} keyboardShouldPersistTaps="handled">
+          <View style={s.modalCard}>
+            <Text style={s.modalTitulo}>{modelo ? 'Editar modelo' : 'Nuevo modelo'}</Text>
 
-          <Text style={styles.label}>Nombre del modelo *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej: 55U75QUF"
-            placeholderTextColor="#616161"
-            value={nombre}
-            onChangeText={setNombre}
-            autoCapitalize="characters"
-          />
+            <Text style={s.label}>Nombre del modelo *</Text>
+            <TextInput style={s.input} placeholder="Ej: 55U75QUF" placeholderTextColor="#555"
+              value={nombre} onChangeText={setNombre} autoCapitalize="characters" />
 
-          <Text style={styles.label}>Numero de placa</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej: RSAG7.820.9451"
-            placeholderTextColor="#616161"
-            value={numPlaca}
-            onChangeText={setNumPlaca}
-            autoCapitalize="characters"
-          />
+            <Text style={s.label}>Modelo interno</Text>
+            <TextInput style={s.input} placeholder="Ej: 50A53FUR" placeholderTextColor="#555"
+              value={modeloInterno} onChangeText={setModeloInterno} autoCapitalize="characters" />
 
-          <Text style={styles.label}>Modelo interno</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej: 55A7500F"
-            placeholderTextColor="#616161"
-            value={modeloInterno}
-            onChangeText={setModeloInterno}
-            autoCapitalize="characters"
-          />
+            <Text style={s.label}>Tipo</Text>
+            <TextInput style={s.input} placeholder="Ej: 3 IN 1 / REFLOV" placeholderTextColor="#555"
+              value={tipo} onChangeText={setTipo} autoCapitalize="characters" />
 
-          <Text style={styles.label}>UPH por linea *</Text>
-          <TextInput
-            style={styles.input}
-            placeholder="Ej: 220"
-            placeholderTextColor="#616161"
-            value={uph}
-            onChangeText={setUph}
-            keyboardType="numeric"
-          />
+            <Text style={[s.label, { marginTop: 4, color: '#4FC3F7', fontWeight: 'bold' }]}>UPH por línea</Text>
+            <View style={s.uphGrid}>
+              {LINEAS.map((linea, i) => (
+                <View key={linea} style={s.uphItem}>
+                  <Text style={s.uphLinea}>{linea}</Text>
+                  <TextInput
+                    style={s.uphInput}
+                    placeholder="—"
+                    placeholderTextColor="#444"
+                    value={uphValues[UPH_KEYS[i]]}
+                    onChangeText={v => setUphValues(prev => ({ ...prev, [UPH_KEYS[i]]: v }))}
+                    keyboardType="numeric"
+                  />
+                </View>
+              ))}
+            </View>
 
-          <View style={styles.modalBtns}>
-            <TouchableOpacity style={styles.btnCancelar} onPress={onClose}>
-              <Text style={styles.btnCancelarText}>Cancelar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.btnGuardar} onPress={handleGuardar} disabled={guardando}>
-              {guardando
-                ? <ActivityIndicator size="small" color="#fff" />
-                : <Text style={styles.btnGuardarText}>Guardar</Text>
-              }
-            </TouchableOpacity>
+            <View style={s.modalBtns}>
+              <TouchableOpacity style={s.btnCancelar} onPress={onClose}>
+                <Text style={s.btnCancelarText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.btnGuardar} onPress={handleGuardar} disabled={guardando}>
+                {guardando
+                  ? <ActivityIndicator size="small" color="#fff" />
+                  : <Text style={s.btnGuardarText}>Guardar</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </Modal>
   );
@@ -114,7 +115,7 @@ function ModalFormulario({ visible, modelo, onClose, onGuardar }) {
 export default function ModelosUPHAdminScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user } = useAuth();
-  const isAdmin = user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin';
+  const isAdmin = ['admin', 'superadmin', 'ingeniero'].includes(user?.tipo_usuario);
 
   const [modelos, setModelos] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -125,20 +126,32 @@ export default function ModelosUPHAdminScreen({ navigation }) {
 
   const cargar = useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
-    const rModelos = await uphService.getModelos();
-    if (rModelos.success) setModelos(rModelos.data);
+    const r = await uphService.getModelos();
+    if (r.success) setModelos(r.data);
     setLoading(false);
     setRefreshing(false);
   }, []);
 
   useEffect(() => { cargar(); }, [cargar]);
 
-  const handleGuardar = async (id, nombre, num_placa, modelo_interno, uph_total) => {
+  const handleGuardar = async (data) => {
+    const payload = {
+      nombre: data.nombre,
+      modelo_interno: data.modelo_interno,
+      tipo: data.tipo,
+      uph_hi1: data.uph_hi1,
+      uph_hi2: data.uph_hi2,
+      uph_hi3: data.uph_hi3,
+      uph_hi4: data.uph_hi4,
+      uph_hi5: data.uph_hi5,
+      uph_hi6: data.uph_hi6,
+      uph_hi7: data.uph_hi7,
+    };
     let result;
-    if (id) {
-      result = await uphService.actualizarModelo(id, nombre, num_placa, modelo_interno, uph_total);
+    if (data.id) {
+      result = await uphService.actualizarModelo(data.id, payload);
     } else {
-      result = await uphService.crearModelo(nombre, num_placa, modelo_interno, uph_total);
+      result = await uphService.crearModelo(payload);
     }
     if (result.success) {
       setModalVisible(false);
@@ -150,135 +163,113 @@ export default function ModelosUPHAdminScreen({ navigation }) {
   };
 
   const handleEliminar = (modelo) => {
-    showAlert(
-      'Eliminar modelo',
-      `Eliminar "${modelo.nombre}"? Esta accion no se puede deshacer.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Eliminar', style: 'destructive',
-          onPress: async () => {
-            const result = await uphService.eliminarModelo(modelo.id);
-            if (result.success) cargar();
-            else showAlert('Error', result.error);
-          },
+    showAlert('Eliminar modelo', `Eliminar "${modelo.nombre}"?`, [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar', style: 'destructive',
+        onPress: async () => {
+          const r = await uphService.eliminarModelo(modelo.id);
+          if (r.success) cargar();
+          else showAlert('Error', r.error);
         },
-      ]
-    );
+      },
+    ]);
   };
 
   const modelosFiltrados = busqueda.trim()
     ? modelos.filter(m =>
-        m.nombre.toLowerCase().includes(busqueda.toLowerCase()) ||
-        (m.num_placa || '').toLowerCase().includes(busqueda.toLowerCase()) ||
-        (m.modelo_interno || '').toLowerCase().includes(busqueda.toLowerCase())
+        m.nombre?.toLowerCase().includes(busqueda.toLowerCase()) ||
+        (m.modelo_interno || '').toLowerCase().includes(busqueda.toLowerCase()) ||
+        (m.tipo || '').toLowerCase().includes(busqueda.toLowerCase())
       )
     : modelos;
 
   if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#2196F3" />
-      </View>
-    );
+    return <View style={s.center}><ActivityIndicator size="large" color="#2196F3" /></View>;
   }
 
   return (
-    <View style={[styles.container, isWeb && webStyles.container]}>
-      <LinearGradient
-        colors={['#0F0F0F', '#1A1A1A', '#2D2D2D']}
-        style={StyleSheet.absoluteFill}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-      />
-      <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+    <View style={[s.container, isWeb && webStyles.container]}>
+      <LinearGradient colors={['#0F0F0F', '#1A1A1A', '#2D2D2D']} style={StyleSheet.absoluteFill} />
+      <SafeAreaView style={s.safeArea} edges={['top', 'bottom']}>
 
         {isAdmin && (
-          <TouchableOpacity
-            style={styles.operadoresBtn}
-            onPress={() => navigation.navigate('OperadoresAdmin')}
-          >
-            <Text style={styles.operadoresBtnText}>Gestionar operadores</Text>
+          <TouchableOpacity style={s.operadoresBtn} onPress={() => navigation.navigate('OperadoresAdmin')}>
+            <Text style={s.operadoresBtnText}>Gestionar operadores</Text>
           </TouchableOpacity>
         )}
 
-        <View style={styles.searchContainer}>
+        <View style={s.searchContainer}>
           <TextInput
-            style={styles.searchInput}
-            placeholder="Buscar modelo, placa, interno..."
+            style={s.searchInput}
+            placeholder="Buscar modelo, interno, tipo..."
             placeholderTextColor="#616161"
             value={busqueda}
             onChangeText={setBusqueda}
           />
-          <Text style={styles.conteo}>{modelosFiltrados.length} modelos</Text>
+          <Text style={s.conteo}>{modelosFiltrados.length} modelos</Text>
         </View>
 
         <ScrollView
-          contentContainerStyle={[
-            styles.scroll,
-            isWeb && { maxWidth, alignSelf: 'center', width: '100%', paddingHorizontal: containerPadding },
-          ]}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={() => cargar(true)} tintColor="#2196F3" />
-          }
+          contentContainerStyle={[s.scroll, isWeb && { maxWidth, alignSelf: 'center', width: '100%', paddingHorizontal: containerPadding }]}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => cargar(true)} tintColor="#2196F3" />}
         >
           {modelosFiltrados.length === 0 ? (
-            <View style={styles.empty}>
-              <Text style={styles.emptyText}>
-                {busqueda ? 'Sin resultados' : 'Sin modelos registrados'}
-              </Text>
-              {!busqueda && <Text style={styles.emptyHint}>Toca + para agregar el primero</Text>}
+            <View style={s.empty}>
+              <Text style={s.emptyText}>{busqueda ? 'Sin resultados' : 'Sin modelos registrados'}</Text>
+              {!busqueda && <Text style={s.emptyHint}>Toca + para agregar el primero</Text>}
             </View>
           ) : (
             modelosFiltrados.map(m => (
-              <View key={m.id} style={styles.modeloCard}>
-                <View style={styles.modeloInfo}>
-                  <Text style={styles.modeloNombre}>{m.nombre}</Text>
-                  <View style={styles.metaRow}>
-                    {m.num_placa ? (
-                      <View style={styles.metaChip}>
-                        <Text style={styles.metaChipLabel}>Placa</Text>
-                        <Text style={styles.metaChipValor}>{m.num_placa}</Text>
-                      </View>
-                    ) : null}
-                    {m.modelo_interno ? (
-                      <View style={styles.metaChip}>
-                        <Text style={styles.metaChipLabel}>Interno</Text>
-                        <Text style={styles.metaChipValor}>{m.modelo_interno}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                  <View style={styles.uphRow}>
-                    <View style={styles.uphBloque}>
-                      <Text style={styles.uphEtiqueta}>UPH/linea</Text>
-                      <Text style={styles.uphValor}>{m.uph_total}</Text>
+              <View key={m.id} style={s.modeloCard}>
+                {/* Header */}
+                <View style={s.cardTop}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.modeloNombre}>{m.nombre}</Text>
+                    <View style={s.metaRow}>
+                      {m.modelo_interno ? (
+                        <View style={s.chip}>
+                          <Text style={s.chipLabel}>Interno</Text>
+                          <Text style={s.chipVal}>{m.modelo_interno}</Text>
+                        </View>
+                      ) : null}
+                      {m.tipo ? (
+                        <View style={[s.chip, { borderColor: '#4FC3F730' }]}>
+                          <Text style={s.chipLabel}>Tipo</Text>
+                          <Text style={[s.chipVal, { color: '#4FC3F7' }]}>{m.tipo}</Text>
+                        </View>
+                      ) : null}
                     </View>
                   </View>
+                  <View style={s.acciones}>
+                    <TouchableOpacity style={s.btnEditar} onPress={() => { setModeloEditar(m); setModalVisible(true); }}>
+                      <Text style={s.btnEditarText}>✏️</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={s.btnEliminar} onPress={() => handleEliminar(m)}>
+                      <Text style={s.btnEliminarText}>🗑️</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
-                <View style={styles.modeloAcciones}>
-                  <TouchableOpacity
-                    style={styles.btnEditar}
-                    onPress={() => { setModeloEditar(m); setModalVisible(true); }}
-                  >
-                    <Text style={styles.btnEditarText}>✏️</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.btnEliminar}
-                    onPress={() => handleEliminar(m)}
-                  >
-                    <Text style={styles.btnEliminarText}>🗑️</Text>
-                  </TouchableOpacity>
+
+                {/* UPH por línea */}
+                <View style={s.uphRow}>
+                  {LINEAS.map((linea, i) => {
+                    const val = m[UPH_KEYS[i]];
+                    return (
+                      <View key={linea} style={[s.uphBloque, !val && s.uphBloqueVacio]}>
+                        <Text style={s.uphLinea}>{linea}</Text>
+                        <Text style={[s.uphVal, !val && s.uphValVacio]}>{val ?? '—'}</Text>
+                      </View>
+                    );
+                  })}
                 </View>
               </View>
             ))
           )}
         </ScrollView>
 
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => { setModeloEditar(null); setModalVisible(true); }}
-        >
-          <Text style={styles.fabText}>+</Text>
+        <TouchableOpacity style={s.fab} onPress={() => { setModeloEditar(null); setModalVisible(true); }}>
+          <Text style={s.fabText}>+</Text>
         </TouchableOpacity>
 
         <ModalFormulario
@@ -292,7 +283,7 @@ export default function ModelosUPHAdminScreen({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   container: { flex: 1 },
   safeArea: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F0F0F' },
@@ -304,40 +295,43 @@ const styles = StyleSheet.create({
   operadoresBtnText: { color: '#2196F3', fontWeight: 'bold', fontSize: 14 },
   searchContainer: { paddingHorizontal: 14, paddingTop: 8, paddingBottom: 4 },
   searchInput: {
-    backgroundColor: '#1A1A1A', color: '#FFFFFF', borderWidth: 1, borderColor: '#333',
+    backgroundColor: '#1A1A1A', color: '#FFF', borderWidth: 1, borderColor: '#333',
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 10, fontSize: 14,
   },
   conteo: { color: '#616161', fontSize: 12, marginTop: 4, marginLeft: 4 },
-  scroll: { padding: 14, paddingBottom: 80 },
+  scroll: { padding: 14, paddingBottom: 90 },
+
   modeloCard: {
-    flexDirection: 'row', backgroundColor: '#1A1A1A', borderRadius: 10,
-    marginBottom: 8, padding: 14, borderWidth: 1, borderColor: '#2D2D2D',
-    alignItems: 'center',
+    backgroundColor: '#1A1A1A', borderRadius: 12, marginBottom: 10,
+    padding: 14, borderWidth: 1, borderColor: '#2D2D2D',
   },
-  modeloInfo: { flex: 1 },
-  modeloNombre: { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
-  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 6 },
-  metaChip: {
-    backgroundColor: '#0F0F0F', borderRadius: 6,
-    paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: '#333',
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 10 },
+  modeloNombre: { color: '#FFF', fontSize: 16, fontWeight: 'bold', marginBottom: 6 },
+  metaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
+    backgroundColor: '#0F0F0F', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4,
+    borderWidth: 1, borderColor: '#333',
   },
-  metaChipLabel: { color: '#616161', fontSize: 10 },
-  metaChipValor: { color: '#BDBDBD', fontSize: 12, fontWeight: 'bold' },
-  uphRow: { flexDirection: 'row' },
-  uphBloque: { marginRight: 20 },
-  uphEtiqueta: { color: '#757575', fontSize: 11 },
-  uphValor: { color: '#2196F3', fontSize: 15, fontWeight: 'bold' },
-  modeloAcciones: { flexDirection: 'row', gap: 8 },
-  btnEditar: {
-    width: 36, height: 36, borderRadius: 8,
-    backgroundColor: '#1A237E33', justifyContent: 'center', alignItems: 'center',
+  chipLabel: { color: '#555', fontSize: 10 },
+  chipVal: { color: '#BDBDBD', fontSize: 12, fontWeight: 'bold' },
+
+  /* UPH grid */
+  uphRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  uphBloque: {
+    backgroundColor: '#0D1A26', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 6,
+    alignItems: 'center', minWidth: 46, borderWidth: 1, borderColor: '#1565C0',
   },
+  uphBloqueVacio: { borderColor: '#2A2A2A', backgroundColor: '#111' },
+  uphLinea: { color: '#4FC3F7', fontSize: 9, fontWeight: 'bold', marginBottom: 2 },
+  uphVal: { color: '#2196F3', fontSize: 13, fontWeight: 'bold' },
+  uphValVacio: { color: '#333', fontSize: 12 },
+
+  acciones: { flexDirection: 'row', gap: 8, marginLeft: 8 },
+  btnEditar: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#1A237E33', justifyContent: 'center', alignItems: 'center' },
   btnEditarText: { fontSize: 16 },
-  btnEliminar: {
-    width: 36, height: 36, borderRadius: 8,
-    backgroundColor: '#B71C1C33', justifyContent: 'center', alignItems: 'center',
-  },
+  btnEliminar: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#B71C1C33', justifyContent: 'center', alignItems: 'center' },
   btnEliminarText: { fontSize: 16 },
+
   empty: { alignItems: 'center', marginTop: 60 },
   emptyText: { color: '#9E9E9E', fontSize: 16, marginBottom: 8 },
   emptyHint: { color: '#616161', fontSize: 13 },
@@ -347,32 +341,30 @@ const styles = StyleSheet.create({
     backgroundColor: '#1565C0', justifyContent: 'center', alignItems: 'center',
     elevation: 6, shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.4,
   },
-  fabText: { color: '#FFFFFF', fontSize: 30, lineHeight: 34 },
-  modalOverlay: {
-    flex: 1, backgroundColor: '#000000BB',
-    justifyContent: 'center', alignItems: 'center', padding: 20,
-  },
+  fabText: { color: '#FFF', fontSize: 30, lineHeight: 34 },
+
+  /* Modal */
+  modalOverlay: { flex: 1, backgroundColor: '#000000BB' },
   modalCard: {
-    backgroundColor: '#1A1A1A', borderRadius: 16,
-    padding: 24, width: '100%', maxWidth: 400,
-    borderWidth: 1, borderColor: '#2D2D2D',
+    backgroundColor: '#1A1A1A', borderRadius: 16, padding: 24,
+    width: '100%', maxWidth: 420, borderWidth: 1, borderColor: '#2D2D2D', alignSelf: 'center',
   },
-  modalTitulo: { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
+  modalTitulo: { color: '#FFF', fontSize: 18, fontWeight: 'bold', marginBottom: 20 },
   label: { color: '#9E9E9E', fontSize: 12, marginBottom: 6 },
   input: {
-    backgroundColor: '#0F0F0F', color: '#FFFFFF', borderWidth: 1,
-    borderColor: '#333', borderRadius: 8, paddingHorizontal: 12,
-    paddingVertical: 10, fontSize: 15, marginBottom: 16,
+    backgroundColor: '#0F0F0F', color: '#FFF', borderWidth: 1, borderColor: '#333',
+    borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, fontSize: 15, marginBottom: 14,
   },
-  modalBtns: { flexDirection: 'row', gap: 12, marginTop: 8 },
-  btnCancelar: {
-    flex: 1, paddingVertical: 12, borderRadius: 8,
-    backgroundColor: '#2D2D2D', alignItems: 'center',
+  uphGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  uphItem: { width: '27%' },
+  uphLinea: { color: '#4FC3F7', fontSize: 11, fontWeight: 'bold', marginBottom: 4 },
+  uphInput: {
+    backgroundColor: '#0F0F0F', color: '#FFF', borderWidth: 1, borderColor: '#1565C0',
+    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, textAlign: 'center',
   },
+  modalBtns: { flexDirection: 'row', gap: 12, marginTop: 4 },
+  btnCancelar: { flex: 1, paddingVertical: 12, borderRadius: 8, backgroundColor: '#2D2D2D', alignItems: 'center' },
   btnCancelarText: { color: '#9E9E9E', fontWeight: 'bold' },
-  btnGuardar: {
-    flex: 1, paddingVertical: 12, borderRadius: 8,
-    backgroundColor: '#1565C0', alignItems: 'center',
-  },
-  btnGuardarText: { color: '#FFFFFF', fontWeight: 'bold' },
+  btnGuardar: { flex: 1, paddingVertical: 12, borderRadius: 8, backgroundColor: '#1565C0', alignItems: 'center' },
+  btnGuardarText: { color: '#FFF', fontWeight: 'bold' },
 });

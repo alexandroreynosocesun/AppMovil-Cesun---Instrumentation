@@ -30,10 +30,19 @@ class ModeloUPH(UphBase):
     __tablename__ = "modelos_uph"
 
     id = Column(Integer, primary_key=True, index=True)
-    nombre = Column(String, nullable=False)           # modelo comercial ej. 43A45NV
-    num_placa = Column(String, nullable=True)          # número de placa PCB
-    modelo_interno = Column(String, nullable=True)     # modelo interno
-    uph_total = Column(Float, nullable=False)          # meta UPH por línea
+    nombre = Column(String, nullable=False)           # modelo comercial ej. 55U75QUF
+    modelo_interno = Column(String, nullable=True)    # modelo interno ej. 50A53FUR
+    tipo = Column(String, nullable=True)              # tipo: 3 IN 1, REFLOV, etc.
+    # UPH por línea HI-1 al HI-7 (cada línea tiene UPH distinto)
+    uph_hi1 = Column(Float, nullable=True)
+    uph_hi2 = Column(Float, nullable=True)
+    uph_hi3 = Column(Float, nullable=True)
+    uph_hi4 = Column(Float, nullable=True)
+    uph_hi5 = Column(Float, nullable=True)
+    uph_hi6 = Column(Float, nullable=True)
+    uph_hi7 = Column(Float, nullable=True)
+    # Mantener compatibilidad con asignaciones existentes
+    uph_total = Column(Float, nullable=True)
     linea_id = Column(Integer, ForeignKey("lineas.id"), nullable=True)
 
     linea = relationship("Linea", back_populates="modelos")
