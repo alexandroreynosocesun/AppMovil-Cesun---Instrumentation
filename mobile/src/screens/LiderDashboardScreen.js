@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import { View, StyleSheet, ScrollView, TouchableOpacity, RefreshControl, Animated } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, ActivityIndicator } from 'react-native-paper';
@@ -112,6 +113,9 @@ export default function LiderDashboardScreen() {
   }, [lineaLocal, cargarOperadores]);
 
   useEffect(() => { cargar(); }, [cargar]);
+
+  // Recargar cada vez que el tab vuelve a estar visible
+  useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
   const onRefresh = () => { setRefreshing(true); cargar(); };
 
