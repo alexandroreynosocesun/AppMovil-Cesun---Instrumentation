@@ -240,10 +240,14 @@ export default function AsignacionLideraScreen() {
 
   // ── Métricas ────────────────────────────────────────────
   const opsConOp = Object.values(asignacion).filter(v => v?.op).length;
-  const numEstaciones = todasEstaciones.length;
+  // Estaciones seleccionadas hoy (suma de todas las asignadas en slots)
+  const estacionesSeleccionadas = Object.values(asignacion)
+    .flatMap(v => v?.estaciones || []);
+  const numEstSeleccionadas = estacionesSeleccionadas.length;
   const uphLinea = getUphLinea(modeloSeleccionado);
-  const uphPorEst = uphLinea && numEstaciones > 0
-    ? Math.round(uphLinea / numEstaciones)
+  // UPH/EST solo cuando hay estaciones ya seleccionadas
+  const uphPorEst = uphLinea && numEstSeleccionadas > 0
+    ? Math.round(uphLinea / numEstSeleccionadas)
     : null;
   const metaTurno = uphLinea ? Math.round(uphLinea * 12) : null;
   const opsAsignados = opsConOp;
@@ -387,7 +391,9 @@ export default function AsignacionLideraScreen() {
                   </View>
                   <View style={s.uphSep} />
                   <View style={s.uphBloque}>
-                    <Text style={s.uphLabel}>UPH / EST</Text>
+                    <Text style={s.uphLabel}>
+                      {numEstSeleccionadas > 0 ? `UPH / ${numEstSeleccionadas} EST` : 'UPH / EST'}
+                    </Text>
                     <Text style={[s.uphValor, { color: '#42A5F5' }]}>{uphPorEst ?? '—'}</Text>
                     <Text style={s.uphUnidad}>pzs / hr</Text>
                   </View>
