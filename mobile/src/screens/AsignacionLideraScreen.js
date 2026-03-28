@@ -230,13 +230,22 @@ export default function AsignacionLideraScreen() {
     setExpandedSlot(slotIdx); // expandir para asignar estaciones
   };
 
+  // ── UPH de la línea seleccionada ────────────────────────
+  const getUphLinea = (modelo) => {
+    if (!modelo || !lineaSeleccionada) return modelo?.uph_total ?? null;
+    const num = (lineaSeleccionada.nombre || '').replace(/[^0-9]/g, '');
+    const key = num ? `uph_hi${num}` : null;
+    return (key && modelo[key] != null) ? modelo[key] : (modelo.uph_total ?? null);
+  };
+
   // ── Métricas ────────────────────────────────────────────
   const opsConOp = Object.values(asignacion).filter(v => v?.op).length;
   const numEstaciones = todasEstaciones.length;
-  const uphPorEst = modeloSeleccionado && numEstaciones > 0
-    ? Math.round(modeloSeleccionado.uph_total / numEstaciones)
+  const uphLinea = getUphLinea(modeloSeleccionado);
+  const uphPorEst = uphLinea && numEstaciones > 0
+    ? Math.round(uphLinea / numEstaciones)
     : null;
-  const metaTurno = modeloSeleccionado ? Math.round(modeloSeleccionado.uph_total * 12) : null;
+  const metaTurno = uphLinea ? Math.round(uphLinea * 12) : null;
   const opsAsignados = opsConOp;
 
   // ── Guardar ─────────────────────────────────────────────
@@ -349,7 +358,7 @@ export default function AsignacionLideraScreen() {
                             <Text style={s.modeloItemSub}>{[m.num_placa, m.modelo_interno].filter(Boolean).join(' · ')}</Text>
                           )}
                         </View>
-                        <Text style={[s.modeloItemUph, activo && { color: '#66BB6A' }]}>{m.uph_total} pzs/hr</Text>
+                        <Text style={[s.modeloItemUph, activo && { color: '#66BB6A' }]}>{getUphLinea(m) ?? '—'} pzs/hr</Text>
                         {activo && <Text style={s.modeloItemCheck}>✓</Text>}
                       </TouchableOpacity>
                     );
@@ -363,7 +372,7 @@ export default function AsignacionLideraScreen() {
                       <Text style={s.modeloItemSub}>{[modeloSeleccionado.num_placa, modeloSeleccionado.modelo_interno].filter(Boolean).join(' · ')}</Text>
                     )}
                   </View>
-                  <Text style={{ color: '#66BB6A', fontSize: 12, fontWeight: 'bold', marginRight: 8 }}>{modeloSeleccionado.uph_total} pzs/hr</Text>
+                  <Text style={{ color: '#66BB6A', fontSize: 12, fontWeight: 'bold', marginRight: 8 }}>{uphLinea ?? '—'} pzs/hr</Text>
                   <Text style={s.modeloItemCheck}>✓</Text>
                 </View>
               ) : null}
@@ -372,8 +381,8 @@ export default function AsignacionLideraScreen() {
                   <LinearGradient colors={['#0D2137', '#0A1628']} style={StyleSheet.absoluteFill}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} />
                   <View style={s.uphBloque}>
-                    <Text style={s.uphLabel}>UPH LÍNEA</Text>
-                    <Text style={s.uphValor}>{modeloSeleccionado.uph_total}</Text>
+                    <Text style={s.uphLabel}>UPH {lineaSeleccionada?.nombre ?? 'LÍNEA'}</Text>
+                    <Text style={s.uphValor}>{uphLinea ?? '—'}</Text>
                     <Text style={s.uphUnidad}>pzs / hr</Text>
                   </View>
                   <View style={s.uphSep} />
