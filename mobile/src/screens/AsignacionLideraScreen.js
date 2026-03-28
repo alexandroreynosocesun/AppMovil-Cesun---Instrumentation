@@ -536,7 +536,12 @@ export default function AsignacionLideraScreen() {
 
         <ModalOperador
           visible={slotModal !== null}
-          operadores={operadores}
+          operadores={operadores.filter(o => {
+            // Excluir operadores ya asignados en OTRO slot
+            return !Object.entries(asignacion).some(
+              ([k, v]) => parseInt(k) !== slotModal && v?.op?.num_empleado === o.num_empleado
+            );
+          })}
           onSelect={(op) => asignarOperador(slotModal, op)}
           onClose={() => setSlotModal(null)}
         />
