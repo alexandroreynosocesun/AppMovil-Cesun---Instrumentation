@@ -249,7 +249,7 @@ export default function AsignacionLideraScreen() {
   const uphPorEst = uphLinea && numEstSeleccionadas > 0
     ? Math.round(uphLinea / numEstSeleccionadas)
     : null;
-  const metaTurno = uphLinea ? Math.round(uphLinea * 12) : null;
+  const metaTurno = uphLinea ? Math.round(uphLinea * 11) : null; // 12h turno - 1h descanso = 11h efectivas
   const opsAsignados = opsConOp;
 
   // ── Guardar ─────────────────────────────────────────────
