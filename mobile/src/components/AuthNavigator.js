@@ -68,6 +68,8 @@ import AsignacionLideraScreen from '../screens/AsignacionLideraScreen';
 import OperadoresAdminScreen from '../screens/OperadoresAdminScreen';
 // Tab Navigator Líder de Línea
 import LiderTabNavigator from '../navigators/LiderTabNavigator';
+// FCT Dashboard
+import MESDashboardScreen from '../screens/MESDashboardScreen';
 
 const Stack = createStackNavigator();
 
@@ -384,6 +386,11 @@ export default function AuthNavigator() {
             name="OperadoresAdmin"
             component={OperadoresAdminScreen}
             options={{ title: 'Gestión de Operadores' }}
+          />
+          <Stack.Screen
+            name="MESDashboard"
+            component={MESDashboardScreen}
+            options={{ title: 'FCT Dashboard' }}
           />
         </>
       ) : (
