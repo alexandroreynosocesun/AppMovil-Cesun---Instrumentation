@@ -70,6 +70,14 @@ export default function ModuleSelectionScreen({ navigation }) {
       color: ['#7B1FA2', '#4A148C'],
       route: 'ModelosUPHAdmin'
     }] : []),
+    ...(esAdminOIngeniero ? [{
+      id: 'passrate',
+      title: 'Pass Rate FCT',
+      description: 'Dashboard OK/NG y Pass% de estaciones FCT en tiempo real',
+      icon: '🎯',
+      color: ['#00695C', '#004D40'],
+      route: 'MESDashboard'
+    }] : []),
   ];
 
   const handleModulePress = (module) => {
@@ -83,6 +91,8 @@ export default function ModuleSelectionScreen({ navigation }) {
       navigation.navigate('VByOneHome');
     } else if (module.id === 'modelos_uph') {
       navigation.navigate('ModelosUPHAdmin');
+    } else if (module.id === 'passrate') {
+      navigation.navigate('MESDashboard');
     } else {
       alert(t('comingSoon', { module: module.title }));
     }
