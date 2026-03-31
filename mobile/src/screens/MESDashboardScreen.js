@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useRef } from 'react';
 import {
-  View, StyleSheet, ScrollView, Text, RefreshControl, Dimensions,
+  View, StyleSheet, ScrollView, Text, RefreshControl, Dimensions, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -127,25 +127,37 @@ export default function MESDashboardScreen() {
   const [historial, setHistorial] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [estaciones, setEstaciones] = useState([]);
+  const [estacionSeleccionada, setEstacionSeleccionada] = useState(null);
   const intervalRef = useRef(null);
 
-  const cargar = useCallback(async (isRef = false) => {
+  const cargarEstaciones = useCallback(async () => {
+    const r = await mesService.getEstaciones();
+    if (r.success && r.data.length > 0) {
+      setEstaciones(r.data);
+      if (!estacionSeleccionada) setEstacionSeleccionada(r.data[0]);
+    }
+  }, [estacionSeleccionada]);
+
+  const cargar = useCallback(async (isRef = false, estId = null) => {
     if (isRef) setRefreshing(true);
-    const r = await mesService.getDashboard('FCT-1');
+    const id = estId || estacionSeleccionada;
+    if (!id) { setLoading(false); setRefreshing(false); return; }
+    const r = await mesService.getDashboard(id);
     if (r.success) {
       setActual(r.data.actual);
       setHistorial(r.data.historial || []);
     }
     setLoading(false);
     setRefreshing(false);
-  }, []);
+  }, [estacionSeleccionada]);
 
   useFocusEffect(useCallback(() => {
+    cargarEstaciones();
     cargar();
-    // Auto-refresh cada 60s mientras la pantalla está visible
     intervalRef.current = setInterval(() => cargar(), 60_000);
     return () => clearInterval(intervalRef.current);
-  }, [cargar]));
+  }, [cargar, cargarEstaciones]));
 
   const ts = actual?.ts
     ? new Date(actual.ts).toLocaleString('es-MX', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })
@@ -171,6 +183,30 @@ export default function MESDashboardScreen() {
               <Text style={s.liveText}>LIVE · 1 min</Text>
             </View>
           </View>
+
+          {/* Selector de estación */}
+          {estaciones.length > 1 && (
+            <View style={s.estSelector}>
+              {estaciones.map(est => (
+                <TouchableOpacity
+                  key={est}
+                  style={[s.estBtn, estacionSeleccionada === est && s.estBtnActivo]}
+                  onPress={() => {
+                    setEstacionSeleccionada(est);
+                    setLoading(true);
+                    cargar(false, est);
+                  }}
+                >
+                  <Text style={[s.estBtnText, estacionSeleccionada === est && s.estBtnTextActivo]}>
+                    {est}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          {estacionSeleccionada && (
+            <Text style={s.estActualLabel}>{estacionSeleccionada}</Text>
+          )}
 
           {loading ? (
             <ActivityIndicator color="#9C27B0" style={{ marginTop: 60 }} />
@@ -268,6 +304,13 @@ const s = StyleSheet.create({
                paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: '#4CAF5066' },
   liveDot:   { width: 6, height: 6, borderRadius: 3, backgroundColor: '#4CAF50' },
   liveText:  { color: '#4CAF50', fontSize: 11, fontWeight: 'bold' },
+
+  estSelector:      { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  estBtn:           { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#333' },
+  estBtnActivo:     { backgroundColor: '#9C27B022', borderColor: '#9C27B0' },
+  estBtnText:       { color: '#757575', fontSize: 13, fontWeight: '600' },
+  estBtnTextActivo: { color: '#CE93D8' },
+  estActualLabel:   { color: '#616161', fontSize: 11, marginBottom: 10 },
 
   modeloRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   modeloNombre: { color: '#E0E0E0', fontSize: 14, fontWeight: '600', flex: 1 },
