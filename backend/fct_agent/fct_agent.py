@@ -1,54 +1,59 @@
 """
 FCT Agent — captura zonas específicas de la pantalla con OCR local
-y envía solo los valores numéricos al backend (sin imagen, sin Claude Vision).
+y envía solo los valores numéricos al backend.
 
-── INSTALACIÓN (una sola vez, en una PC con Python) ──────────────
-  pip install mss pillow requests winocr pyinstaller
+── INSTALACIÓN ────────────────────────────────────────────────────
+  1. Instala Python: https://python.org
+  2. Instala Tesseract: https://github.com/UB-Mannheim/tesseract/wiki
+     (ruta default: C:\Program Files\Tesseract-OCR\tesseract.exe)
+  3. pip install mss pillow requests pytesseract opencv-python numpy
 
-── COMPILAR a .exe ───────────────────────────────────────────────
-  pyinstaller --onefile --noconsole --name fct_agent fct_agent.py
+── USO DIRECTO (con Python instalado) ────────────────────────────
+  python fct_agent.py             # modo producción
+  python fct_agent.py --calibrar  # verificar zonas
 
-── CALIBRACIÓN ───────────────────────────────────────────────────
-  Ejecuta con --calibrar para guardar una imagen con las zonas
-  marcadas y verificar que están bien posicionadas:
-    fct_agent.exe --calibrar
+── COMPILAR a .exe (opcional) ────────────────────────────────────
+  Corre build_exe.bat
 
-── CONFIGURACIÓN ─────────────────────────────────────────────────
-  Edita la sección CONFIG más abajo para ajustar coordenadas.
+── DETECTAR COORDENADAS ──────────────────────────────────────────
+  python detect_zones.py          # genera deteccion.png con zonas
 """
 
 import sys
 import time
 import re
-import json
 import logging
-import asyncio
 import requests
+import numpy as np
+import cv2
+import pytesseract
 from PIL import Image, ImageDraw
 import mss
+
+pytesseract.pytesseract.tesseract_cmd = r"C:\Program Files\Tesseract-OCR\tesseract.exe"
 
 # ══════════════════════════════════════════════════════════════════
 #  CONFIG — ajusta estas coordenadas a tu pantalla
 #  Formato: (x, y, ancho, alto) en píxeles desde esquina superior izquierda
-#  TIP: usa --calibrar para ver las zonas marcadas en pantalla
+#  TIP: corre detect_zones.py para detectar coordenadas automáticamente
 # ══════════════════════════════════════════════════════════════════
 CONFIG = {
-    "backend_url":  "https://cesun-instrumentation-doebfjmi5.vercel.app/api/mes/captura",
+    "backend_url":  "https://api.checkconfirm.com/api/mes/captura",
     "estacion_id":  "FCT-1",
     "intervalo":    60,       # segundos entre capturas
     "monitor":      1,        # 1 = monitor principal
 
-    # Zonas de captura (x, y, w, h)
+    # Zonas de captura (x, y, w, h) — resolución 1920x1080
     # ── Estación A (panel izquierdo) ──────────────────────────────
-    "zona_modelo_a":   (130,  143, 580,  32),   # título del modelo est. A
-    "zona_ok_a":       (1215, 183, 165,  28),   # valor OKCount est. A
-    "zona_ng_a":       (1215, 207, 165,  28),   # valor NGCount est. A
-    "zona_pass_a":     (1375, 207, 120,  28),   # valor Pass(%) est. A
+    "zona_modelo_a":   ( 20, 140, 700,  35),   # barra amarilla modelo A
+    "zona_ok_a":       (890, 228,  90,  35),   # valor OKCount A (≈x=926)
+    "zona_ng_a":       (890, 258,  95,  35),   # valor NGCount A
+    "zona_pass_a":     (855, 293, 120,  28),   # valor Pass(%) A
 
-    # ── Estación B (panel derecho) ─────────────────────────────────
-    "zona_ok_b":       (2655, 183, 165,  28),   # valor OKCount est. B
-    "zona_ng_b":       (2655, 207, 165,  28),   # valor NGCount est. B
-    "zona_pass_b":     (2815, 207, 120,  28),   # valor Pass(%) est. B
+    # ── Estación B (panel derecho) ────────────────────────────────
+    "zona_ok_b":       (1855, 228, 100,  35),  # valor OKCount B (142 en x=1886)
+    "zona_ng_b":       (1870, 258,  75,  35),  # valor NGCount B (22 en x=1897)
+    "zona_pass_b":     (1840, 293, 110,  28),  # valor Pass(%) B (86.6% en x=1861)
 }
 # ══════════════════════════════════════════════════════════════════
 
@@ -64,7 +69,7 @@ log = logging.getLogger(__name__)
 
 
 def capturar_zona(sct, monitor_info, zona):
-    """Captura una zona de la pantalla y devuelve PIL Image."""
+    """Captura una zona y devuelve imagen BGR (numpy array)."""
     x, y, w, h = zona
     region = {
         "left":   monitor_info["left"] + x,
@@ -73,56 +78,88 @@ def capturar_zona(sct, monitor_info, zona):
         "height": h,
     }
     shot = sct.grab(region)
-    return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+    img_np = np.array(shot)
+    return cv2.cvtColor(img_np, cv2.COLOR_BGRA2BGR)
 
 
-async def ocr_zona(img: Image.Image) -> str:
-    """Extrae texto de una imagen usando Windows OCR (sin instalación extra)."""
-    try:
-        import winocr
-        result = await winocr.recognize_pil(img, "en")
-        return result.get("text", "").strip()
-    except Exception as e:
-        log.warning(f"OCR falló: {e}")
-        return ""
+def ocr_numero(img_bgr):
+    """Extrae número de una imagen BGR usando Tesseract."""
+    h, w = img_bgr.shape[:2]
+    img_bgr = cv2.resize(img_bgr, (w * 3, h * 3), interpolation=cv2.INTER_CUBIC)
+    gris = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+
+    config = "--psm 7 -c tessedit_char_whitelist=0123456789."
+
+    # Intentar con threshold normal, invertido y sin threshold
+    # para cubrir fondos oscuros, fondos rojos (NG) y fondos claros
+    for metodo in [
+        lambda g: cv2.threshold(g, 150, 255, cv2.THRESH_BINARY)[1],
+        lambda g: cv2.threshold(g, 150, 255, cv2.THRESH_BINARY_INV)[1],
+        lambda g: cv2.adaptiveThreshold(g, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2),
+        lambda g: g,  # sin preprocesamiento
+    ]:
+        img_proc = metodo(gris)
+        texto = pytesseract.image_to_string(img_proc, config=config).strip()
+        numero = re.search(r"\d+(?:\.\d+)?", texto)
+        if numero:
+            return texto
+    return ""
 
 
-def limpiar_numero(texto: str) -> float | None:
+def ocr_texto(img_bgr):
+    """Extrae texto libre de una imagen BGR usando Tesseract."""
+    h, w = img_bgr.shape[:2]
+    img_bgr = cv2.resize(img_bgr, (w * 2, h * 2), interpolation=cv2.INTER_CUBIC)
+
+    gris = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    _, binaria = cv2.threshold(gris, 150, 255, cv2.THRESH_BINARY)
+
+    config = "--psm 7"
+    texto = pytesseract.image_to_string(binaria, config=config).strip()
+    return texto
+
+
+def limpiar_numero(texto: str):
     """Extrae el primer número (entero o decimal) del texto OCR."""
-    # Quitar espacios y caracteres confundidos por OCR
     texto = texto.replace(",", ".").replace("O", "0").replace("o", "0")
-    m = re.search(r"[\d]+(?:\.\d+)?", texto)
+    m = re.search(r"\d+(?:\.\d+)?", texto)
     if m:
         return float(m.group())
     return None
 
 
-async def capturar_y_enviar():
+def capturar_y_enviar(debug=False):
     with mss.mss() as sct:
         monitor = sct.monitors[CONFIG["monitor"]]
 
-        # OCR en paralelo para todas las zonas
         imgs = {
             k: capturar_zona(sct, monitor, CONFIG[k])
             for k in ("zona_modelo_a", "zona_ok_a", "zona_ng_a", "zona_pass_a",
                       "zona_ok_b", "zona_ng_b", "zona_pass_b")
         }
 
-        textos = {}
+    if debug:
+        import os
+        os.makedirs("debug_zonas", exist_ok=True)
         for k, img in imgs.items():
-            # Agrandar imagen para mejor OCR (x2)
-            img = img.resize((img.width * 2, img.height * 2), Image.LANCZOS)
-            textos[k] = await ocr_zona(img)
+            cv2.imwrite(f"debug_zonas/{k}.png", img)
+        log.info("Imágenes de zonas guardadas en carpeta debug_zonas/")
+
+    textos = {}
+    textos["zona_modelo_a"] = ocr_texto(imgs["zona_modelo_a"])
+    for k in ("zona_ok_a", "zona_ng_a", "zona_pass_a",
+              "zona_ok_b", "zona_ng_b", "zona_pass_b"):
+        textos[k] = ocr_numero(imgs[k])
 
     log.debug(f"OCR raw: {textos}")
 
-    modelo    = textos["zona_modelo_a"][:60] if textos["zona_modelo_a"] else None
-    ok_a      = limpiar_numero(textos["zona_ok_a"])
-    ng_a      = limpiar_numero(textos["zona_ng_a"])
-    pass_a    = limpiar_numero(textos["zona_pass_a"])
-    ok_b      = limpiar_numero(textos["zona_ok_b"])
-    ng_b      = limpiar_numero(textos["zona_ng_b"])
-    pass_b    = limpiar_numero(textos["zona_pass_b"])
+    modelo = textos["zona_modelo_a"][:60] if textos["zona_modelo_a"] else None
+    ok_a   = limpiar_numero(textos["zona_ok_a"])
+    ng_a   = limpiar_numero(textos["zona_ng_a"])
+    pass_a = limpiar_numero(textos["zona_pass_a"])
+    ok_b   = limpiar_numero(textos["zona_ok_b"])
+    ng_b   = limpiar_numero(textos["zona_ng_b"])
+    pass_b = limpiar_numero(textos["zona_pass_b"])
 
     payload = {
         "estacion_id": CONFIG["estacion_id"],
@@ -136,11 +173,7 @@ async def capturar_y_enviar():
     }
 
     try:
-        resp = requests.post(
-            CONFIG["backend_url"],
-            json=payload,
-            timeout=15,
-        )
+        resp = requests.post(CONFIG["backend_url"], json=payload, timeout=15)
         if resp.status_code == 200:
             log.info(
                 f"OK — modelo={modelo} "
@@ -160,9 +193,9 @@ def calibrar():
     with mss.mss() as sct:
         monitor = sct.monitors[CONFIG["monitor"]]
         shot = sct.grab(monitor)
-        img  = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+        img = Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
 
-    draw   = ImageDraw.Draw(img)
+    draw = ImageDraw.Draw(img)
     colores = {
         "zona_modelo_a": "yellow",
         "zona_ok_a":     "lime",
@@ -178,8 +211,7 @@ def calibrar():
         draw.text((x + 2, y + 2), key.replace("zona_", ""), fill=color)
 
     img.save("calibracion.png")
-    log.info("Guardado 'calibracion.png' — abre el archivo y verifica que las zonas estén en los valores correctos.")
-    log.info("Ajusta las coordenadas en CONFIG si es necesario y vuelve a compilar.")
+    log.info("Guardado 'calibracion.png' — verifica que las zonas estén sobre los valores correctos.")
 
 
 def main():
@@ -187,12 +219,15 @@ def main():
         calibrar()
         return
 
+    debug = "--debug" in sys.argv
     log.info(f"FCT Agent iniciado — estacion={CONFIG['estacion_id']} intervalo={CONFIG['intervalo']}s")
     log.info(f"Backend: {CONFIG['backend_url']}")
-    log.info("Tip: ejecuta con --calibrar para verificar las zonas de captura")
 
     while True:
-        asyncio.run(capturar_y_enviar())
+        capturar_y_enviar(debug=debug)
+        if debug:
+            log.info("Modo debug: solo una captura. Revisa carpeta debug_zonas/")
+            break
         time.sleep(CONFIG["intervalo"])
 
 

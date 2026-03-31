@@ -102,8 +102,8 @@ function EstacionCard({ label, ok, ng, passPct, color }) {
         </View>
         <View style={st.metSep} />
         <View style={st.metBloque}>
-          <Text style={st.metLabel}>Total</Text>
-          <Text style={st.metValor}>{total || '—'}</Text>
+          <Text style={st.metLabel}>Pass%</Text>
+          <Text style={[st.metValor, { color: semColor }]}>{pct != null ? `${pct.toFixed(1)}%` : '—'}</Text>
         </View>
       </View>
 
