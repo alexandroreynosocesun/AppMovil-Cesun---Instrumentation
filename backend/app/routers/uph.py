@@ -514,7 +514,10 @@ def resumen_todas_lineas(
             .first()
         )
         modelo = asig.modelo if asig else None
-        uph_meta = modelo.uph_total if modelo else 0
+        _num = ''.join(filter(str.isdigit, linea.nombre))
+        _attr = f"uph_hi{_num}" if _num else None
+        _val = getattr(modelo, _attr, None) if (modelo and _attr) else None
+        uph_meta = _val if _val else (modelo.uph_total or 0) if modelo else 0
         uph_real = _uph_ultima_hora(db, linea.nombre)
         total_estaciones = (
             db.query(func.count(func.distinct(Asignacion.estacion)))
