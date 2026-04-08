@@ -118,6 +118,16 @@ class UPHService {
     }
   }
 
+  async getTopOperadores(linea = null) {
+    try {
+      const params = linea ? `?linea=${encodeURIComponent(linea)}` : '';
+      const response = await apiClient.get(`/uph/resumen/top-operadores${params}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error' };
+    }
+  }
+
   async getAsignacionHoy(linea) {
     try {
       const response = await apiClient.get(`/uph/asignacion/hoy?linea=${encodeURIComponent(linea)}`);

@@ -524,17 +524,91 @@ def resumen_todas_lineas(
             .filter(Asignacion.linea_id == linea.id, Asignacion.fecha == hoy)
             .scalar() or 0
         )
+        # Contar piezas reales en la hora actual (desde inicio de hora hasta ahora)
+        ahora = datetime.now(timezone.utc)
+        inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
+        piezas_hora = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea == linea.nombre,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_hora,
+            EventoUPH.timestamp <= ahora,
+        ).scalar() or 0
+
         resultado.append({
             "linea": linea.nombre,
             "linea_id": linea.id,
             "modelo": modelo.nombre if modelo else None,
             "uph_real": round(uph_real, 1),
             "uph_meta": round(uph_meta, 1),
+            "piezas_hora": piezas_hora,
             "color": _color_semaforo(uph_real, uph_meta),
             "total_estaciones": total_estaciones,
             "actualizado": datetime.now(timezone.utc).isoformat(),
         })
     return {"lineas": resultado, "actualizado": datetime.now(timezone.utc).isoformat()}
+
+
+@router.get("/resumen/top-operadores")
+def top_operadores(
+    linea: Optional[str] = None,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Top operadores por piezas en la hora actual y en el día."""
+    _ensure_gerencia(current_user)
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    ahora = datetime.now(timezone.utc)
+    inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
+    inicio_dia  = datetime.strptime(hoy, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+
+    query = db.query(Asignacion).filter(Asignacion.fecha == hoy)
+    if linea:
+        linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
+        if linea_obj:
+            query = query.filter(Asignacion.linea_id == linea_obj.id)
+    asignaciones = query.all()
+
+    # Acumular por operador
+    por_op: dict = {}
+    for asig in asignaciones:
+        if not asig.num_empleado:
+            continue
+        key = asig.num_empleado
+        if key not in por_op:
+            op = db.query(Operador).filter(Operador.num_empleado == key).first()
+            por_op[key] = {
+                "num_empleado": key,
+                "nombre": op.nombre if op else key,
+                "foto_url": op.foto_url if op else None,
+                "piezas_hora": 0,
+                "piezas_dia": 0,
+            }
+        linea_nombre = asig.linea.nombre if asig.linea else ""
+        piezas_hora = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.estacion == asig.estacion,
+            EventoUPH.linea == linea_nombre,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_hora,
+        ).scalar() or 0
+        piezas_dia = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.estacion == asig.estacion,
+            EventoUPH.linea == linea_nombre,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_dia,
+        ).scalar() or 0
+        por_op[key]["piezas_hora"] += piezas_hora
+        por_op[key]["piezas_dia"]  += piezas_dia
+
+    ops = list(por_op.values())
+    top_hora = sorted(ops, key=lambda x: x["piezas_hora"], reverse=True)[:3]
+    top_dia  = sorted(ops, key=lambda x: x["piezas_dia"],  reverse=True)[:3]
+
+    return {
+        "top_hora": top_hora,
+        "top_dia":  top_dia,
+        "hora_inicio": inicio_hora.isoformat(),
+        "actualizado": ahora.isoformat(),
+    }
 
 
 @router.get("/historial/{num_empleado}")
@@ -818,11 +892,11 @@ def crear_asignacion_bulk(
     if not turno:
         raise HTTPException(status_code=404, detail="Turno no encontrado")
 
-    # Eliminar asignaciones previas del mismo día/línea/turno
+    # Eliminar TODAS las asignaciones previas del día para esa línea
+    # (sin importar turno) para evitar duplicados al re-guardar
     db.query(Asignacion).filter(
         Asignacion.linea_id == linea.id,
         Asignacion.fecha == data.fecha,
-        Asignacion.turno_id == data.turno_id,
     ).delete()
 
     creadas = 0
