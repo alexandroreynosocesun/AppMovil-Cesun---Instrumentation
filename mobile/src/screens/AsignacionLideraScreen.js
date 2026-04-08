@@ -14,7 +14,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL } from '../utils/apiClient';
 
 const MAX_SLOTS = 4;
-const FILTROS_TURNO = ['Todos', 'A', 'B', 'C'];
 
 // ── Avatar iniciales ────────────────────────────────────────
 function Iniciales({ nombre, size = 40 }) {
@@ -49,19 +48,16 @@ function AvatarOp({ op, size = 40 }) {
 
 // ── Modal selector de operador ──────────────────────────────
 function ModalOperador({ visible, operadores, onSelect, onClose }) {
-  const [filtro, setFiltro] = useState('Todos');
   const [busqueda, setBusqueda] = useState('');
 
   const lista = operadores.filter(o => {
-    const matchTurno = filtro === 'Todos' || !o.turno || o.turno === filtro;
     const q = busqueda.toLowerCase();
-    const matchBusq = !q
+    return !q
       || (o.nombre || '').toLowerCase().includes(q)
       || (o.num_empleado || '').includes(q);
-    return matchTurno && matchBusq;
   });
 
-  const handleClose = () => { setBusqueda(''); setFiltro('Todos'); onClose(); };
+  const handleClose = () => { setBusqueda(''); onClose(); };
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={handleClose}>
@@ -72,7 +68,6 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
             <TouchableOpacity onPress={handleClose}><Text style={s.modalCerrar}>✕</Text></TouchableOpacity>
           </View>
 
-          {/* Buscador */}
           <TextInput
             style={s.searchInput}
             placeholder="Buscar por nombre o #empleado..."
@@ -80,19 +75,6 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
             value={busqueda}
             onChangeText={setBusqueda}
           />
-
-          {/* Filtro turno */}
-          <View style={s.filtroRow}>
-            {FILTROS_TURNO.map(f => (
-              <TouchableOpacity key={f}
-                style={[s.filtroChip, filtro === f && s.filtroChipActivo]}
-                onPress={() => setFiltro(f)}>
-                <Text style={[s.filtroChipText, filtro === f && s.filtroChipTextActivo]}>
-                  {f === 'Todos' ? 'Todos' : `Turno ${f}`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
 
           <FlatList
             data={lista}

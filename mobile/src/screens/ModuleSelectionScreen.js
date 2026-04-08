@@ -65,10 +65,18 @@ export default function ModuleSelectionScreen({ navigation }) {
     ...(esAdminOIngeniero ? [{
       id: 'modelos_uph',
       title: 'Modelos UPH',
-      description: 'Gestiona modelos, UPH por línea y cantidades por operador',
+      description: 'Agrega y edita modelos con UPH por línea',
       icon: '📊',
       color: ['#7B1FA2', '#4A148C'],
       route: 'ModelosUPHAdmin'
+    }] : []),
+    ...(esAdminOIngeniero ? [{
+      id: 'operadores',
+      title: 'Operadores',
+      description: 'Agrega y gestiona operadores de línea',
+      icon: '👷',
+      color: ['#1565C0', '#0D47A1'],
+      route: 'OperadoresAdmin'
     }] : []),
     ...(esAdminOIngeniero ? [{
       id: 'passrate',
@@ -91,6 +99,8 @@ export default function ModuleSelectionScreen({ navigation }) {
       navigation.navigate('VByOneHome');
     } else if (module.id === 'modelos_uph') {
       navigation.navigate('ModelosUPHAdmin');
+    } else if (module.id === 'operadores') {
+      navigation.navigate('OperadoresAdmin');
     } else if (module.id === 'passrate') {
       navigation.navigate('MESDashboard');
     } else {

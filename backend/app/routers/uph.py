@@ -801,6 +801,7 @@ def scoreboard_hoy(
             "estacion": asig.estacion,
             "num_empleado": asig.operador.num_empleado if asig.operador else None,
             "nombre": asig.operador.nombre if asig.operador else "Sin asignar",
+            "foto_url": asig.operador.foto_url if asig.operador else None,
             "linea": linea_nombre,
             "uph_hora": round(uph_hora, 1),
             "uph_meta": uph_meta_est,

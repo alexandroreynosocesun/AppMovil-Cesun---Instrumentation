@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Animated, Dimensions,
+  RefreshControl, Animated, Dimensions, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, ActivityIndicator } from 'react-native-paper';
@@ -11,6 +11,7 @@ import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { useAuth } from '../contexts/AuthContext';
 import { uphService } from '../services/UPHService';
 import { showAlert } from '../utils/alertUtils';
+import { API_BASE_URL } from '../utils/apiClient';
 
 const LINEAS = ['HI-1', 'HI-2', 'HI-3', 'HI-4', 'HI-5', 'HI-6'];
 const { width: SCREEN_W } = Dimensions.get('window');
@@ -50,6 +51,22 @@ function Initials({ nombre, size = 36 }) {
       <Text style={[s.avatarText, { fontSize: size * 0.38 }]}>{ini}</Text>
     </View>
   );
+}
+
+// ── Avatar con foto o iniciales ───────────────────────────
+function AvatarOp({ op, size = 36 }) {
+  const [err, setErr] = useState(false);
+  if (op?.foto_url && !err) {
+    const uri = op.foto_url.startsWith('http') ? op.foto_url : `${API_BASE_URL}${op.foto_url}`;
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 1, borderColor: '#1565C0' }}
+        onError={() => setErr(true)}
+      />
+    );
+  }
+  return <Initials nombre={op?.nombre} size={size} />;
 }
 
 // ── Gráfica de línea SVG ──────────────────────────────────
@@ -333,7 +350,7 @@ export default function LiderDashboardScreen() {
                         <View style={s.opRank}>
                           <Text style={s.opRankText}>{i + 1}</Text>
                         </View>
-                        <Initials nombre={op.nombre} size={38} />
+                        <AvatarOp op={op} size={38} />
                         <View style={s.opInfo}>
                           <Text style={s.opNombre} numberOfLines={1}>{op.nombre || '—'}</Text>
                           <Text style={s.opSub}>#{op.num_empleado} · {op.total_estaciones || 0} est.</Text>
