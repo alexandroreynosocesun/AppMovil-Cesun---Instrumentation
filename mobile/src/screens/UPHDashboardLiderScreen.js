@@ -11,7 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL } from '../utils/apiClient';
 
 const REFRESH_INTERVAL = 15000;
-const BAR_H = 150;
+const BAR_H = 220;
 
 // ── Color KPI ──────────────────────────────────────────────
 function colorKPI(pct) {
@@ -169,16 +169,7 @@ export default function UPHDashboardLiderScreen() {
             {horaInicio ? <Text style={s.leyendaHora}>Hora: {horaInicio}</Text> : null}
           </View>
 
-          {/* ── Barras por línea ── */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
-            <View style={s.barrasRow}>
-              {lineas.map(l => (
-                <BarraLinea key={l.linea} linea={l} activa={l.linea === lineaUsuario} />
-              ))}
-            </View>
-          </ScrollView>
-
-          {/* ── Medallas ── */}
+          {/* ── Medallas (arriba) ── */}
           {topOps && (
             <View style={s.medallasWrap}>
               <View style={s.medalCard}>
@@ -201,6 +192,16 @@ export default function UPHDashboardLiderScreen() {
               </View>
             </View>
           )}
+
+          {/* ── Barras por línea (abajo) ── */}
+          <Text style={s.secLabel}>PRODUCCIÓN POR LÍNEA — HORA ACTUAL</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 20 }}>
+            <View style={s.barrasRow}>
+              {lineas.map(l => (
+                <BarraLinea key={l.linea} linea={l} activa={l.linea === lineaUsuario} />
+              ))}
+            </View>
+          </ScrollView>
 
           <Text style={s.footer}>Se actualiza cada 15 segundos</Text>
         </ScrollView>
@@ -227,21 +228,22 @@ const s = StyleSheet.create({
 
   barrasRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10, paddingHorizontal: 4 },
 
+  secLabel: { color: '#42A5F5', fontSize: 10, fontWeight: '700', letterSpacing: 2, marginBottom: 12, marginTop: 16 },
   barraCard: {
-    width: 78, alignItems: 'center',
+    width: 100, alignItems: 'center',
     backgroundColor: '#0d1b2a', borderRadius: 12,
-    borderWidth: 1, borderColor: '#1a2a3a', padding: 8, paddingBottom: 10,
+    borderWidth: 1, borderColor: '#1a2a3a', padding: 10, paddingBottom: 12,
   },
   barraCardActiva: { borderColor: '#1565C0', backgroundColor: '#0d1b3e' },
   barraNombre: { color: '#cfd8e3', fontSize: 12, fontWeight: '800', marginBottom: 2 },
   barraModelo: { color: '#546E7A', fontSize: 8, marginBottom: 8, textAlign: 'center' },
 
-  barraWrap:   { width: 34, height: BAR_H, justifyContent: 'flex-end', position: 'relative' },
-  barraFondo:  { width: 34, height: BAR_H, backgroundColor: '#1a2a3a', borderRadius: 6, justifyContent: 'flex-end', overflow: 'hidden' },
+  barraWrap:   { width: 56, height: BAR_H, justifyContent: 'flex-end', position: 'relative' },
+  barraFondo:  { width: 56, height: BAR_H, backgroundColor: '#1a2a3a', borderRadius: 8, justifyContent: 'flex-end', overflow: 'hidden' },
   barraRelleno:{ width: '100%', borderRadius: 6, minHeight: 3 },
   metaLine:    { position: 'absolute', left: 0, right: 0, height: 2, backgroundColor: '#fff', opacity: 0.5, zIndex: 2 },
 
-  barraVal:  { color: '#fff', fontSize: 15, fontWeight: '800', marginTop: 6 },
+  barraVal:  { color: '#fff', fontSize: 18, fontWeight: '800', marginTop: 6 },
   barraKPI:  { fontSize: 11, fontWeight: '700', marginTop: 1 },
   barraMeta: { color: '#37474F', fontSize: 8, marginTop: 2 },
 
