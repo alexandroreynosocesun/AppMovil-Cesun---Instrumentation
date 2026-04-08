@@ -207,8 +207,19 @@ def andon_linea(linea: str, db: Session = Depends(get_uph_db)):
     if asignaciones and asignaciones[0].modelo:
         modelo = asignaciones[0].modelo
 
+    # UPH meta: usar el campo específico de la línea (uph_hi1..uph_hi7)
+    def _uph_meta_linea(modelo, linea_nombre):
+        if not modelo:
+            return 0
+        num = ''.join(filter(str.isdigit, linea_nombre))
+        attr = f"uph_hi{num}" if num else None
+        val = getattr(modelo, attr, None) if attr else None
+        return val if val else (modelo.uph_total or 0)
+
+    uph_meta_total = _uph_meta_linea(modelo, linea)
+
     estaciones_activas = len(set(a.estacion for a in asignaciones))
-    uph_meta_estacion = (modelo.uph_total / estaciones_activas) if (modelo and estaciones_activas > 0) else 0
+    uph_meta_estacion = (uph_meta_total / estaciones_activas) if (modelo and estaciones_activas > 0) else 0
 
     estaciones = []
     for asig in asignaciones:
@@ -224,7 +235,7 @@ def andon_linea(linea: str, db: Session = Depends(get_uph_db)):
         })
 
     uph_linea = _uph_ultima_hora(db, linea)
-    uph_meta_linea = modelo.uph_total if modelo else 0
+    uph_meta_linea = uph_meta_total
 
     return {
         "linea": linea,
@@ -700,6 +711,93 @@ def estaciones_linea(
     return {"linea": linea_nombre, "estaciones": sorted([r[0] for r in rows])}
 
 
+@router.get("/asignacion/hoy")
+def get_asignacion_hoy(
+    linea: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Devuelve la asignación activa de hoy para una línea, agrupada por operador."""
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not linea_obj:
+        return {"operadores": [], "modelo_id": None}
+
+    asigs = (
+        db.query(Asignacion)
+        .filter(Asignacion.linea_id == linea_obj.id, Asignacion.fecha == hoy)
+        .all()
+    )
+    if not asigs:
+        return {"operadores": [], "modelo_id": None}
+
+    modelo_id = asigs[0].modelo_id if asigs else None
+
+    # Agrupar estaciones por operador
+    from collections import defaultdict
+    por_op = defaultdict(list)
+    for a in asigs:
+        if a.num_empleado:
+            por_op[a.num_empleado].append(a.estacion)
+
+    resultado = []
+    for num_emp, estaciones in por_op.items():
+        op = db.query(Operador).filter(Operador.num_empleado == num_emp).first()
+        resultado.append({
+            "num_empleado": num_emp,
+            "nombre": op.nombre if op else num_emp,
+            "foto_url": op.foto_url if op else None,
+            "turno": op.turno if op else None,
+            "estaciones": estaciones,
+        })
+
+    return {"operadores": resultado, "modelo_id": modelo_id}
+
+
+@router.patch("/asignacion/hoy/modelo")
+def actualizar_modelo_hoy(
+    linea: str,
+    modelo_id: int,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Cambia solo el modelo de las asignaciones de hoy sin tocar los operadores."""
+    _ensure_admin_or_jefa(current_user)
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not linea_obj:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    modelo = db.query(ModeloUPH).filter(ModeloUPH.id == modelo_id).first()
+    if not modelo:
+        raise HTTPException(status_code=404, detail="Modelo no encontrado")
+    actualizadas = db.query(Asignacion).filter(
+        Asignacion.linea_id == linea_obj.id,
+        Asignacion.fecha == hoy,
+    ).update({"modelo_id": modelo_id})
+    db.commit()
+    return {"ok": True, "actualizadas": actualizadas, "modelo": modelo.nombre}
+
+
+@router.delete("/asignacion/hoy")
+def limpiar_asignacion_hoy(
+    linea: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Elimina la asignación de hoy para una línea."""
+    _ensure_admin_or_jefa(current_user)
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not linea_obj:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    eliminadas = db.query(Asignacion).filter(
+        Asignacion.linea_id == linea_obj.id,
+        Asignacion.fecha == hoy,
+    ).delete()
+    db.commit()
+    return {"ok": True, "eliminadas": eliminadas}
+
+
 @router.post("/asignacion/bulk", status_code=201)
 def crear_asignacion_bulk(
     data: AsignacionBulkIn,
@@ -778,7 +876,11 @@ def scoreboard_hoy(
     for asig in asignaciones:
         linea_nombre = asig.linea.nombre if asig.linea else ""
         num_est = len(estaciones_por_linea.get(asig.linea_id, {1})) or 1
-        uph_meta_linea = asig.modelo.uph_total if asig.modelo else 0
+        # Usar UPH específico de la línea
+        _num = ''.join(filter(str.isdigit, linea_nombre))
+        _attr = f"uph_hi{_num}" if _num else None
+        _uph_linea_val = getattr(asig.modelo, _attr, None) if (asig.modelo and _attr) else None
+        uph_meta_linea = _uph_linea_val if _uph_linea_val else (asig.modelo.uph_total if asig.modelo else 0)
         uph_meta_est = round(uph_meta_linea / num_est, 1)
 
         uph_hora = _uph_ultima_hora(db, linea_nombre, asig.estacion)

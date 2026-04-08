@@ -118,6 +118,35 @@ class UPHService {
     }
   }
 
+  async getAsignacionHoy(linea) {
+    try {
+      const response = await apiClient.get(`/uph/asignacion/hoy?linea=${encodeURIComponent(linea)}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async actualizarModeloHoy(linea, modelo_id) {
+    try {
+      const response = await apiClient.patch(
+        `/uph/asignacion/hoy/modelo?linea=${encodeURIComponent(linea)}&modelo_id=${modelo_id}`
+      );
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async limpiarAsignacionHoy(linea) {
+    try {
+      const response = await apiClient.delete(`/uph/asignacion/hoy?linea=${encodeURIComponent(linea)}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
   async asignarBulk(linea, fecha, turno_id, modelo_id, asignaciones) {
     try {
       const response = await apiClient.post('/uph/asignacion/bulk', {

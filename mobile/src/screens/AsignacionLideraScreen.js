@@ -104,7 +104,7 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
 }
 
 // ── Pantalla principal ──────────────────────────────────────
-export default function AsignacionLideraScreen() {
+export default function AsignacionLideraScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user } = useAuth();
   const lineaUsuario = user?.linea_uph;
@@ -128,6 +128,8 @@ export default function AsignacionLideraScreen() {
   const [refreshing,     setRefreshing]     = useState(false);
   const [loadingModelos, setLoadingModelos] = useState(false);
   const [guardando,      setGuardando]      = useState(false);
+  const [modeloGuardado, setModeloGuardado] = useState(null); // modelo que está en BD hoy
+  const [guardandoModelo, setGuardandoModelo] = useState(false);
 
   const hoy = new Date().toISOString().split('T')[0];
 
@@ -164,23 +166,47 @@ export default function AsignacionLideraScreen() {
 
   useEffect(() => { cargarInicial(); }, [cargarInicial]);
 
-  // ── Carga modelos + estaciones de la línea ──────────────
+  // ── Carga modelos + estaciones + asignación del día ─────
   useEffect(() => {
     if (!lineaSeleccionada) return;
     async function cargar() {
       setLoadingModelos(true);
-      setModeloSeleccionado(null);
-      setAsignacion({});
       setExpandedSlot(null);
-      const [rMod, rEst] = await Promise.all([
+      const [rMod, rEst, rAsig] = await Promise.all([
         uphService.getModelosPorLinea(lineaSeleccionada.nombre),
         uphService.getEstacionesPorLinea(lineaSeleccionada.nombre),
+        uphService.getAsignacionHoy(lineaSeleccionada.nombre),
       ]);
+
+      let modeloActual = null;
       if (rMod.success) {
         setModelos(rMod.data);
-        if (rMod.data.length > 0) setModeloSeleccionado(rMod.data[0]);
+        modeloActual = rMod.data[0] || null;
       } else { setModelos([]); }
+
       if (rEst.success) setTodasEstaciones(rEst.data.estaciones || []);
+
+      // Restaurar asignación del día si existe
+      if (rAsig.success && rAsig.data.operadores?.length > 0) {
+        const ops = rAsig.data.operadores;
+        const nuevaAsig = {};
+        ops.forEach((op, idx) => {
+          nuevaAsig[idx] = { op, estaciones: op.estaciones || [] };
+        });
+        setAsignacion(nuevaAsig);
+        setNumSlots(ops.length);
+        // Restaurar modelo guardado
+        if (rAsig.data.modelo_id && rMod.success) {
+          const m = rMod.data.find(x => x.id === rAsig.data.modelo_id);
+          if (m) modeloActual = m;
+        }
+      } else {
+        setAsignacion({});
+        setNumSlots(2);
+      }
+
+      setModeloSeleccionado(modeloActual);
+      setModeloGuardado(modeloActual);
       setLoadingModelos(false);
     }
     cargar();
@@ -229,6 +255,42 @@ export default function AsignacionLideraScreen() {
     setExpandedSlot(slotIdx); // expandir para asignar estaciones
   };
 
+  // ── Guardar solo el modelo (cambio de rolling) ──────────
+  const handleGuardarModelo = async () => {
+    if (!modeloSeleccionado || !lineaSeleccionada) return;
+    setGuardandoModelo(true);
+    const result = await uphService.actualizarModeloHoy(lineaSeleccionada.nombre, modeloSeleccionado.id);
+    setGuardandoModelo(false);
+    if (result.success) {
+      setModeloGuardado(modeloSeleccionado);
+      showAlert('✅ Modelo actualizado', `Cambiado a ${modeloSeleccionado.nombre} en ${lineaSeleccionada.nombre}.`);
+    } else {
+      showAlert('Error', result.error);
+    }
+  };
+
+  // ── Limpiar asignación del día ──────────────────────────
+  const handleLimpiar = () => {
+    showAlert(
+      'Limpiar operadores',
+      '¿Deseas quitar todos los operadores asignados hoy? El modelo se conserva.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Limpiar', style: 'destructive',
+          onPress: async () => {
+            if (lineaSeleccionada) {
+              await uphService.limpiarAsignacionHoy(lineaSeleccionada.nombre);
+            }
+            setAsignacion({});
+            setNumSlots(2);
+            setExpandedSlot(null);
+          },
+        },
+      ],
+    );
+  };
+
   // ── UPH de la línea seleccionada ────────────────────────
   const getUphLinea = (modelo) => {
     if (!modelo || !lineaSeleccionada) return modelo?.uph_total ?? null;
@@ -270,7 +332,9 @@ export default function AsignacionLideraScreen() {
     );
     setGuardando(false);
     if (result.success) {
-      showAlert('✅ Listo', `${opsAsignados} operador(es) asignados en ${lineaSeleccionada.nombre}.`);
+      showAlert('✅ Listo', `${opsAsignados} operador(es) asignados en ${lineaSeleccionada.nombre}.`, [
+        { text: 'Cerrar', onPress: () => navigation.navigate('Inicio') },
+      ]);
     } else {
       showAlert('Error', result.error);
     }
@@ -379,6 +443,16 @@ export default function AsignacionLideraScreen() {
                   <Text style={s.modeloItemCheck}>✓</Text>
                 </View>
               ) : null}
+              {/* Botón cambio de modelo (rolling) — solo cuando el modelo difiere del guardado y ya hay operadores */}
+              {modeloSeleccionado && modeloGuardado && modeloSeleccionado.id !== modeloGuardado.id && opsAsignados > 0 && (
+                <TouchableOpacity style={s.cambiarModeloBtn} onPress={handleGuardarModelo} disabled={guardandoModelo}>
+                  {guardandoModelo
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={s.cambiarModeloBtnText}>🔄 Guardar cambio de modelo</Text>
+                  }
+                </TouchableOpacity>
+              )}
+
               {modeloSeleccionado && (
                 <View style={s.uphCard}>
                   <LinearGradient colors={['#0D2137', '#0A1628']} style={StyleSheet.absoluteFill}
@@ -416,8 +490,15 @@ export default function AsignacionLideraScreen() {
           {/* ── Operadores ──────────────────────────────── */}
           <View style={s.opsHeader}>
             <Text style={s.secLabel}>OPERADORES</Text>
-            <View style={s.opsPill}>
-              <Text style={s.opsPillText}>{opsAsignados} / {numSlots}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {opsAsignados > 0 && (
+                <TouchableOpacity onPress={handleLimpiar} style={s.limpiarBtn}>
+                  <Text style={s.limpiarBtnText}>Limpiar</Text>
+                </TouchableOpacity>
+              )}
+              <View style={s.opsPill}>
+                <Text style={s.opsPillText}>{opsAsignados} / {numSlots}</Text>
+              </View>
             </View>
           </View>
 
@@ -618,6 +699,10 @@ const s = StyleSheet.create({
 
   opsHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   opsPill:     { backgroundColor: '#1565C022', borderRadius: 10, borderWidth: 1, borderColor: '#1565C0', paddingHorizontal: 10, paddingVertical: 3 },
+  limpiarBtn:  { backgroundColor: '#7f1d1d33', borderRadius: 8, borderWidth: 1, borderColor: '#ef444466', paddingHorizontal: 10, paddingVertical: 3 },
+  limpiarBtnText: { color: '#fca5a5', fontSize: 11, fontWeight: '600' },
+  cambiarModeloBtn: { backgroundColor: '#1a3a1a', borderRadius: 10, borderWidth: 1, borderColor: '#4CAF50', padding: 12, alignItems: 'center', marginBottom: 10 },
+  cambiarModeloBtnText: { color: '#81C784', fontWeight: '700', fontSize: 14 },
   opsPillText: { color: '#42A5F5', fontSize: 12, fontWeight: 'bold' },
 
   opSlot: {
