@@ -1,0 +1,13 @@
+node_modules
+*.xlsx
+*.xls
+*.csv
+*.env
+__pycache__/
+*.pyc
+.expo/
+venv/
+*.apk
+uph_logs/
+uploads/
+cloudflared.exe.exe

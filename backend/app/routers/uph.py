@@ -915,6 +915,55 @@ def limpiar_eventos(data: LimpiarIn, db: Session = Depends(get_uph_db)):
     return {"ok": True, "eliminados": eliminados}
 
 
+@router.get("/dashboard/operadores", response_class=HTMLResponse)
+def dashboard_operadores():
+    """Dashboard de pared — muestra operadores asignados hoy con fotos."""
+    html_path = Path(__file__).parent.parent.parent / "dashboard_operadores.html"
+    if not html_path.exists():
+        return HTMLResponse("<h1>dashboard_operadores.html no encontrado</h1>", status_code=404)
+    return HTMLResponse(html_path.read_text(encoding="utf-8"))
+
+
+@router.get("/dashboard/asignaciones-hoy")
+def asignaciones_hoy_publico(db: Session = Depends(get_uph_db)):
+    """
+    Operadores asignados hoy, agrupados por línea — sin autenticación.
+    Usado por el dashboard de pared.
+    """
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    asigs = (
+        db.query(Asignacion)
+        .filter(Asignacion.fecha == hoy)
+        .all()
+    )
+    # Agrupar por línea y operador único
+    from collections import defaultdict
+    por_linea = defaultdict(dict)
+    for a in asigs:
+        linea = db.query(Linea).filter(Linea.id == a.linea_id).first()
+        linea_nombre = linea.nombre if linea else f"L{a.linea_id}"
+        if a.num_empleado not in por_linea[linea_nombre]:
+            op = db.query(Operador).filter(Operador.num_empleado == a.num_empleado).first()
+            por_linea[linea_nombre][a.num_empleado] = {
+                "num_empleado": a.num_empleado,
+                "nombre": op.nombre if op else a.num_empleado,
+                "foto_url": op.foto_url if op else None,
+                "turno": op.turno if op else None,
+            }
+    resultado = [
+        {
+            "linea": linea,
+            "operadores": list(ops.values()),
+        }
+        for linea, ops in sorted(por_linea.items())
+    ]
+    return {
+        "fecha": hoy,
+        "lineas": resultado,
+        "actualizado": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
     """Dashboard HTML de testing — sin autenticación."""
@@ -1199,3 +1248,225 @@ setInterval(cargar, 5000);
 </body>
 </html>"""
     return HTMLResponse(content=html)
+
+
+def _guardar_csv_hora(linea: str, estaciones: list, db):
+    """Guarda CSV con conteo de la hora actual. Ruta: uph_logs/linea_6/YYYY/MM/DD/hora_HH.csv"""
+    from sqlalchemy import text
+    ahora = datetime.now(timezone.utc)
+    inicio = ahora.replace(minute=0, second=0, microsecond=0)
+
+    base = Path(__file__).parent.parent.parent / "uph_logs" / f"linea_{linea.replace('L','')}"
+    carpeta = base / str(ahora.year) / f"{ahora.month:02d}" / f"{ahora.day:02d}"
+    carpeta.mkdir(parents=True, exist_ok=True)
+    archivo = carpeta / f"hora_{ahora.hour:02d}.csv"
+
+    escribir_header = not archivo.exists()
+    with open(archivo, "a", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        if escribir_header:
+            writer.writerow(["hora", "estacion", "total_piezas"])
+        for est in estaciones:
+            total = db.query(func.count(EventoUPH.id)).filter(
+                EventoUPH.linea == linea,
+                EventoUPH.estacion == est,
+                EventoUPH.evento == "GOOD",
+                EventoUPH.timestamp >= inicio,
+            ).scalar() or 0
+            writer.writerow([ahora.strftime("%Y-%m-%d %H:00"), est, total])
+
+
+def _vista_operador_fija(nombre: str, estaciones: list, op_num: int):
+    """Genera HTML compacto para un tercio de pantalla con barras verticales."""
+    est_js = str(estaciones)
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Op{op_num}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ font-family: 'Inter', 'Segoe UI', sans-serif; background: #0c0c0f; color: #e2e8f0;
+         display: flex; flex-direction: column; height: 100vh; overflow: hidden; }}
+  header {{ background: #111318; padding: 8px 14px; border-bottom: 1px solid #1e2230;
+            display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }}
+  .op-name {{ font-size: 0.95rem; font-weight: 700; color: #f1f5f9; letter-spacing: .02em; }}
+  .op-sub  {{ font-size: 0.65rem; color: #4a90d9; letter-spacing: .05em; text-transform: uppercase; }}
+  #hora    {{ font-size: 0.7rem; color: #3a3f52; font-variant-numeric: tabular-nums; }}
+  main {{ flex: 1; display: flex; flex-direction: row;
+          gap: 8px; padding: 10px; min-height: 0; overflow: hidden; }}
+  .card {{ flex: 1; }}
+  .card {{ background: #13151c; border: 1px solid #1e2230; border-radius: 12px;
+           padding: 10px 8px 8px; text-align: center; display: flex; flex-direction: column;
+           align-items: center; gap: 4px; min-height: 0; transition: border-color .4s, box-shadow .4s; }}
+  .card.verde   {{ border-color: #22c55e; box-shadow: 0 0 12px rgba(34,197,94,.15); }}
+  .card.naranja {{ border-color: #f97316; box-shadow: 0 0 12px rgba(249,115,22,.15); }}
+  .card.rojo    {{ border-color: #ef4444; box-shadow: 0 0 12px rgba(239,68,68,.15); }}
+  .est-label {{ font-size: 8px; color: #3a3f52; text-transform: uppercase; letter-spacing: .08em; }}
+  .est-num   {{ font-size: 1rem; font-weight: 700; color: #4a90d9; }}
+  .big {{ font-size: 2.6rem; font-weight: 900; line-height: 1; letter-spacing: -.02em; }}
+  .card.verde   .big {{ color: #22c55e; }}
+  .card.naranja .big {{ color: #f97316; }}
+  .card.rojo    .big {{ color: #ef4444; }}
+  .card:not(.verde):not(.naranja):not(.rojo) .big {{ color: #2a2f3e; }}
+  .uph-label {{ font-size: 8px; color: #3a3f52; }}
+  .bar-wrap {{ width: 6px; flex: 1; background: #1a1d28; border-radius: 3px;
+               margin: 2px auto; min-height: 30px; position: relative; overflow: hidden; }}
+  .bar-fill {{ position: absolute; bottom: 0; left: 0; right: 0; border-radius: 3px;
+               transition: height .6s cubic-bezier(.4,0,.2,1); }}
+  .card.verde   .bar-fill {{ background: linear-gradient(to top, #16a34a, #4ade80); }}
+  .card.naranja .bar-fill {{ background: linear-gradient(to top, #c2410c, #fb923c); }}
+  .card.rojo    .bar-fill {{ background: linear-gradient(to top, #b91c1c, #f87171); }}
+  .card:not(.verde):not(.naranja):not(.rojo) .bar-fill {{ background: #1e2230; }}
+  footer {{ text-align: center; padding: 4px; color: #1e2230; font-size: 8px;
+            flex-shrink: 0; letter-spacing: .05em; }}
+  @keyframes pulse {{
+    0%   {{ transform: scale(1);    opacity: 1; }}
+    40%  {{ transform: scale(1.25); opacity: 1; }}
+    100% {{ transform: scale(1);    opacity: 1; }}
+  }}
+  .big.pulse {{ animation: pulse .4s ease-out; }}
+  @keyframes floatUp {{
+    0%   {{ opacity: 1; transform: translateY(0)   scale(1); }}
+    100% {{ opacity: 0; transform: translateY(-36px) scale(1.3); }}
+  }}
+  .plus-one {{
+    position: absolute; pointer-events: none;
+    font-size: 1rem; font-weight: 900;
+    color: #4ade80; text-shadow: 0 0 8px rgba(74,222,128,.6);
+    animation: floatUp .8s ease-out forwards;
+    white-space: nowrap;
+  }}
+  .card {{ position: relative; }}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="op-name">{nombre}</div>
+    <div class="op-sub">Línea 6 · Op {op_num}</div>
+  </div>
+  <div id="hora">—</div>
+</header>
+<main id="main">Cargando...</main>
+<footer id="reset-info">—</footer>
+<script>
+const BASE = window.location.origin;
+const ESTACIONES = {est_js};
+const META_HORA = 60;
+let horaActual = new Date().getHours();
+
+function color(cnt) {{
+  if (cnt === 0) return '';
+  if (cnt >= 50) return 'verde';
+  if (cnt >= 35) return 'naranja';
+  return 'rojo';
+}}
+
+async function cargar() {{
+  const ahora = new Date();
+  const h = ahora.getHours();
+
+  if (h !== horaActual) {{
+    horaActual = h;
+    location.reload();
+    return;
+  }}
+
+  document.getElementById('hora').textContent =
+    ahora.toLocaleTimeString('es-MX', {{hour:'2-digit', minute:'2-digit', second:'2-digit'}});
+
+  const minRestantes = 60 - ahora.getMinutes();
+  document.getElementById('reset-info').textContent =
+    `Reinicia en ${{minRestantes}} min`;
+
+  try {{
+    const r = await fetch(`${{BASE}}/api/uph/datos?linea=L6`);
+    const d = await r.json();
+    const mapa = {{}};
+    d.estaciones.forEach(e => {{ mapa[e.estacion] = e; }});
+
+    const main = document.getElementById('main');
+    if (main.querySelector('.card') === null) main.innerHTML = '';
+
+    ESTACIONES.forEach(est => {{
+      const e = mapa[String(est)] || {{}};
+      const cnt = e.hora_actual ?? 0;
+      const uph = e.uph ?? 0;
+      const cl = color(cnt);
+      const pct = Math.min(Math.round((cnt / META_HORA) * 100), 100);
+
+      let card = document.getElementById(`card-${{est}}`);
+      const esNuevo = !card;
+      if (esNuevo) {{
+        card = document.createElement('div');
+        card.id = `card-${{est}}`;
+        card.className = `card ${{cl}}`;
+        card.innerHTML = `
+          <div class="est-label">Estación</div>
+          <div class="est-num">${{est}}</div>
+          <div class="big" id="big-${{est}}">${{cnt}}</div>
+          <div class="bar-wrap"><div class="bar-fill" id="bar-${{est}}" style="height:${{pct}}%"></div></div>
+          <div class="uph-label" id="uph-${{est}}">UPH ${{uph}}/hr</div>
+        `;
+        main.appendChild(card);
+      }} else {{
+        const bigEl = document.getElementById(`big-${{est}}`);
+        const prevCnt = parseInt(bigEl.textContent) || 0;
+
+        // Actualizar valores
+        card.className = `card ${{cl}}`;
+        bigEl.textContent = cnt;
+        document.getElementById(`bar-${{est}}`).style.height = pct + '%';
+        document.getElementById(`uph-${{est}}`).textContent = `UPH ${{uph}}/hr`;
+
+        // Pulso y +N flotante cuando llega pieza nueva
+        if (cnt > prevCnt) {{
+          bigEl.classList.remove('pulse');
+          void bigEl.offsetWidth;
+          bigEl.classList.add('pulse');
+
+          const diff = cnt - prevCnt;
+          const tag = document.createElement('div');
+          tag.className = 'plus-one';
+          tag.textContent = `+${{diff}}`;
+          tag.style.top = '50%';
+          tag.style.left = '50%';
+          tag.style.transform = 'translate(-50%, -50%)';
+          card.appendChild(tag);
+          setTimeout(() => tag.remove(), 850);
+        }}
+      }}
+    }});
+  }} catch(err) {{
+    document.getElementById('main').innerHTML = '<p style="color:#333;padding:20px;font-size:12px">Sin conexión</p>';
+  }}
+}}
+
+cargar();
+setInterval(cargar, 1000);
+</script>
+</body>
+</html>"""
+
+
+@router.get("/op1", response_class=HTMLResponse)
+def vista_op1():
+    """Operador 1 — Estaciones 603, 604, 605"""
+    return HTMLResponse(_vista_operador_fija("Operador 1", ["603","604","605"], 1))
+
+
+@router.get("/op2", response_class=HTMLResponse)
+def vista_op2():
+    """Operador 2 — Estaciones 606, 607, 608"""
+    return HTMLResponse(_vista_operador_fija("Operador 2", ["606","607","608"], 2))
+
+
+@router.post("/guardar_hora")
+def guardar_csv_hora(linea: str = "L6", db: Session = Depends(get_uph_db)):
+    """Guarda CSV con conteo de la hora actual para todas las estaciones de la línea."""
+    estaciones = ESTACIONES_POR_LINEA.get(linea, [])
+    _guardar_csv_hora(linea, estaciones, db)
+    return {"ok": True}

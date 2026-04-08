@@ -283,6 +283,34 @@ try:
 except Exception as e:
     logger.error(f"No se pudo iniciar el programador de limpieza: {e}", exc_info=True)
 
+# Guardar CSV UPH cada hora en punto
+try:
+    import threading, time as _time
+    from app.database_uph import UphSessionLocal
+    from app.routers.uph import _guardar_csv_hora, ESTACIONES_POR_LINEA
+
+    def _scheduler_csv_uph():
+        import datetime as _dt
+        while True:
+            ahora = _dt.datetime.now()
+            # Esperar al inicio del siguiente minuto 0 de la siguiente hora
+            segundos_restantes = (60 - ahora.minute) * 60 - ahora.second
+            _time.sleep(segundos_restantes)
+            try:
+                db = UphSessionLocal()
+                for linea, estaciones in ESTACIONES_POR_LINEA.items():
+                    _guardar_csv_hora(linea, estaciones, db)
+                db.close()
+                logger.info("✅ CSV UPH guardado por hora")
+            except Exception as ex:
+                logger.error(f"Error guardando CSV UPH: {ex}")
+
+    t = threading.Thread(target=_scheduler_csv_uph, daemon=True)
+    t.start()
+    logger.info("✅ Scheduler CSV UPH iniciado")
+except Exception as e:
+    logger.error(f"No se pudo iniciar scheduler CSV UPH: {e}", exc_info=True)
+
 if __name__ == "__main__":
     logger.info(f"Iniciando servidor en {API_HOST}:{API_PORT} (Entorno: {'PRODUCCIÓN' if IS_PRODUCTION else 'DESARROLLO'})")
     uvicorn.run(app, host=API_HOST, port=API_PORT)

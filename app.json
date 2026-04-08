@@ -1,0 +1,16 @@
+{
+  "plugins": [
+    "expo-barcode-scanner"
+  ],
+  "android": {
+    "permissions": [
+      "android.permission.CAMERA"
+    ],
+    "package": "com.alexandro.reynoso.appmovil"
+  },
+  "extra": {
+    "eas": {
+      "projectId": "109b0899-b451-4bba-842a-dc22b2dc23ea"
+    }
+  }
+}

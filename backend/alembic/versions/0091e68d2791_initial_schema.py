@@ -38,6 +38,7 @@ def upgrade() -> None:
     sa.Column('password_hash', sa.String(length=255), nullable=False),
     sa.Column('firma_digital', sa.Text(), nullable=True),
     sa.Column('turno_actual', sa.String(length=20), nullable=True),
+    sa.Column('linea_uph', sa.String(length=20), nullable=True),
     sa.Column('tipo_tecnico', sa.String(length=50), nullable=True),
     sa.Column('tipo_usuario', sa.String(length=20), nullable=True),
     sa.Column('activo', sa.Boolean(), nullable=True),

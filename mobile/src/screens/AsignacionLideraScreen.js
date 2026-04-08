@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity, Text,
-  Modal, FlatList, Platform, RefreshControl, KeyboardAvoidingView, TextInput,
+  Modal, FlatList, Platform, RefreshControl, KeyboardAvoidingView, TextInput, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,7 @@ import { webStyles } from '../utils/webStyles';
 import { showAlert } from '../utils/alertUtils';
 import { uphService } from '../services/UPHService';
 import { useAuth } from '../contexts/AuthContext';
+import { API_BASE_URL } from '../utils/apiClient';
 
 const MAX_SLOTS = 4;
 const FILTROS_TURNO = ['Todos', 'A', 'B', 'C'];
@@ -29,6 +30,22 @@ const av = StyleSheet.create({
   circle: { backgroundColor: '#1565C044', borderWidth: 1, borderColor: '#1565C0', justifyContent: 'center', alignItems: 'center' },
   text:   { color: '#90CAF9', fontWeight: 'bold' },
 });
+
+// ── Avatar con foto o iniciales ──────────────────────────────
+function AvatarOp({ op, size = 40 }) {
+  const [err, setErr] = useState(false);
+  if (op?.foto_url && !err) {
+    const uri = op.foto_url.startsWith('http') ? op.foto_url : `${API_BASE_URL}${op.foto_url}`;
+    return (
+      <Image
+        source={{ uri }}
+        style={{ width: size, height: size, borderRadius: size / 2, borderWidth: 1, borderColor: '#1565C0' }}
+        onError={() => setErr(true)}
+      />
+    );
+  }
+  return <Iniciales nombre={op?.nombre} size={size} />;
+}
 
 // ── Modal selector de operador ──────────────────────────────
 function ModalOperador({ visible, operadores, onSelect, onClose }) {
@@ -85,7 +102,7 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
             ItemSeparatorComponent={() => <View style={s.itemSep} />}
             renderItem={({ item }) => (
               <TouchableOpacity style={s.opCard} onPress={() => { setBusqueda(''); onSelect(item); }}>
-                <Iniciales nombre={item.nombre} />
+                <AvatarOp op={item} size={40} />
                 <View style={{ flex: 1, marginLeft: 10 }}>
                   <Text style={s.opNombre}>{item.nombre}</Text>
                   <Text style={s.opNum}>#{item.num_empleado}</Text>
@@ -446,7 +463,7 @@ export default function AsignacionLideraScreen() {
                         onPress={() => setExpandedSlot(isExpanded ? null : idx)}
                         activeOpacity={0.8}
                       >
-                        <Iniciales nombre={op.nombre} size={42} />
+                        <AvatarOp op={op} size={42} />
                         <View style={{ flex: 1, marginLeft: 12 }}>
                           <Text style={s.opSlotNombre}>{op.nombre}</Text>
                           <View style={s.opSlotSubRow}>

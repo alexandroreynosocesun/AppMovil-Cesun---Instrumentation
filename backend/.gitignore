@@ -122,3 +122,10 @@ reports/
 .env.local
 .env.production
 .env.*.local
+
+# Archivos de datos — no subir a git
+*.xlsx
+*.xls
+*.csv
+uploads/
+uph_logs/
