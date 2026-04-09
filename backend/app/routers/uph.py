@@ -1144,6 +1144,97 @@ def asignaciones_hoy_publico(db: Session = Depends(get_uph_db)):
     }
 
 
+@router.get("/dashboard/lineas-hoy")
+def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
+    """
+    Datos completos para wall dashboard v2 — sin autenticación.
+    Retorna por línea: UPH actual, meta, modelo, piezas acumuladas del modelo,
+    y por cada operador asignado: sus estaciones con UPH hora y meta.
+    """
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    ahora = datetime.now(timezone.utc)
+    inicio_dia = datetime.strptime(hoy, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
+
+    lineas = db.query(Linea).order_by(Linea.nombre).all()
+
+    resultado = []
+    for linea in lineas:
+        # Asignaciones de hoy para esta línea
+        asignaciones = (
+            db.query(Asignacion)
+            .filter(Asignacion.linea_id == linea.id, Asignacion.fecha == hoy)
+            .all()
+        )
+
+        # Modelo actual desde primera asignación
+        modelo = asignaciones[0].modelo if asignaciones else None
+        modelo_nombre = modelo.modelo if modelo else None
+
+        # UPH meta específica de la línea
+        _num = ''.join(filter(str.isdigit, linea.nombre))
+        _attr = f"uph_hi{_num}" if _num else None
+        _val = getattr(modelo, _attr, None) if (modelo and _attr) else None
+        uph_meta = _val if _val else (modelo.uph_total if modelo else 0) if modelo else 0
+
+        # UPH actual: piezas en la hora actual (clock hour)
+        uph_actual = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea == linea.nombre,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_hora,
+            EventoUPH.timestamp <= ahora,
+        ).scalar() or 0
+
+        # Piezas acumuladas del modelo (total del día)
+        piezas_modelo = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea == linea.nombre,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_dia,
+            EventoUPH.timestamp <= ahora,
+        ).scalar() or 0
+
+        # Plan del modelo = meta × 8 horas (turno completo)
+        plan_modelo = uph_meta * 8
+
+        # Número de estaciones únicas en esta línea hoy
+        estaciones_unicas = list({a.estacion for a in asignaciones})
+        num_est = len(estaciones_unicas) or 1
+        uph_meta_est = round(uph_meta / num_est, 1)
+
+        # Agrupar por operador y calcular UPH por estación
+        ops_dict: dict = {}
+        for a in asignaciones:
+            emp = a.num_empleado
+            if emp not in ops_dict:
+                op = a.operador
+                ops_dict[emp] = {
+                    "num_empleado": emp,
+                    "nombre": op.nombre if op else str(emp),
+                    "foto_url": op.foto_url if op else None,
+                    "estaciones": [],
+                }
+            uph_hora_est = _uph_ultima_hora(db, linea.nombre, a.estacion)
+            kpi_pct = round((uph_hora_est / uph_meta_est * 100) if uph_meta_est > 0 else 0, 1)
+            ops_dict[emp]["estaciones"].append({
+                "estacion": a.estacion,
+                "uph_hora": round(uph_hora_est, 1),
+                "uph_meta": uph_meta_est,
+                "kpi_pct": kpi_pct,
+            })
+
+        resultado.append({
+            "linea": linea.nombre,
+            "modelo": modelo_nombre,
+            "uph_actual": uph_actual,
+            "uph_meta": uph_meta,
+            "piezas_modelo": piezas_modelo,
+            "plan_modelo": plan_modelo,
+            "operadores": list(ops_dict.values()),
+        })
+
+    return {"lineas": resultado, "actualizado": ahora.isoformat()}
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
     """Dashboard HTML de testing — sin autenticación."""

@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard UPH v2 · Hisense</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: #030c12; color: #d0e8f0;
+      font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden;
+    }
+    body { display: flex; flex-direction: column; }
+
+    /* ─── HEADER ──────────────────────────────────────── */
+    header {
+      height: 48px; flex-shrink: 0;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 20px; position: relative;
+      background: linear-gradient(90deg, #040e16, #061420, #040e16);
+      border-bottom: 1px solid #0d2538;
+    }
+    .h-center {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 10px;
+    }
+    .h-logo    { font-size: 1.8rem; font-weight: 900; color: #00c8e8;
+                 text-shadow: 0 0 28px #00c8e899; letter-spacing: 2px; }
+    .h-empresa { font-size: 0.82rem; font-weight: 500; color: #1e6a80; }
+    .h-title   { font-size: 0.62rem; font-weight: 600; color: #1e5a70;
+                 letter-spacing: 2px; text-transform: uppercase; }
+    .h-right   { display: flex; align-items: center; gap: 14px; }
+    .h-turnos  { display: flex; gap: 6px; }
+    .t-pill    { padding: 3px 14px; border-radius: 16px; font-size: 0.72rem;
+                 font-weight: 700; border: 1px solid #0d2538;
+                 color: #1a3a50; background: #040e16; transition: all 0.4s; }
+    .t-pill.act-A { background: #006070; color: #fff; border-color: #00c8e8;
+                    box-shadow: 0 0 16px #00c8e855; }
+    .t-pill.act-B { background: #004860; color: #66eeff; border-color: #0090b0; }
+    .t-pill.act-C { background: #003040; color: #88ddee; border-color: #006080; }
+    .h-clock   { font-size: 1.65rem; font-weight: 200; letter-spacing: 3px;
+                 color: #00c8e8; font-variant-numeric: tabular-nums;
+                 text-shadow: 0 0 28px #00c8e844; }
+
+    /* ─── LAYOUT ──────────────────────────────────────── */
+    .main { flex: 1; min-height: 0; padding: 10px; display: flex; gap: 10px; }
+
+    .lines-grid {
+      flex: 1; min-width: 0; height: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 10px;
+    }
+
+    /* ─── CARD ────────────────────────────────────────── */
+    .card {
+      background: #050d18; border: 1px solid #0d2538;
+      border-radius: 16px; display: flex; flex-direction: column;
+      overflow: hidden; transition: border-color 0.5s, box-shadow 0.5s;
+    }
+    .card.verde    { border-color: #00877a99; box-shadow: 0 0 22px #00877a1a; }
+    .card.amarillo { border-color: #cc770066; box-shadow: 0 0 22px #cc770012; }
+    .card.rojo     { border-color: #cc222266; box-shadow: 0 0 22px #cc222214; }
+    .card.rank-1   { border-color: #ffd700cc !important; border-width: 2px;
+                     animation: pulse-gold 2s ease-in-out infinite; }
+    .card.rank-2   { border-color: #c0c0c099 !important;
+                     box-shadow: 0 0 30px #c0c0c033 !important; }
+    .card.rank-3   { border-color: #cd7f3288 !important; }
+    @keyframes pulse-gold {
+      0%,100% { box-shadow: 0 0 25px #ffd70066, 0 0 50px #ffd70022; }
+      50%     { box-shadow: 0 0 60px #ffd700bb, 0 0 100px #ffd70055; }
+    }
+
+    /* ── Card top ── */
+    .card-top {
+      display: flex; flex-direction: row; align-items: center;
+      padding: 10px 14px 9px; gap: 12px; flex-shrink: 0;
+      border-bottom: 1px solid #0d2538;
+    }
+    .card-id { display: flex; flex-direction: column; justify-content: center;
+               min-width: 76px; flex-shrink: 0; }
+    .id-medal  { font-size: 1.2rem; line-height: 1; margin-bottom: 2px; }
+    .id-linea  { font-size: 2rem; font-weight: 900; line-height: 1; letter-spacing: -1px; }
+    .id-linea.verde    { color: #00ddc0; text-shadow: 0 0 20px #00ddc055; }
+    .id-linea.amarillo { color: #ff8c00; text-shadow: 0 0 16px #ff8c0044; }
+    .id-linea.rojo     { color: #ff5555; }
+    .id-linea.gris     { color: #546e7a; }
+    .id-modelo { font-size: 0.6rem; color: #1e6a80; letter-spacing: 1px;
+                 text-transform: uppercase; margin-top: 3px; }
+    .id-kpi    { font-size: 0.75rem; font-weight: 800; margin-top: 4px; }
+    .id-kpi.verde    { color: #00ddc0; }
+    .id-kpi.amarillo { color: #ff8c00; }
+    .id-kpi.rojo     { color: #ff5555; }
+
+    .card-kpis { flex: 1; display: flex; flex-direction: column; gap: 7px; justify-content: center; }
+
+    /* Barra horizontal KPI */
+    .kpi-row { display: flex; align-items: center; gap: 7px; }
+    .kpi-label { font-size: 0.52rem; color: #1e5a70; letter-spacing: 1px;
+                 text-transform: uppercase; width: 36px; flex-shrink: 0; text-align: right; }
+    .kpi-track {
+      flex: 1; height: 20px; background: #071a24; border-radius: 10px;
+      position: relative; overflow: visible;
+    }
+    .kpi-fill {
+      height: 100%; border-radius: 10px; min-width: 6px;
+      transition: width 0.8s ease; position: relative; overflow: hidden;
+    }
+    .kpi-fill::after {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 40%; background: rgba(255,255,255,0.12); border-radius: 10px 10px 0 0;
+    }
+    .kpi-fill.verde    { background: linear-gradient(90deg, #004d35, #00a060, #00f090);
+                         box-shadow: 0 0 14px #00a06055 inset; }
+    .kpi-fill.amarillo { background: linear-gradient(90deg, #5c2000, #cc5500, #ff8800);
+                         box-shadow: 0 0 12px #cc550044 inset; }
+    .kpi-fill.rojo     { background: linear-gradient(90deg, #550000, #bb1111, #ff4040);
+                         animation: pulso-rojo 2s ease-in-out infinite; }
+    .kpi-fill.azul     { background: linear-gradient(90deg, #001e44, #0055aa, #0090dd); }
+    @keyframes pulso-rojo { 0%,100%{opacity:0.8;} 50%{opacity:1;} }
+    .kpi-target-line {
+      position: absolute; top: -4px; bottom: -4px; width: 2px;
+      background: rgba(255,255,255,0.65); border-radius: 1px; z-index: 2;
+      box-shadow: 0 0 4px rgba(255,255,255,0.4);
+    }
+    .kpi-val  { font-size: 0.85rem; font-weight: 800; font-variant-numeric: tabular-nums;
+                flex-shrink: 0; min-width: 34px; text-align: right; }
+    .kpi-val.verde    { color: #00ddc0; }
+    .kpi-val.amarillo { color: #ff8c00; }
+    .kpi-val.rojo     { color: #ff5555; }
+    .kpi-val.azul     { color: #55aaee; }
+    .kpi-target { font-size: 0.58rem; color: #1e5a70; flex-shrink: 0; min-width: 30px; }
+
+    /* ── Sección operadores ── */
+    .card-ops {
+      flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
+      display: flex; flex-direction: row; align-items: stretch;
+      padding: 8px 12px 8px; gap: 10px;
+      scrollbar-width: thin; scrollbar-color: #0d2538 transparent;
+    }
+    .card-ops::-webkit-scrollbar { height: 4px; }
+    .card-ops::-webkit-scrollbar-thumb { background: #0d2538; border-radius: 2px; }
+    .card-ops.vacia { align-items: center; justify-content: center; }
+    .ops-empty { color: #1a3a4a; font-size: 0.75rem; }
+
+    /* Columna operador — ocupa toda la altura */
+    .op-col { display: flex; flex-direction: column; align-items: center;
+              flex-shrink: 0; gap: 5px; }
+    .op-name { font-size: 0.56rem; color: #2a7a8a; text-align: center;
+               max-width: 72px; white-space: nowrap; overflow: hidden;
+               text-overflow: ellipsis; }
+
+    /* Estaciones — flex:1 para crecer */
+    .op-stations { display: flex; flex-direction: row; gap: 6px;
+                   align-items: flex-end; flex: 1; min-height: 0; }
+
+    /* Columna estación */
+    .st-col { display: flex; flex-direction: column; align-items: center;
+              gap: 2px; width: 34px; height: 100%; }
+    /* Wrap de barra ocupa todo el espacio disponible */
+    .st-bar-outer { flex: 1; min-height: 0; display: flex;
+                    flex-direction: column; align-items: center; justify-content: flex-end; }
+    .st-bar-wrap { width: 26px; position: relative; background: #071a24;
+                   border-radius: 6px; overflow: visible; }
+    .st-bar-fill { width: 100%; border-radius: 6px; min-height: 3px;
+                   transition: height 0.8s ease; }
+    .st-bar-fill.verde    { background: linear-gradient(0deg, #004d30, #00aa60, #00ffaa); }
+    .st-bar-fill.amarillo { background: linear-gradient(0deg, #5c2000, #cc5500, #ff8800); }
+    .st-bar-fill.rojo     { background: linear-gradient(0deg, #550000, #bb1111, #ff4040); }
+    .st-target-line {
+      position: absolute; left: -3px; right: -3px; height: 2px;
+      background: rgba(255,255,255,0.6); border-radius: 1px; z-index: 2;
+      box-shadow: 0 0 4px rgba(255,255,255,0.35);
+    }
+    .st-val  { font-size: 0.6rem; font-weight: 800;
+               font-variant-numeric: tabular-nums; color: #d0e8f0; }
+    .st-pct  { font-size: 0.52rem; font-weight: 700; }
+    .st-pct.verde    { color: #00ddc0; }
+    .st-pct.amarillo { color: #ff8800; }
+    .st-pct.rojo     { color: #ff4040; }
+    .st-label { font-size: 0.5rem; color: #1e5a70; }
+
+    /* Avatar operador en card */
+    .op-avatar {
+      width: 44px; height: 44px; border-radius: 50%;
+      object-fit: cover; flex-shrink: 0;
+      border: 2px solid #0d2538;
+    }
+    .op-avatar.kpi-verde    { border-color: #00aa6088; box-shadow: 0 0 8px #00aa6055; }
+    .op-avatar.kpi-amarillo { border-color: #cc550055; }
+    .op-avatar.kpi-rojo     { border-color: #bb111155; }
+    .op-avatar-ini {
+      width: 44px; height: 44px; border-radius: 50%; border: 2px solid #0d3555;
+      background: #061828; display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700; color: #4a9ab8; flex-shrink: 0;
+    }
+
+    /* ─── SIDEBAR ─────────────────────────────────────── */
+    .sidebar {
+      width: 220px; flex-shrink: 0;
+      display: flex; flex-direction: column; gap: 8px; overflow: hidden;
+    }
+
+    /* Hero turno */
+    .sb-hero {
+      flex-shrink: 0; border-radius: 14px; overflow: hidden;
+      position: relative; padding: 14px 14px 10px;
+      background: linear-gradient(135deg, #061828 0%, #0a2540 50%, #061828 100%);
+      border: 1px solid #0d2538;
+    }
+    .sb-hero-glow {
+      position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+      width: 160px; height: 100px; border-radius: 50%;
+      background: radial-gradient(ellipse, #00c8e822, transparent 70%);
+    }
+    .sb-turno-label { font-size: 0.48rem; font-weight: 700; letter-spacing: 3px;
+                      color: #1e6a80; text-transform: uppercase; }
+    .sb-turno-val   { font-size: 1.4rem; font-weight: 900; color: #00c8e8;
+                      text-shadow: 0 0 20px #00c8e855; letter-spacing: 2px; }
+    .sb-turno-hora  { font-size: 0.55rem; color: #1e5a70; margin-top: 2px; }
+
+    /* Ranking */
+    .sb-sec-title {
+      font-size: 0.48rem; font-weight: 700; letter-spacing: 2px;
+      color: #1e5a70; text-transform: uppercase; margin-bottom: 5px; padding: 0 2px;
+    }
+    .sb-ranking {
+      flex: 1; min-height: 0; overflow-y: auto; display: flex;
+      flex-direction: column; gap: 4px;
+      scrollbar-width: thin; scrollbar-color: #0d2538 transparent;
+    }
+    .sb-ranking::-webkit-scrollbar { width: 3px; }
+    .sb-ranking::-webkit-scrollbar-thumb { background: #0d2538; }
+
+    .rk-card {
+      background: #060e18; border: 1px solid #0d2538;
+      border-radius: 10px; padding: 6px 8px; flex-shrink: 0;
+      transition: border-color 0.4s;
+    }
+    .rk-card.rk-1 { border-color: #ffd700aa; background: #0e0e00;
+                     animation: pulse-gold 2s ease-in-out infinite; }
+    .rk-card.rk-2 { border-color: #c0c0c077; background: #0a0e14; }
+    .rk-card.rk-3 { border-color: #cd7f3255; }
+    .rk-card.rk-verde    { border-color: #00877a44; }
+    .rk-card.rk-amarillo { border-color: #cc770033; }
+    .rk-card.rk-rojo     { border-color: #cc222233; }
+
+    .rk-top  { display: flex; align-items: center; gap: 6px; }
+    .rk-medal { font-size: 1rem; width: 18px; text-align: center; flex-shrink: 0; }
+    .rk-rank  { font-size: 0.65rem; font-weight: 700; color: #1e6a80;
+                width: 14px; text-align: center; flex-shrink: 0; }
+    /* Avatar en ranking */
+    .rk-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover;
+                 flex-shrink: 0; border: 1px solid #0d2538; }
+    .rk-avatar-ini { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #0d3555;
+                     background: #061828; display: flex; align-items: center;
+                     justify-content: center; font-size: 0.55rem; font-weight: 700;
+                     color: #4a9ab8; flex-shrink: 0; }
+    .rk-info  { flex: 1; min-width: 0; }
+    .rk-nombre { font-size: 0.68rem; font-weight: 700; color: #cfd8e3;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rk-1 .rk-nombre { color: #ffd700; }
+    .rk-2 .rk-nombre { color: #d0d0d0; }
+    .rk-sub   { font-size: 0.52rem; color: #1e6a80; }
+    .rk-right { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+    .rk-val   { font-size: 0.95rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .rk-val.verde    { color: #00ddc0; }
+    .rk-val.amarillo { color: #ff8800; }
+    .rk-val.rojo     { color: #ff4040; }
+    .rk-1 .rk-val   { color: #ffd700; }
+    .rk-pct  { font-size: 0.5rem; font-weight: 700; }
+    .rk-pct.verde    { color: #00ddc0; }
+    .rk-pct.amarillo { color: #ff8800; }
+    .rk-pct.rojo     { color: #ff4040; }
+
+    .rk-bar-wrap { width: 100%; height: 3px; background: #071a24; border-radius: 2px;
+                   overflow: hidden; margin-top: 5px; }
+    .rk-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s; }
+    .rk-bar-fill.verde    { background: linear-gradient(90deg, #004d30, #00c070); }
+    .rk-bar-fill.amarillo { background: linear-gradient(90deg, #5c2000, #ff8800); }
+    .rk-bar-fill.rojo     { background: linear-gradient(90deg, #550000, #ff4040); }
+    .rk-1 .rk-bar-fill    { background: linear-gradient(90deg, #8a6000, #ffd700); }
+
+    /* Piezas por línea */
+    .sb-lineas {
+      flex-shrink: 0; background: #060e18; border: 1px solid #0d2538;
+      border-radius: 12px; padding: 10px;
+    }
+    .lp-row { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+    .lp-row:last-child { margin-bottom: 0; }
+    .lp-id    { font-size: 0.65rem; font-weight: 800; color: #4a9ab8;
+                width: 18px; flex-shrink: 0; }
+    .lp-track { flex: 1; height: 11px; background: #071a24; border-radius: 6px; overflow: hidden; }
+    .lp-fill  { height: 100%; border-radius: 6px; transition: width 0.8s; }
+    .lp-fill.verde    { background: linear-gradient(90deg, #004d30, #00c070); }
+    .lp-fill.amarillo { background: linear-gradient(90deg, #5c2000, #ff8800); }
+    .lp-fill.rojo     { background: linear-gradient(90deg, #550000, #ff4040); }
+    .lp-val   { font-size: 0.6rem; font-weight: 800; font-variant-numeric: tabular-nums;
+                color: #cfd8e3; min-width: 52px; text-align: right; flex-shrink: 0; }
+    .lp-delta { font-size: 0.54rem; font-weight: 700; min-width: 40px;
+                text-align: right; flex-shrink: 0; }
+    .lp-delta.pos { color: #00ddc0; }
+    .lp-delta.neg { color: #ff4040; }
+
+    /* ─── FOOTER ──────────────────────────────────────── */
+    footer {
+      height: 16px; flex-shrink: 0; background: #030c12;
+      border-top: 1px solid #0d2538;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 16px; font-size: 0.54rem; color: #0d2538;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="h-title">Dashboard UPH · Producción en Vivo</div>
+  <div class="h-center">
+    <span class="h-logo">Hisense</span>
+    <span class="h-empresa">Electrónica de México S.A. de C.V.</span>
+  </div>
+  <div class="h-right">
+    <div class="h-turnos">
+      <span class="t-pill" id="pill-A">Turno A</span>
+      <span class="t-pill" id="pill-B">Turno B</span>
+      <span class="t-pill" id="pill-C">Turno C</span>
+    </div>
+    <div class="h-clock" id="clock">--:--:--</div>
+  </div>
+</header>
+
+<div class="main">
+  <div class="lines-grid" id="lines"></div>
+
+  <aside class="sidebar">
+    <!-- Hero turno -->
+    <div class="sb-hero">
+      <div class="sb-hero-glow"></div>
+      <div class="sb-turno-label">Turno activo</div>
+      <div class="sb-turno-val" id="sb-turno-val">—</div>
+      <div class="sb-turno-hora" id="sb-turno-hora"></div>
+    </div>
+
+    <!-- Ranking -->
+    <div class="sb-sec-title">🏅 Ranking operadores · UPH</div>
+    <div class="sb-ranking" id="sb-ranking"></div>
+
+    <!-- Piezas por línea -->
+    <div class="sb-lineas">
+      <div class="sb-sec-title">📦 Piezas acumuladas en turno</div>
+      <div id="sb-lineas-list"></div>
+    </div>
+  </aside>
+</div>
+
+<footer>
+  <span>Hisense CESUN · UPH Dashboard v2</span>
+  <span id="last-upd">actualizando…</span>
+  <span>UPH = piezas/hora · se actualiza cada 15s</span>
+</footer>
+
+<script>
+  const ST_BAR_H   = 90;   // px máx barra estación
+  const ST_MAX_PCT = 130;  // escala 130% = llena
+
+  // ── Utilidades ──────────────────────────────────────────────
+  function col(pct) {
+    if (pct == null) return 'gris';
+    return pct >= 100 ? 'verde' : pct >= 90 ? 'amarillo' : 'rojo';
+  }
+  function ini(nombre) {
+    return (nombre || '?').trim().split(' ').slice(0, 2)
+      .map(p => p[0] || '').join('').toUpperCase();
+  }
+
+  // ── Avatar en card ───────────────────────────────────────────
+  function avatarHTML(op, kpiClass) {
+    const cls = `op-avatar kpi-${kpiClass}`;
+    if (op.foto_url) {
+      const url = op.foto_url.startsWith('http') ? op.foto_url : `http://localhost:8000${op.foto_url}`;
+      return `<img class="${cls}" src="${url}" alt="${ini(op.nombre)}"
+        onerror="this.outerHTML=\`<div class='op-avatar-ini'>${ini(op.nombre)}</div>\`">`;
+    }
+    return `<img class="${cls}" src="${op._mock_foto}" alt="${ini(op.nombre)}"
+      onerror="this.outerHTML=\`<div class='op-avatar-ini'>${ini(op.nombre)}</div>\`">`;
+  }
+
+  // ── Avatar en ranking sidebar ────────────────────────────────
+  function rkAvatarHTML(op) {
+    const src = op.foto_url
+      ? (op.foto_url.startsWith('http') ? op.foto_url : `http://localhost:8000${op.foto_url}`)
+      : (op._mock_foto || '');
+    if (src) {
+      return `<img class="rk-avatar" src="${src}" alt="${ini(op.nombre)}"
+        onerror="this.outerHTML=\`<div class='rk-avatar-ini'>${ini(op.nombre)}</div>\`">`;
+    }
+    return `<div class="rk-avatar-ini">${ini(op.nombre)}</div>`;
+  }
+
+  // ── Barra horizontal KPI ─────────────────────────────────────
+  function kpiRowHTML(label, actual, meta, clase) {
+    const pct   = meta > 0 ? Math.min(actual / meta, 1.3) : 0;
+    const width = (pct * 100).toFixed(1);
+    const tPos  = meta > 0 ? ((100 / 130) * 100).toFixed(1) : null;
+    return `
+      <div class="kpi-row">
+        <span class="kpi-label">${label}</span>
+        <div class="kpi-track">
+          <div class="kpi-fill ${clase}" style="width:${width}%"></div>
+          ${tPos ? `<div class="kpi-target-line" style="left:${tPos}%"></div>` : ''}
+        </div>
+        <span class="kpi-val ${clase}">${actual.toLocaleString()}</span>
+        ${meta > 0 ? `<span class="kpi-target">/${meta.toLocaleString()}</span>` : ''}
+      </div>`;
+  }
+
+  // ── Columna de estación ──────────────────────────────────────
+  // Las barras usan % de altura relativo al contenedor (st-bar-outer flex:1)
+  // Para el target usamos CSS custom property
+  function stColHTML(st) {
+    const kpi   = st.uph_meta > 0 ? Math.round(st.uph_hora / st.uph_meta * 100) : null;
+    const c     = col(kpi);
+    // Porcentaje de llenado (escala 130% = 100% visual)
+    const fillPct  = st.uph_meta > 0 ? Math.min(st.uph_hora / st.uph_meta / 1.3 * 100, 100).toFixed(1) : 0;
+    // Target line en % desde abajo (100%/130% = 76.9%)
+    const targetPct = st.uph_meta > 0 ? '76.9' : null;
+    return `
+      <div class="st-col">
+        <span class="st-val">${Math.round(st.uph_hora)}</span>
+        <span class="st-pct ${c}">${kpi != null ? kpi + '%' : '—'}</span>
+        <div class="st-bar-outer">
+          <div class="st-bar-wrap" style="width:26px;height:100%;min-height:40px">
+            ${targetPct ? `<div class="st-target-line" style="bottom:${targetPct}%"></div>` : ''}
+            <div style="position:absolute;bottom:0;left:0;right:0;border-radius:6px;overflow:hidden;height:${fillPct}%">
+              <div class="st-bar-fill ${c}" style="height:100%"></div>
+            </div>
+          </div>
+        </div>
+        <span class="st-label">${st.estacion || '—'}</span>
+      </div>`;
+  }
+
+  // ── Columna de operador ──────────────────────────────────────
+  function opColHTML(op) {
+    const nombre2 = (op.nombre || '').split(' ').slice(0, 2).join(' ');
+    const ests    = op.estaciones || [];
+    const best    = ests.reduce((b, s) => s.uph_hora > b ? s.uph_hora : b, 0);
+    const meta    = ests[0]?.uph_meta || 0;
+    const kpi     = meta > 0 ? Math.round(best / meta * 100) : null;
+    const c       = col(kpi);
+    const stations = ests.map(st => stColHTML(st)).join('');
+    return `
+      <div class="op-col" style="flex:1;min-width:34px;max-width:60px">
+        <div class="op-stations" style="flex:1;min-height:0;width:100%;justify-content:center">${stations}</div>
+        ${avatarHTML(op, c)}
+        <span class="op-name">${nombre2}</span>
+      </div>`;
+  }
+
+  // ── Renderizar tarjeta ───────────────────────────────────────
+  function cardHTML(linea, rankMap) {
+    const uphPct  = linea.uph_meta > 0 ? Math.round(linea.uph_actual / linea.uph_meta * 100) : null;
+    const uphCol  = col(uphPct);
+    const rank    = rankMap[linea.linea] || 99;
+    const rankCls = rank <= 3 ? `rank-${rank}` : '';
+    const medal   = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : '';
+
+    const ops = (linea.operadores || []).map(op => opColHTML(op)).join('');
+    const opsSection = linea.operadores.length > 0
+      ? `<div class="card-ops">${ops}</div>`
+      : `<div class="card-ops vacia"><span class="ops-empty">Sin operadores asignados</span></div>`;
+
+    return `
+      <div class="card ${uphCol} ${rankCls}">
+        <div class="card-top">
+          <div class="card-id">
+            ${medal ? `<span class="id-medal">${medal}</span>` : ''}
+            <span class="id-linea ${uphCol}">${linea.linea}</span>
+            <span class="id-modelo">${linea.modelo || '—'}</span>
+            ${uphPct != null ? `<span class="id-kpi ${uphCol}">${uphPct}%</span>` : ''}
+          </div>
+          <div class="card-kpis">
+            ${kpiRowHTML('UPH', linea.uph_actual, linea.uph_meta, uphCol)}
+            ${kpiRowHTML('Modelo', linea.piezas_modelo, linea.plan_modelo, 'azul')}
+          </div>
+        </div>
+        ${opsSection}
+      </div>`;
+  }
+
+  // ── Render principal ─────────────────────────────────────────
+  function render(lineas) {
+    const sorted = [...lineas]
+      .map(l => ({ linea: l.linea, pct: l.uph_meta > 0 ? l.uph_actual / l.uph_meta : 0 }))
+      .sort((a, b) => b.pct - a.pct);
+    const rankMap = {};
+    sorted.forEach((l, i) => { rankMap[l.linea] = i + 1; });
+    document.getElementById('lines').innerHTML = lineas.map(l => cardHTML(l, rankMap)).join('');
+  }
+
+  // ── Render sidebar ───────────────────────────────────────────
+  function renderSidebar(lineas) {
+    const h = new Date().getHours();
+    const turno = h >= 6 && h < 14 ? 'A' : h >= 14 && h < 22 ? 'B' : 'C';
+    const turnoNames = { A: 'TURNO A', B: 'TURNO B', C: 'TURNO C' };
+    const turnoHoras = { A: '06:00 – 14:00', B: '14:00 – 22:00', C: '22:00 – 06:00' };
+    document.getElementById('sb-turno-val').textContent  = turnoNames[turno];
+    document.getElementById('sb-turno-hora').textContent = turnoHoras[turno];
+
+    // Lista plana de operadores
+    const ops = [];
+    lineas.forEach(linea => {
+      (linea.operadores || []).forEach(op => {
+        const ests = op.estaciones || [];
+        const best = ests.reduce((b, s) => s.uph_hora > b ? s.uph_hora : b, 0);
+        const meta = ests[0]?.uph_meta || 0;
+        const kpi  = meta > 0 ? Math.round(best / meta * 100) : null;
+        ops.push({ ...op, linea: linea.linea, modelo: linea.modelo, uph: Math.round(best), meta, kpi });
+      });
+    });
+    ops.sort((a, b) => b.uph - a.uph);
+    const maxUph = ops[0]?.uph || 1;
+
+    document.getElementById('sb-ranking').innerHTML = ops.slice(0, 12).map((op, i) => {
+      const rank    = i + 1;
+      const medal   = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null;
+      const c       = col(op.kpi);
+      const bordCls = rank <= 3 ? `rk-${rank}` : `rk-${c}`;
+      const barW    = Math.round(op.uph / maxUph * 100);
+      const nombre2 = (op.nombre || '').split(' ').slice(0, 2).join(' ');
+      return `
+        <div class="rk-card ${bordCls}">
+          <div class="rk-top">
+            ${medal ? `<span class="rk-medal">${medal}</span>` : `<span class="rk-rank">${rank}</span>`}
+            ${rkAvatarHTML(op)}
+            <div class="rk-info">
+              <div class="rk-nombre">${nombre2}</div>
+              <div class="rk-sub">${op.linea} · ${op.modelo || '—'}</div>
+            </div>
+            <div class="rk-right">
+              <span class="rk-val ${rank <= 3 ? '' : c}">${op.uph}</span>
+              ${op.kpi != null ? `<span class="rk-pct ${c}">${op.kpi}%</span>` : ''}
+            </div>
+          </div>
+          <div class="rk-bar-wrap">
+            <div class="rk-bar-fill ${rank === 1 ? '' : c}" style="width:${barW}%"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    // Piezas por línea
+    const maxPzs = Math.max(...lineas.map(l => l.piezas_modelo || 0), 1);
+    document.getElementById('sb-lineas-list').innerHTML = lineas.map(linea => {
+      const pct = linea.plan_modelo > 0
+        ? Math.min(Math.round(linea.piezas_modelo / linea.plan_modelo * 100), 100) : 0;
+      const delta    = linea.piezas_modelo - (linea.plan_modelo || 0);
+      const deltaTxt = delta >= 0 ? `↑ +${delta.toLocaleString()}` : `↓ ${delta.toLocaleString()}`;
+      const c = col(pct >= 100 ? 100 : pct >= 90 ? 95 : 0);
+      return `
+        <div class="lp-row">
+          <span class="lp-id">${linea.linea}</span>
+          <div class="lp-track"><div class="lp-fill ${c}" style="width:${pct}%"></div></div>
+          <span class="lp-val">${(linea.piezas_modelo || 0).toLocaleString()} pzs</span>
+          <span class="lp-delta ${delta >= 0 ? 'pos' : 'neg'}">${deltaTxt}</span>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Datos mock con fotos ficticias ───────────────────────────
+  // randomuser.me: portraits/men/N.jpg y portraits/women/N.jpg
+  const P = (g, n) => `https://randomuser.me/api/portraits/${g}/${n}.jpg`;
+  const MOCK = { lineas: [
+    {
+      linea: 'L1', modelo: '43A45NV', uph_actual: 233, uph_meta: 250,
+      piezas_modelo: 2018, plan_modelo: 2500,
+      operadores: [
+        { num_empleado:'001', nombre:'Ana García',    foto_url:null, _mock_foto:P('women',12),
+          estaciones:[{estacion:'E01',uph_hora:58,uph_meta:62,kpi_pct:94}] },
+        { num_empleado:'002', nombre:'Luis Torres',   foto_url:null, _mock_foto:P('men',34),
+          estaciones:[{estacion:'E02',uph_hora:45,uph_meta:62,kpi_pct:73}] },
+        { num_empleado:'003', nombre:'María Ruiz',    foto_url:null, _mock_foto:P('women',5),
+          estaciones:[
+            {estacion:'E03',uph_hora:40,uph_meta:62,kpi_pct:65},
+            {estacion:'E04',uph_hora:52,uph_meta:62,kpi_pct:84}
+          ]},
+        { num_empleado:'004', nombre:'Diego Mora',    foto_url:null, _mock_foto:P('men',8),
+          estaciones:[{estacion:'E05',uph_hora:38,uph_meta:62,kpi_pct:61}] },
+        { num_empleado:'005', nombre:'Norma López',   foto_url:null, _mock_foto:P('women',22),
+          estaciones:[{estacion:'E06',uph_hora:62,uph_meta:62,kpi_pct:100}] },
+      ]
+    },
+    {
+      linea: 'L2', modelo: '50Q65T', uph_actual: 452, uph_meta: 400,
+      piezas_modelo: 3200, plan_modelo: 3200,
+      operadores: [
+        { num_empleado:'006', nombre:'Juan López',    foto_url:null, _mock_foto:P('men',52),
+          estaciones:[{estacion:'E01',uph_hora:92,uph_meta:80,kpi_pct:115}] },
+        { num_empleado:'007', nombre:'Sara Díaz',     foto_url:null, _mock_foto:P('women',38),
+          estaciones:[{estacion:'E02',uph_hora:87,uph_meta:80,kpi_pct:109}] },
+        { num_empleado:'008', nombre:'Pedro Soto',    foto_url:null, _mock_foto:P('men',17),
+          estaciones:[{estacion:'E03',uph_hora:94,uph_meta:80,kpi_pct:118}] },
+        { num_empleado:'019', nombre:'Lucía Campos',  foto_url:null, _mock_foto:P('women',61),
+          estaciones:[{estacion:'E04',uph_hora:85,uph_meta:80,kpi_pct:106}] },
+      ]
+    },
+    {
+      linea: 'L3', modelo: '55A70TH', uph_actual: 155, uph_meta: 350,
+      piezas_modelo: 900, plan_modelo: 2800,
+      operadores: [
+        { num_empleado:'009', nombre:'Rosa Méndez',   foto_url:null, _mock_foto:P('women',44),
+          estaciones:[{estacion:'E01',uph_hora:35,uph_meta:70,kpi_pct:50}] },
+        { num_empleado:'010', nombre:'Tomás Ríos',    foto_url:null, _mock_foto:P('men',63),
+          estaciones:[{estacion:'E02',uph_hora:28,uph_meta:70,kpi_pct:40}] },
+        { num_empleado:'020', nombre:'Adriana Vela',  foto_url:null, _mock_foto:P('women',71),
+          estaciones:[{estacion:'E03',uph_hora:31,uph_meta:70,kpi_pct:44}] },
+      ]
+    },
+    {
+      linea: 'L4', modelo: '32LM5710', uph_actual: 298, uph_meta: 300,
+      piezas_modelo: 2100, plan_modelo: 2400,
+      operadores: [
+        { num_empleado:'011', nombre:'Carlos Vega',   foto_url:null, _mock_foto:P('men',28),
+          estaciones:[{estacion:'E01',uph_hora:75,uph_meta:75,kpi_pct:100}] },
+        { num_empleado:'012', nombre:'Paola Cruz',    foto_url:null, _mock_foto:P('women',33),
+          estaciones:[{estacion:'E02',uph_hora:74,uph_meta:75,kpi_pct:99}] },
+        { num_empleado:'013', nombre:'Elena Núñez',   foto_url:null, _mock_foto:P('women',18),
+          estaciones:[{estacion:'E03',uph_hora:73,uph_meta:75,kpi_pct:97}] },
+        { num_empleado:'014', nombre:'José Flores',   foto_url:null, _mock_foto:P('men',41),
+          estaciones:[{estacion:'E04',uph_hora:76,uph_meta:75,kpi_pct:101}] },
+      ]
+    },
+    {
+      linea: 'L5', modelo: '43UP75', uph_actual: 401, uph_meta: 400,
+      piezas_modelo: 3100, plan_modelo: 3200,
+      operadores: [
+        { num_empleado:'015', nombre:'Marco Silva',   foto_url:null, _mock_foto:P('men',55),
+          estaciones:[{estacion:'E01',uph_hora:80,uph_meta:80,kpi_pct:100}] },
+        { num_empleado:'016', nombre:'Laura Peña',    foto_url:null, _mock_foto:P('women',27),
+          estaciones:[{estacion:'E02',uph_hora:83,uph_meta:80,kpi_pct:104}] },
+        { num_empleado:'017', nombre:'Ricardo Leal',  foto_url:null, _mock_foto:P('men',71),
+          estaciones:[{estacion:'E03',uph_hora:79,uph_meta:80,kpi_pct:99}] },
+        { num_empleado:'021', nombre:'Sofía Ramos',   foto_url:null, _mock_foto:P('women',48),
+          estaciones:[{estacion:'E04',uph_hora:82,uph_meta:80,kpi_pct:103}] },
+      ]
+    },
+    {
+      linea: 'L6', modelo: '65NANO90', uph_actual: 210, uph_meta: 400,
+      piezas_modelo: 1400, plan_modelo: 3200,
+      operadores: [
+        { num_empleado:'018', nombre:'Isabel Reyes',  foto_url:null, _mock_foto:P('women',56),
+          estaciones:[{estacion:'E01',uph_hora:42,uph_meta:80,kpi_pct:53}] },
+        { num_empleado:'022', nombre:'Fernando Oca',  foto_url:null, _mock_foto:P('men',82),
+          estaciones:[{estacion:'E02',uph_hora:38,uph_meta:80,kpi_pct:48}] },
+        { num_empleado:'023', nombre:'Gabriela Mora', foto_url:null, _mock_foto:P('women',9),
+          estaciones:[
+            {estacion:'E03',uph_hora:40,uph_meta:80,kpi_pct:50},
+            {estacion:'E04',uph_hora:44,uph_meta:80,kpi_pct:55}
+          ]},
+      ]
+    },
+  ]};
+
+  function fetchData() {
+    render(MOCK.lineas);
+    renderSidebar(MOCK.lineas);
+    document.getElementById('last-upd').textContent =
+      `MOCKUP · ${new Date().toLocaleTimeString('es-MX')}`;
+  }
+
+  // ── Reloj + turno ────────────────────────────────────────────
+  function tick() {
+    const now = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    document.getElementById('clock').textContent =
+      `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const h = now.getHours();
+    const turno = h >= 6 && h < 14 ? 'A' : h >= 14 && h < 22 ? 'B' : 'C';
+    ['A','B','C'].forEach(x => {
+      document.getElementById(`pill-${x}`).className = `t-pill${turno===x?` act-${x}`:''}`;
+    });
+  }
+
+  tick();
+  setInterval(tick, 1000);
+  fetchData();
+  setInterval(fetchData, 15000);
+</script>
+</body>
+</html>
