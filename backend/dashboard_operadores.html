@@ -1,284 +1,613 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Operadores — Hisense AMI</title>
-<style>
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body {
-  font-family: 'Segoe UI', sans-serif;
-  background: #070d1a;
-  color: #e0e0e0;
-  min-height: 100vh;
-  padding: 0;
-}
+  <meta charset="UTF-8" />
+  <title>Dashboard UPH · Hisense AMI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: #040f0e; color: #e0f7f5;
+      font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden;
+    }
+    body { display: flex; flex-direction: column; }
 
-/* ── Header ── */
-header {
-  background: #0d1b3e;
-  border-bottom: 2px solid #1565C0;
-  padding: 14px 28px;
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-header .logo { font-size: 1.6rem; font-weight: 800; color: #42A5F5; letter-spacing: 2px; }
-header .subtitulo { font-size: 0.85rem; color: #7090b0; }
-#reloj {
-  margin-left: auto;
-  font-size: 1.3rem;
-  font-weight: 700;
-  color: #42A5F5;
-  font-variant-numeric: tabular-nums;
-}
-#fecha { font-size: 0.8rem; color: #7090b0; text-align: right; }
+    /* ─── HEADER ─────────────────────────────────────── */
+    header {
+      height: 50px; flex-shrink: 0;
+      display: flex; align-items: center;
+      padding: 0 16px; position: relative;
+      background: linear-gradient(90deg, #061412, #061412, #061412);
+      border-bottom: 1px solid #0a2e2a;
+    }
+    .h-logo-wrap { display: flex; align-items: center; gap: 10px; }
+    .h-logo  { font-size: 1.7rem; font-weight: 900; letter-spacing: 3px;
+               color: #00c8b8; text-shadow: 0 0 28px #00c8b888; }
+    .h-sep   { width: 1px; height: 26px; background: #0a2e2a; margin: 0 10px; }
+    .h-title { font-size: 0.62rem; font-weight: 600; color: #00856e;
+               letter-spacing: 2px; text-transform: uppercase; }
+    .h-center {
+      position: absolute; left: 50%; transform: translateX(-50%);
+      display: flex; flex-direction: column; align-items: center; gap: 0;
+    }
+    .h-empresa { font-size: 0.7rem; font-weight: 500; color: #00856e; margin-top: 1px; }
+    .h-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
+    .h-turnos { display: flex; gap: 6px; }
+    .t-pill { padding: 3px 14px; border-radius: 16px; font-size: 0.72rem; font-weight: 700;
+              border: 1px solid #0a2e2a; color: #1a4040; background: #061412; transition: all 0.4s; }
+    .t-pill.act-A { background: #00877a; color: #fff; border-color: #00c8b8; box-shadow: 0 0 14px #00c8b844; }
+    .t-pill.act-B { background: #005544; color: #69f0ae; border-color: #00aa88; }
+    .t-pill.act-C { background: #003322; color: #b2dfdb; border-color: #008866; }
+    .h-clock { font-size: 1.65rem; font-weight: 200; letter-spacing: 3px;
+               color: #00c8b8; font-variant-numeric: tabular-nums;
+               text-shadow: 0 0 28px #00c8b844; }
+    /* Monitor SVG */
+    .h-monitor { width: 54px; height: 44px; flex-shrink: 0; }
+    .h-monitor svg { width: 100%; height: 100%; }
 
-/* ── Estado conexión ── */
-#conexion {
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  font-weight: 600;
-  background: #1a2a1a;
-  color: #66BB6A;
-  border: 1px solid #2e7d32;
-}
-#conexion.err {
-  background: #2a1a1a;
-  color: #EF5350;
-  border-color: #c62828;
-}
+    /* ─── LAYOUT ─────────────────────────────────────── */
+    .main { flex: 1; min-height: 0; padding: 10px; display: flex; gap: 10px; }
+    .lines-grid {
+      flex: 1; min-width: 0; height: 100%;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      grid-template-rows: repeat(2, 1fr);
+      gap: 10px;
+    }
 
-/* ── Main ── */
-main { padding: 20px 24px; }
+    /* ─── CARD ───────────────────────────────────────── */
+    .card {
+      background: #061412; border: 1px solid #0a2e2a;
+      border-radius: 16px; display: flex; flex-direction: column;
+      overflow: hidden; transition: border-color 0.5s, box-shadow 0.5s;
+    }
+    .card.verde    { border-color: #00877a99; box-shadow: 0 0 22px #00877a18; }
+    .card.amarillo { border-color: #cc770066; box-shadow: 0 0 22px #cc770012; }
+    .card.rojo     { border-color: #cc222266; box-shadow: 0 0 22px #cc222214; }
+    .card.rank-1   { border-color: #ffd700cc !important; border-width: 2px;
+                     animation: pulse-gold 2s ease-in-out infinite; }
+    .card.rank-2   { border-color: #c0c0c099 !important; box-shadow: 0 0 30px #c0c0c033 !important; }
+    .card.rank-3   { border-color: #cd7f3288 !important; }
+    @keyframes pulse-gold {
+      0%,100% { box-shadow: 0 0 25px #ffd70066, 0 0 50px #ffd70022; }
+      50%     { box-shadow: 0 0 60px #ffd700bb, 0 0 100px #ffd70055; }
+    }
 
-.sin-datos {
-  text-align: center;
-  padding: 80px 20px;
-  color: #37474F;
-  font-size: 1.1rem;
-}
+    /* ── Card top ── */
+    .card-top {
+      display: flex; flex-direction: row; align-items: center;
+      padding: 10px 4px 16px 10px; gap: 8px; flex-shrink: 0;
+      border-bottom: 1px solid #0a2e2a;
+    }
+    .card-id { display: flex; flex-direction: column; justify-content: center;
+               min-width: 68px; flex-shrink: 0; }
+    .id-top   { display: flex; align-items: baseline; gap: 4px; }
+    .id-medal { font-size: 1rem; }
+    .id-linea { font-size: 2rem; font-weight: 900; line-height: 1; letter-spacing: -1px; }
+    .id-linea.verde    { color: #00c8b8; text-shadow: 0 0 20px #00c8b855; }
+    .id-linea.amarillo { color: #ff8c00; text-shadow: 0 0 16px #ff8c0044; }
+    .id-linea.rojo     { color: #ff5555; }
+    .id-linea.gris     { color: #2e6b3e; }
+    .id-modelo { font-size: 0.58rem; color: #00856e; letter-spacing: 1px;
+                 text-transform: uppercase; margin-top: 2px; }
+    .card-kpis { flex: 1; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
 
-/* ── Sección de línea ── */
-.linea-seccion { margin-bottom: 28px; }
-.linea-titulo {
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 3px;
-  color: #42A5F5;
-  text-transform: uppercase;
-  margin-bottom: 12px;
-  padding-bottom: 6px;
-  border-bottom: 1px solid #1565C022;
-}
+    /* ── Barras KPI ── */
+    .kpi-row { display: flex; align-items: stretch; }
+    .kpi-track {
+      flex: 1; height: 38px; background: #071a17; border-radius: 19px;
+      position: relative; overflow: visible;
+      box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
+    }
+    .kpi-track::before {
+      content: ''; position: absolute; inset: 0; border-radius: 19px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.025) 0%, transparent 60%);
+    }
+    .kpi-fill {
+      height: 100%; border-radius: 19px; min-width: 8px;
+      transition: width 1s cubic-bezier(.4,0,.2,1);
+      position: relative; overflow: hidden;
+    }
+    .kpi-fill::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 42%; border-radius: 19px 19px 0 0; background: rgba(255,255,255,0.18);
+    }
+    .kpi-fill::after {
+      content: ''; position: absolute; right: -2px; top: 15%; bottom: 15%;
+      width: 22px; border-radius: 50%;
+      background: radial-gradient(ellipse at right, rgba(255,255,255,0.55), transparent 70%);
+    }
+    .kpi-fill.verde    { background: linear-gradient(90deg, #003d2a 0%, #00877a 55%, #00c8b8 100%);
+                         box-shadow: 0 0 20px #00877a55, 0 2px 8px rgba(0,0,0,0.5); }
+    .kpi-fill.amarillo { background: linear-gradient(90deg, #5c2800 0%, #d46000 60%, #ff8c00 100%);
+                         box-shadow: 0 0 16px #ff8c0044; }
+    .kpi-fill.rojo     { background: linear-gradient(90deg, #550000 0%, #cc2020 60%, #ff4545 100%);
+                         animation: pulso-rojo 2s ease-in-out infinite; }
+    .kpi-fill.azul     { background: linear-gradient(90deg, #003a2a 0%, #00877a 55%, #00c8b8 100%);
+                         box-shadow: 0 0 16px #00877a44; }
+    @keyframes pulso-rojo { 0%,100%{filter:brightness(0.85);} 50%{filter:brightness(1.1);} }
+    .kpi-inner-label {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      font-size: 0.48rem; font-weight: 700; letter-spacing: 1.5px;
+      text-transform: uppercase; color: rgba(255,255,255,0.4); z-index: 3;
+    }
+    .kpi-fill-val {
+      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+      display: flex; align-items: baseline; gap: 5px; z-index: 3; white-space: nowrap;
+    }
+    .kpi-fill-num { font-size: 0.95rem; font-weight: 900; font-variant-numeric: tabular-nums;
+                    color: rgba(255,255,255,0.97); text-shadow: 0 1px 6px rgba(0,0,0,0.7); }
+    .kpi-fill-pct { font-size: 0.7rem; font-weight: 800; color: rgba(255,255,255,0.7); }
+    .kpi-target-end {
+      position: absolute; right: 0; top: -6px; bottom: -6px; width: 3px;
+      background: rgba(255,255,255,0.65); border-radius: 2px; z-index: 5;
+      box-shadow: 0 0 8px rgba(255,255,255,0.55);
+    }
+    .kpi-target-end-label {
+      position: absolute; right: 5px; bottom: -18px;
+      font-size: 0.48rem; font-weight: 700; color: rgba(255,255,255,0.5); white-space: nowrap;
+    }
 
-/* ── Grid de operadores ── */
-.ops-grid {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
+    /* ── Operadores — zona scrollable ── */
+    .card-ops {
+      flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
+      display: flex; flex-direction: row; align-items: stretch;
+      padding: 8px 10px; gap: 7px;
+      scrollbar-width: thin; scrollbar-color: #0a2e2a transparent;
+    }
+    .card-ops::-webkit-scrollbar { height: 4px; }
+    .card-ops::-webkit-scrollbar-thumb { background: #0a2e2a; border-radius: 2px; }
+    .card-ops.vacia { align-items: center; justify-content: center; }
+    .ops-empty { color: #0a3530; font-size: 0.75rem; }
 
-/* ── Card operador ── */
-.op-card {
-  background: linear-gradient(145deg, #0d1b3e, #091228);
-  border: 1px solid #1565C033;
-  border-radius: 14px;
-  padding: 16px 14px 12px;
-  width: 140px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  animation: fadeIn 0.4s ease;
-  transition: border-color 0.3s;
-}
-.op-card:hover { border-color: #1565C0; }
+    /* ── Mini-card por operador (Opción B) ── */
+    .op-card {
+      display: flex; flex-direction: column; align-items: center;
+      flex-shrink: 0; gap: 5px;
+      background: #040f0e;
+      border-radius: 12px;
+      border: 1px solid #0d2e29;
+      padding: 10px 8px 8px;
+      min-width: 80px;
+      transition: border-color 0.4s, box-shadow 0.4s;
+    }
+    .op-card.kpi-verde    { border-color: #00877a99; box-shadow: 0 0 14px #00877a22; }
+    .op-card.kpi-amarillo { border-color: #cc770066; box-shadow: 0 0 10px #cc770011; }
+    .op-card.kpi-rojo     { border-color: #cc222266; box-shadow: 0 0 10px #cc222211; }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
+    /* Avatar dentro de la mini-card */
+    .op-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
+                 flex-shrink: 0; border: 2px solid #0a2e2a; }
+    .op-avatar.kpi-verde    { border-color: #00c8b8; box-shadow: 0 0 10px #00c8b855; }
+    .op-avatar.kpi-amarillo { border-color: #ff8800aa; }
+    .op-avatar.kpi-rojo     { border-color: #ff4040aa; }
+    .op-avatar-ini { width: 48px; height: 48px; border-radius: 50%;
+                     border: 2px solid #0a2e2a; background: #071a17;
+                     display: flex; align-items: center; justify-content: center;
+                     font-size: 0.75rem; font-weight: 800; color: #00c8b8; flex-shrink: 0; }
+    .op-name { font-size: 0.58rem; font-weight: 700; color: #7ecdc4; text-align: center;
+               white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+               letter-spacing: 0.5px; }
 
-/* ── Foto / Avatar ── */
-.foto-wrap {
-  position: relative;
-  width: 80px;
-  height: 80px;
-}
-.foto-wrap img {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #1565C0;
-  display: block;
-}
-.avatar-iniciales {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  background: #1565C033;
-  border: 2px solid #1565C0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #90CAF9;
-}
+    /* Barras de estaciones dentro de la card */
+    .op-stations { display: flex; flex-direction: row; gap: 6px;
+                   align-items: stretch; flex: 1; min-height: 0;
+                   width: 100%; justify-content: center; }
+    .st-col { display: flex; flex-direction: column; align-items: center;
+              gap: 3px; width: 30px; }
+    .st-bar-outer { flex: 1; min-height: 30px; display: flex;
+                    flex-direction: column; align-items: center; justify-content: flex-end; }
+    .st-bar-wrap { width: 22px; position: relative; background: #071a17;
+                   border-radius: 6px; overflow: visible; }
+    .st-bar-fill { width: 100%; border-radius: 6px; min-height: 3px; transition: height 0.9s cubic-bezier(.4,0,.2,1); }
+    .st-bar-fill.verde    { background: linear-gradient(0deg, #003d2a, #00877a, #00c8b8);
+                            box-shadow: 0 0 8px #00c8b833; }
+    .st-bar-fill.amarillo { background: linear-gradient(0deg, #5c2000, #cc5500, #ff8800); }
+    .st-bar-fill.rojo     { background: linear-gradient(0deg, #550000, #bb1111, #ff4040);
+                            animation: pulso-rojo 2s ease-in-out infinite; }
+    .st-bar-fill.gris     { background: #1a3a35; }
+    .st-target-line {
+      position: absolute; left: -4px; right: -4px; height: 2px;
+      background: rgba(255,255,255,0.6); border-radius: 1px; z-index: 2;
+      box-shadow: 0 0 5px rgba(255,255,255,0.35);
+    }
+    .st-val   { font-size: 0.62rem; font-weight: 900; font-variant-numeric: tabular-nums;
+                color: #e0f7f5; line-height: 1; }
+    .st-pct   { font-size: 0.5rem; font-weight: 700; line-height: 1; }
+    .st-pct.verde    { color: #00c8b8; }
+    .st-pct.amarillo { color: #ff8800; }
+    .st-pct.rojo     { color: #ff4040; }
+    .st-pct.gris     { color: #1a5048; }
+    .st-label { font-size: 0.48rem; color: #1a7060; font-weight: 600; letter-spacing: 0.5px; }
 
-/* Badge turno */
-.turno-badge {
-  position: absolute;
-  bottom: 0;
-  right: 0;
-  background: #1565C0;
-  color: #fff;
-  font-size: 0.6rem;
-  font-weight: 800;
-  border-radius: 8px;
-  padding: 2px 5px;
-  border: 1px solid #0d47a1;
-}
+    /* ─── SIDEBAR ────────────────────────────────────── */
+    .sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
+    .sb-hero {
+      flex-shrink: 0; border-radius: 14px; padding: 14px 14px 10px;
+      background: linear-gradient(135deg, #061412 0%, #071e0e 50%, #061412 100%);
+      border: 1px solid #0a2e2a; position: relative;
+    }
+    .sb-hero-glow { position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+                    width: 160px; height: 100px; border-radius: 50%;
+                    background: radial-gradient(ellipse, #00c8b820, transparent 70%); }
+    .sb-turno-label { font-size: 0.48rem; font-weight: 700; letter-spacing: 3px;
+                      color: #00856e; text-transform: uppercase; }
+    .sb-turno-val   { font-size: 1.4rem; font-weight: 900; color: #00c8b8;
+                      text-shadow: 0 0 20px #00c8b855; letter-spacing: 2px; }
+    .sb-turno-hora  { font-size: 0.55rem; color: #00856e; margin-top: 2px; }
+    .sb-sec-title   { font-size: 0.48rem; font-weight: 700; letter-spacing: 2px;
+                      color: #00856e; text-transform: uppercase; margin-bottom: 5px; padding: 0 2px; }
+    .sb-ranking {
+      flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 4px;
+      scrollbar-width: thin; scrollbar-color: #0a2e2a transparent;
+    }
+    .sb-ranking::-webkit-scrollbar { width: 3px; }
+    .sb-ranking::-webkit-scrollbar-thumb { background: #0a2e2a; }
+    .rk-card { background: #061412; border: 1px solid #0a2e2a;
+               border-radius: 10px; padding: 6px 8px; flex-shrink: 0; transition: border-color 0.4s; }
+    .rk-card.rk-1 { border-color: #ffd700aa; background: #0a0e00; animation: pulse-gold 2s ease-in-out infinite; }
+    .rk-card.rk-2 { border-color: #c0c0c077; background: #080e0a; }
+    .rk-card.rk-3 { border-color: #cd7f3255; }
+    .rk-card.rk-verde    { border-color: #00877a44; }
+    .rk-card.rk-amarillo { border-color: #cc770033; }
+    .rk-card.rk-rojo     { border-color: #cc222233; }
+    .rk-top    { display: flex; align-items: center; gap: 6px; }
+    .rk-medal  { font-size: 1rem; width: 18px; text-align: center; flex-shrink: 0; }
+    .rk-rank   { font-size: 0.65rem; font-weight: 700; color: #00856e; width: 14px; text-align: center; flex-shrink: 0; }
+    .rk-avatar { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; border: 1px solid #0a2e2a; }
+    .rk-avatar-ini { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #0a2e2a;
+                     background: #061412; display: flex; align-items: center; justify-content: center;
+                     font-size: 0.55rem; font-weight: 700; color: #00c8b8; flex-shrink: 0; }
+    .rk-info   { flex: 1; min-width: 0; }
+    .rk-nombre { font-size: 0.68rem; font-weight: 700; color: #b2dfdb;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .rk-1 .rk-nombre { color: #ffd700; }
+    .rk-2 .rk-nombre { color: #d0d0d0; }
+    .rk-sub    { font-size: 0.52rem; color: #00856e; }
+    .rk-right  { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; }
+    .rk-val    { font-size: 0.95rem; font-weight: 900; font-variant-numeric: tabular-nums; }
+    .rk-val.verde    { color: #00c8b8; }
+    .rk-val.amarillo { color: #ff8800; }
+    .rk-val.rojo     { color: #ff4040; }
+    .rk-1 .rk-val   { color: #ffd700; }
+    .rk-pct  { font-size: 0.5rem; font-weight: 700; }
+    .rk-pct.verde { color: #00c8b8; } .rk-pct.amarillo { color: #ff8800; } .rk-pct.rojo { color: #ff4040; }
+    .rk-bar-wrap { width: 100%; height: 3px; background: #071a17; border-radius: 2px; overflow: hidden; margin-top: 5px; }
+    .rk-bar-fill { height: 100%; border-radius: 2px; transition: width 0.8s; }
+    .rk-bar-fill.verde    { background: linear-gradient(90deg, #003d2a, #00c8b8); }
+    .rk-bar-fill.amarillo { background: linear-gradient(90deg, #5c2000, #ff8800); }
+    .rk-bar-fill.rojo     { background: linear-gradient(90deg, #550000, #ff4040); }
+    .rk-1 .rk-bar-fill    { background: linear-gradient(90deg, #8a6000, #ffd700); }
+    .sb-lineas { flex-shrink: 0; background: #061412; border: 1px solid #0a2e2a; border-radius: 12px; padding: 10px; }
+    .lp-row  { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; }
+    .lp-row:last-child { margin-bottom: 0; }
+    .lp-id   { font-size: 0.65rem; font-weight: 800; color: #00c8b8; width: 18px; flex-shrink: 0; }
+    .lp-track { flex: 1; height: 11px; background: #071a17; border-radius: 6px; overflow: hidden; }
+    .lp-fill  { height: 100%; border-radius: 6px; transition: width 0.8s; }
+    .lp-fill.verde    { background: linear-gradient(90deg, #003d2a, #00c8b8); }
+    .lp-fill.amarillo { background: linear-gradient(90deg, #5c2000, #ff8800); }
+    .lp-fill.rojo     { background: linear-gradient(90deg, #550000, #ff4040); }
+    .lp-val   { font-size: 0.6rem; font-weight: 800; font-variant-numeric: tabular-nums;
+                color: #b2dfdb; min-width: 52px; text-align: right; flex-shrink: 0; }
+    .lp-delta { font-size: 0.54rem; font-weight: 700; min-width: 40px; text-align: right; flex-shrink: 0; }
+    .lp-delta.pos { color: #00c8b8; } .lp-delta.neg { color: #ff4040; }
 
-/* ── Nombre ── */
-.op-nombre {
-  font-size: 0.65rem;
-  font-weight: 600;
-  color: #cfd8e3;
-  text-align: center;
-  line-height: 1.3;
-  max-height: 2.6em;
-  overflow: hidden;
-  word-break: break-word;
-}
-.op-num {
-  font-size: 0.6rem;
-  color: #42A5F5;
-  font-weight: 500;
-}
-
-/* ── Footer estado ── */
-footer {
-  text-align: center;
-  padding: 10px;
-  font-size: 0.7rem;
-  color: #263238;
-}
-</style>
+    /* ─── FOOTER ─────────────────────────────────────── */
+    footer {
+      height: 16px; flex-shrink: 0; background: #071a17;
+      border-top: 1px solid #0a2e2a;
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 0 16px; font-size: 0.54rem; color: #0a2e2a;
+    }
+    .ft-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px;
+              background: #00c8b8; box-shadow: 0 0 6px #00c8b8; }
+    .ft-dot.err { background: #ff4040; box-shadow: 0 0 6px #ff4040; }
+  </style>
 </head>
 <body>
 
 <header>
-  <div>
-    <div class="logo">HISENSE AMI</div>
-    <div class="subtitulo">Operadores asignados hoy</div>
+  <div class="h-logo-wrap">
+    <span class="h-title">Dashboard UPH · Producción en Vivo</span>
   </div>
-  <span id="conexion">● EN VIVO</span>
-  <div style="margin-left:auto; text-align:right;">
-    <div id="reloj">--:--:--</div>
-    <div id="fecha">--</div>
+  <div class="h-center">
+    <span class="h-logo">Hisense</span>
+    <span class="h-empresa">Electrónica de México S.A. de C.V.</span>
+  </div>
+  <div class="h-right">
+    <div class="h-turnos">
+      <span class="t-pill" id="pill-A">Turno A</span>
+      <span class="t-pill" id="pill-B">Turno B</span>
+      <span class="t-pill" id="pill-C">Turno C</span>
+    </div>
+    <div class="h-clock" id="clock">--:--:--</div>
+    <div class="h-monitor">
+      <svg viewBox="0 0 54 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="2" width="50" height="32" rx="3" fill="#071a17" stroke="#00c8b8" stroke-width="1.5"/>
+        <rect x="5" y="5" width="44" height="26" rx="2" fill="#071a17"/>
+        <rect x="8" y="10" width="22" height="4" rx="2" fill="#00c8b8" opacity="0.7"/>
+        <rect x="8" y="16" width="16" height="4" rx="2" fill="#ff8800" opacity="0.6"/>
+        <rect x="8" y="22" width="28" height="4" rx="2" fill="#00c8b8" opacity="0.8"/>
+        <line x1="32" y1="8" x2="32" y2="30" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,2"/>
+        <path d="M20 34 L24 40 L30 40 L34 34" fill="none" stroke="#00c8b8" stroke-width="1.2" opacity="0.6"/>
+        <rect x="19" y="39" width="16" height="2" rx="1" fill="#00c8b8" opacity="0.4"/>
+        <circle cx="27" cy="35" r="1" fill="#00c8b8" opacity="0.9">
+          <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
+        </circle>
+      </svg>
+    </div>
   </div>
 </header>
 
-<main id="main">
-  <div class="sin-datos">Cargando operadores...</div>
-</main>
+<div class="main">
+  <div class="lines-grid" id="lines"></div>
+  <aside class="sidebar">
+    <div class="sb-hero">
+      <div class="sb-hero-glow"></div>
+      <div class="sb-turno-label">Turno activo</div>
+      <div class="sb-turno-val" id="sb-turno-val">—</div>
+      <div class="sb-turno-hora" id="sb-turno-hora"></div>
+    </div>
+    <div class="sb-sec-title">🏅 Ranking operadores · UPH</div>
+    <div class="sb-ranking" id="sb-ranking"></div>
+    <div class="sb-lineas">
+      <div class="sb-sec-title">📦 Piezas acumuladas en turno</div>
+      <div id="sb-lineas-list"></div>
+    </div>
+  </aside>
+</div>
 
-<footer id="footer">Actualización automática cada 10 segundos</footer>
+<footer>
+  <span><span class="ft-dot" id="ft-dot"></span>Hisense AMI · Dashboard UPH</span>
+  <span id="last-upd">conectando…</span>
+  <span>UPH = piezas/hora · actualiza cada 15s</span>
+</footer>
 
 <script>
-const API = window.location.origin;
-const mainEl = document.getElementById('main');
-const cnxEl  = document.getElementById('conexion');
-const footEl = document.getElementById('footer');
+  const API       = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+  const ST_MAX    = 130;
 
-// ── Reloj ──
-function tick() {
-  const now = new Date();
-  document.getElementById('reloj').textContent = now.toLocaleTimeString('es-MX');
-  document.getElementById('fecha').textContent =
-    now.toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-}
-tick();
-setInterval(tick, 1000);
-
-// ── Iniciales ──
-function iniciales(nombre) {
-  const p = (nombre || '?').trim().split(' ');
-  return ((p[0]?.[0] || '') + (p[1]?.[0] || '')).toUpperCase() || '?';
-}
-
-// ── Render ──
-function render(data) {
-  if (!data.lineas || data.lineas.length === 0) {
-    mainEl.innerHTML = '<div class="sin-datos">Sin operadores asignados hoy</div>';
-    return;
+  function col(pct) {
+    if (pct == null) return 'gris';
+    return pct >= 100 ? 'verde' : pct >= 90 ? 'amarillo' : 'rojo';
+  }
+  function ini(nombre) {
+    return (nombre||'?').trim().split(' ').slice(0,2).map(p=>p[0]||'').join('').toUpperCase();
   }
 
-  let html = '';
-  for (const linea of data.lineas) {
-    if (!linea.operadores.length) continue;
-    html += `<div class="linea-seccion">
-      <div class="linea-titulo">${linea.linea} — ${linea.operadores.length} operador${linea.operadores.length > 1 ? 'es' : ''}</div>
-      <div class="ops-grid">`;
+  // ── Avatars ──────────────────────────────────────────────────
+  function avatarHTML(op, kpiClass) {
+    const src = op.foto_url ? (op.foto_url.startsWith('http') ? op.foto_url : `${API}${op.foto_url}`) : '';
+    if (src) return `<img class="op-avatar kpi-${kpiClass}" src="${src}" alt="${ini(op.nombre)}"
+      onerror="this.outerHTML=\`<div class='op-avatar-ini'>${ini(op.nombre)}</div>\`">`;
+    return `<div class="op-avatar-ini">${ini(op.nombre)}</div>`;
+  }
+  function rkAvatarHTML(op) {
+    const src = op.foto_url ? (op.foto_url.startsWith('http') ? op.foto_url : `${API}${op.foto_url}`) : '';
+    if (src) return `<img class="rk-avatar" src="${src}" alt="${ini(op.nombre)}"
+      onerror="this.outerHTML=\`<div class='rk-avatar-ini'>${ini(op.nombre)}</div>\`">`;
+    return `<div class="rk-avatar-ini">${ini(op.nombre)}</div>`;
+  }
 
-    for (const op of linea.operadores) {
-      const fotoUrl = op.foto_url
-        ? (op.foto_url.startsWith('http') ? op.foto_url : `${API}${op.foto_url}`)
-        : null;
-
-      const turno = op.turno
-        ? `<span class="turno-badge">T-${op.turno}</span>` : '';
-
-      const fotoHtml = fotoUrl
-        ? `<img src="${fotoUrl}" alt="${op.nombre}"
-             onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
-           <div class="avatar-iniciales" style="display:none">${iniciales(op.nombre)}</div>`
-        : `<div class="avatar-iniciales">${iniciales(op.nombre)}</div>`;
-
-      // Nombre: mostrar solo primeros dos apellidos + primer nombre
-      const partes = (op.nombre || '').trim().split(' ');
-      const nombreCorto = partes.slice(0, 3).join(' ');
-
-      html += `
-      <div class="op-card">
-        <div class="foto-wrap">
-          ${fotoHtml}
-          ${turno}
+  // ── Barra KPI ────────────────────────────────────────────────
+  function kpiRowHTML(label, actual, meta, clase) {
+    const fillPct = meta > 0 ? Math.min(actual / meta / 1.25 * 100, 100).toFixed(1) : '0';
+    const pct     = meta > 0 ? Math.round(actual / meta * 100) : null;
+    return `
+      <div class="kpi-row">
+        <div class="kpi-track">
+          <span class="kpi-inner-label">${label}</span>
+          <div class="kpi-fill ${clase}" style="width:${fillPct}%"></div>
+          <div class="kpi-fill-val">
+            <span class="kpi-fill-num">${actual.toLocaleString()}</span>
+            ${pct != null ? `<span class="kpi-fill-pct">${pct}%</span>` : ''}
+          </div>
+          ${meta > 0 ? `<div class="kpi-target-end"><span class="kpi-target-end-label">${meta.toLocaleString()}</span></div>` : ''}
         </div>
-        <div class="op-nombre">${nombreCorto}</div>
-        <div class="op-num">#${op.num_empleado}</div>
       </div>`;
+  }
+
+  // ── Estación ─────────────────────────────────────────────────
+  function stColHTML(st) {
+    const kpi     = st.uph_meta > 0 ? Math.round(st.uph_hora / st.uph_meta * 100) : null;
+    const c       = col(kpi);
+    const fillPct = st.uph_meta > 0 ? Math.min(st.uph_hora / st.uph_meta / (ST_MAX/100) * 100, 100).toFixed(1) : 0;
+    const tBot    = st.uph_meta > 0 ? (100 / ST_MAX * 100).toFixed(1) : null;
+    return `
+      <div class="st-col">
+        <span class="st-val">${Math.round(st.uph_hora)}</span>
+        <span class="st-pct ${c}">${kpi != null ? kpi+'%' : '—'}</span>
+        <div class="st-bar-outer">
+          <div class="st-bar-wrap" style="width:26px;height:100%;min-height:40px">
+            ${tBot ? `<div class="st-target-line" style="bottom:${tBot}%"></div>` : ''}
+            <div style="position:absolute;bottom:0;left:0;right:0;border-radius:6px;overflow:hidden;height:${fillPct}%">
+              <div class="st-bar-fill ${c}" style="height:100%"></div>
+            </div>
+          </div>
+        </div>
+        <span class="st-label">${st.estacion||'—'}</span>
+      </div>`;
+  }
+
+  // ── Operador ─────────────────────────────────────────────────
+  function opColHTML(op) {
+    const nombre2 = (op.nombre||'').split(' ').slice(0,2).join(' ');
+    const ests    = op.estaciones||[];
+    const best    = ests.reduce((b,s)=>s.uph_hora>b?s.uph_hora:b, 0);
+    const meta    = ests[0]?.uph_meta||0;
+    const c       = col(meta > 0 ? Math.round(best/meta*100) : null);
+    return `
+      <div class="op-card kpi-${c}">
+        ${avatarHTML(op, c)}
+        <span class="op-name">${nombre2}</span>
+        <div class="op-stations">${ests.map(stColHTML).join('')}</div>
+      </div>`;
+  }
+
+  // ── Card ─────────────────────────────────────────────────────
+  function cardHTML(linea, rankMap) {
+    const uphPct  = linea.uph_meta > 0 ? Math.round(linea.uph_actual/linea.uph_meta*100) : null;
+    const uphCol  = col(uphPct);
+    const rank    = rankMap[linea.linea]||99;
+    const rankCls = rank<=3 ? `rank-${rank}` : '';
+    const medal   = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
+    const ops     = (linea.operadores||[]).map(opColHTML).join('');
+    const opsSection = linea.operadores.length > 0
+      ? `<div class="card-ops">${ops}</div>`
+      : `<div class="card-ops vacia"><span class="ops-empty">Sin operadores asignados</span></div>`;
+    return `
+      <div class="card ${uphCol} ${rankCls}">
+        <div class="card-top">
+          <div class="card-id">
+            <div class="id-top">${medal?`<span class="id-medal">${medal}</span>`:''}<span class="id-linea ${uphCol}">${linea.linea}</span></div>
+            <span class="id-modelo">${linea.modelo||'—'}</span>
+          </div>
+          <div class="card-kpis">
+            ${kpiRowHTML('UPH',    linea.uph_actual,    linea.uph_meta,    uphCol)}
+            ${kpiRowHTML('Modelo', linea.piezas_modelo, linea.plan_modelo, 'azul')}
+          </div>
+        </div>
+        ${opsSection}
+      </div>`;
+  }
+
+  // ── Render ───────────────────────────────────────────────────
+  function render(lineas) {
+    const sorted = [...lineas].map(l=>({linea:l.linea, pct:l.uph_meta>0?l.uph_actual/l.uph_meta:0})).sort((a,b)=>b.pct-a.pct);
+    const rankMap = {};
+    sorted.forEach((l,i)=>{ rankMap[l.linea]=i+1; });
+    document.getElementById('lines').innerHTML = lineas.map(l=>cardHTML(l,rankMap)).join('');
+  }
+
+  function renderSidebar(lineas, turno_activo) {
+    const turnoNombre = turno_activo === 1 ? 'A' : turno_activo === 2 ? 'B' : 'C';
+    const turnoHora   = {1:'06:30–18:30 · Lun–Jue', 2:'18:30–06:30 · Lun–Vie', 3:'06:30–18:30 · Vie–Dom'}[turno_activo] || '—';
+    document.getElementById('sb-turno-val').textContent  = `TURNO ${turnoNombre}`;
+    document.getElementById('sb-turno-hora').textContent = turnoHora;
+    ['A','B','C'].forEach(x => {
+      const el = document.getElementById(`pill-${x}`);
+      if (el) el.className = `t-pill${x===turnoNombre?' act-'+x:''}`;
+    });
+
+    const ops = [];
+    lineas.forEach(linea => {
+      (linea.operadores||[]).forEach(op => {
+        const ests = op.estaciones||[];
+        const best = ests.reduce((b,s)=>s.uph_hora>b?s.uph_hora:b, 0);
+        const meta = ests[0]?.uph_meta||0;
+        const kpi  = meta>0 ? Math.round(best/meta*100) : null;
+        ops.push({...op, linea:linea.linea, modelo:linea.modelo, uph:Math.round(best), meta, kpi});
+      });
+    });
+    ops.sort((a,b)=>b.uph-a.uph);
+    const maxUph = ops[0]?.uph||1;
+
+    document.getElementById('sb-ranking').innerHTML = ops.slice(0,12).map((op,i) => {
+      const rank=i+1, medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':null;
+      const c=col(op.kpi), bordCls=rank<=3?`rk-${rank}`:`rk-${c}`;
+      const nombre2=(op.nombre||'').split(' ').slice(0,2).join(' ');
+      return `
+        <div class="rk-card ${bordCls}">
+          <div class="rk-top">
+            ${medal?`<span class="rk-medal">${medal}</span>`:`<span class="rk-rank">${rank}</span>`}
+            ${rkAvatarHTML(op)}
+            <div class="rk-info">
+              <div class="rk-nombre">${nombre2}</div>
+              <div class="rk-sub">${op.linea} · ${op.modelo||'—'}</div>
+            </div>
+            <div class="rk-right">
+              <span class="rk-val ${rank<=3?'':c}">${op.uph}</span>
+              ${op.kpi!=null?`<span class="rk-pct ${c}">${op.kpi}%</span>`:''}
+            </div>
+          </div>
+          <div class="rk-bar-wrap"><div class="rk-bar-fill ${rank===1?'':c}" style="width:${Math.round(op.uph/maxUph*100)}%"></div></div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('sb-lineas-list').innerHTML = lineas.map(linea => {
+      const pct   = linea.plan_modelo>0 ? Math.min(Math.round(linea.piezas_modelo/linea.plan_modelo*100),100) : 0;
+      const delta = linea.piezas_modelo-(linea.plan_modelo||0);
+      const c     = col(pct>=100?100:pct>=90?95:0);
+      return `
+        <div class="lp-row">
+          <span class="lp-id">${linea.linea}</span>
+          <div class="lp-track"><div class="lp-fill ${c}" style="width:${pct}%"></div></div>
+          <span class="lp-val">${(linea.piezas_modelo||0).toLocaleString()} pzs</span>
+          <span class="lp-delta ${delta>=0?'pos':'neg'}">${delta>=0?'↑ +'+delta.toLocaleString():'↓ '+delta.toLocaleString()}</span>
+        </div>`;
+    }).join('');
+  }
+
+  // ── Fetch ────────────────────────────────────────────────────
+  async function fetchData() {
+    const dot = document.getElementById('ft-dot');
+    try {
+      const r = await fetch(`${API}/api/uph/dashboard/lineas-hoy`);
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const data = await r.json();
+      const lineas = data.lineas||[];
+      if (data.fuera_horario) {
+        document.getElementById('lines').innerHTML =
+          `<div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
+            <span style="font-size:2.5rem;opacity:0.3">🌙</span>
+            <span style="color:#0a3530;font-size:1.1rem;font-weight:700;letter-spacing:2px;">FUERA DE HORARIO</span>
+            <span style="color:#071a17;font-size:0.75rem;">Sáb 18:30–Dom 06:30 · Dom 18:30–Lun 06:30 sin operaciones</span>
+          </div>`;
+        document.getElementById('sb-turno-val').textContent  = '—';
+        document.getElementById('sb-turno-hora').textContent = 'Sin turno activo';
+        document.getElementById('sb-ranking').innerHTML      = '';
+        document.getElementById('sb-lineas-list').innerHTML  = '';
+      } else if (lineas.length > 0) {
+        render(lineas);
+        renderSidebar(lineas, data.turno_activo);
+      } else {
+        document.getElementById('lines').innerHTML =
+          `<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;color:#00856e;font-size:1rem;">Sin datos · asigna operadores para comenzar</div>`;
+      }
+      dot.className = 'ft-dot';
+      document.getElementById('last-upd').textContent = `Actualizado: ${new Date().toLocaleTimeString('es-MX')}`;
+    } catch(e) {
+      dot.className = 'ft-dot err';
+      document.getElementById('last-upd').textContent = `Sin conexión · ${e.message}`;
     }
-
-    html += `</div></div>`;
   }
 
-  mainEl.innerHTML = html;
-  footEl.textContent = `Última actualización: ${new Date().toLocaleTimeString('es-MX')} · ${data.fecha}`;
-}
+  // ── WebSocket — refresco en tiempo real ──────────────────────
+  let wsRetryMs = 2000;
+  function connectWS() {
+    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl   = `${wsProto}//${window.location.hostname}:${window.location.port}/api/uph/ws`;
+    const ws = new WebSocket(wsUrl);
 
-// ── Fetch ──
-async function cargar() {
-  try {
-    const res = await fetch(`${API}/api/uph/dashboard/asignaciones-hoy`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    render(data);
-    cnxEl.textContent = '● EN VIVO';
-    cnxEl.className = '';
-  } catch (e) {
-    cnxEl.textContent = '● SIN CONEXIÓN';
-    cnxEl.className = 'err';
-    console.error(e);
+    ws.onopen = () => {
+      console.log('[WS] conectado');
+      wsRetryMs = 2000;
+      document.getElementById('last-upd').textContent = '⚡ Tiempo real conectado';
+    };
+    ws.onmessage = (e) => {
+      if (e.data === 'refresh') fetchData();
+    };
+    ws.onclose = () => {
+      console.warn(`[WS] desconectado, reintentando en ${wsRetryMs}ms`);
+      setTimeout(connectWS, wsRetryMs);
+      wsRetryMs = Math.min(wsRetryMs * 2, 30000);
+    };
+    ws.onerror = () => ws.close();
+
+    // Ping cada 25s para mantener viva la conexión
+    setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 25000);
   }
-}
 
-cargar();
-setInterval(cargar, 10000);
+  // ── Reloj ────────────────────────────────────────────────────
+  function tick() {
+    const now = new Date(), pad = n => String(n).padStart(2,'0');
+    document.getElementById('clock').textContent =
+      `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  }
+
+  tick(); setInterval(tick, 1000);
+  fetchData();            // carga inicial
+  connectWS();            // tiempo real vía WebSocket
+  setInterval(fetchData, 60000); // fallback cada 60s por si el WS falla
 </script>
 </body>
 </html>

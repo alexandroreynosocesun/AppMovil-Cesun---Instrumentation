@@ -70,7 +70,8 @@ class Asignacion(UphBase):
     linea_id = Column(Integer, ForeignKey("lineas.id"), nullable=False)
     fecha = Column(String, nullable=False)        # "YYYY-MM-DD"
     turno_id = Column(Integer, ForeignKey("turnos.id"), nullable=False)
-    modelo_id = Column(Integer, ForeignKey("modelos_uph.id"), nullable=True)
+    modelo_id    = Column(Integer, ForeignKey("modelos_uph.id"), nullable=True)
+    plan_interno = Column(Integer, nullable=True)   # cantidad objetivo del modelo interno (puesto por la líder)
 
     operador = relationship("Operador", back_populates="asignaciones")
     linea = relationship("Linea", back_populates="asignaciones")

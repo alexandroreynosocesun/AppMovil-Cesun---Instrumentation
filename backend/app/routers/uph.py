@@ -10,7 +10,7 @@ Router UPH/Andon - Sistema de producción Hisense
 import csv
 import os
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
@@ -36,6 +36,33 @@ def _append_csv(linea: str, estacion: str, evento: str, contador, ts: datetime):
         if escribir_header:
             writer.writerow(["timestamp", "linea", "estacion", "evento", "contador"])
         writer.writerow([ts.isoformat(), linea, estacion, evento, contador])
+
+# ─────────────────────────────────────────────
+# WebSocket — broadcast en tiempo real
+# ─────────────────────────────────────────────
+
+class _ConnectionManager:
+    def __init__(self):
+        self._clients: list[WebSocket] = []
+
+    async def connect(self, ws: WebSocket):
+        await ws.accept()
+        self._clients.append(ws)
+
+    def disconnect(self, ws: WebSocket):
+        self._clients.remove(ws)
+
+    async def broadcast(self, msg: str):
+        dead = []
+        for ws in self._clients:
+            try:
+                await ws.send_text(msg)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self._clients.remove(ws)
+
+ws_manager = _ConnectionManager()
 
 router = APIRouter()
 
@@ -90,6 +117,7 @@ class AsignacionBulkIn(BaseModel):
     fecha: str          # "YYYY-MM-DD"
     turno_id: int
     modelo_id: Optional[int] = None
+    plan_interno: Optional[int] = None   # cantidad objetivo del modelo interno
     asignaciones: List[AsignacionItemIn]
 
 
@@ -108,19 +136,36 @@ def _color_semaforo(uph_real: float, uph_meta: float) -> str:
     return "rojo"
 
 
-def _uph_ultima_hora(db: Session, linea: str, estacion: Optional[str] = None) -> float:
-    """Cuenta eventos GOOD en la última hora móvil."""
+def _linea_evento(linea_nombre: str) -> str:
+    """
+    Mapea nombre BD ('HI-6') al nombre que usan los eventos ('L6').
+    Si ya es 'L6' lo devuelve igual.
+    """
+    import re
+    m = re.search(r'\d+', linea_nombre)
+    if m:
+        return f"L{m.group()}"
+    return linea_nombre
+
+
+def _uph_hora_actual(db: Session, linea: str, estacion: Optional[str] = None) -> float:
+    """Cuenta eventos GOOD desde el inicio de la hora actual en punto (XX:00)."""
     ahora = datetime.now(timezone.utc)
-    desde = ahora - timedelta(hours=1)
+    inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
     q = db.query(func.count(EventoUPH.id)).filter(
         EventoUPH.linea == linea,
         EventoUPH.evento == "GOOD",
-        EventoUPH.timestamp >= desde,
+        EventoUPH.timestamp >= inicio_hora,
         EventoUPH.timestamp <= ahora,
     )
     if estacion:
         q = q.filter(EventoUPH.estacion == estacion)
     return float(q.scalar() or 0)
+
+
+# Alias para compatibilidad con código existente
+def _uph_ultima_hora(db: Session, linea: str, estacion: Optional[str] = None) -> float:
+    return _uph_hora_actual(db, linea, estacion)
 
 
 def _ensure_admin_or_jefa(current_user: Tecnico):
@@ -808,7 +853,8 @@ def get_asignacion_hoy(
     if not asigs:
         return {"operadores": [], "modelo_id": None}
 
-    modelo_id = asigs[0].modelo_id if asigs else None
+    modelo_id    = asigs[0].modelo_id    if asigs else None
+    plan_interno = asigs[0].plan_interno if asigs else None
 
     # Agrupar estaciones por operador
     from collections import defaultdict
@@ -828,7 +874,7 @@ def get_asignacion_hoy(
             "estaciones": estaciones,
         })
 
-    return {"operadores": resultado, "modelo_id": modelo_id}
+    return {"operadores": resultado, "modelo_id": modelo_id, "plan_interno": plan_interno}
 
 
 @router.patch("/asignacion/hoy/modelo")
@@ -876,7 +922,7 @@ def limpiar_asignacion_hoy(
 
 
 @router.post("/asignacion/bulk", status_code=201)
-def crear_asignacion_bulk(
+async def crear_asignacion_bulk(
     data: AsignacionBulkIn,
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
@@ -913,11 +959,13 @@ def crear_asignacion_bulk(
             fecha=data.fecha,
             turno_id=data.turno_id,
             modelo_id=data.modelo_id,
+            plan_interno=data.plan_interno,
         )
         db.add(asig)
         creadas += 1
 
     db.commit()
+    await ws_manager.broadcast("refresh")
     return {"ok": True, "creadas": creadas, "linea": data.linea, "fecha": data.fecha}
 
 
@@ -1104,6 +1152,8 @@ def dashboard_operadores():
     return HTMLResponse(html_path.read_text(encoding="utf-8"))
 
 
+
+
 @router.get("/dashboard/asignaciones-hoy")
 def asignaciones_hoy_publico(db: Session = Depends(get_uph_db)):
     """
@@ -1144,6 +1194,24 @@ def asignaciones_hoy_publico(db: Session = Depends(get_uph_db)):
     }
 
 
+@router.websocket("/ws")
+async def uph_websocket(ws: WebSocket):
+    """Dashboard se conecta aquí y recibe 'refresh' cada vez que llega un evento nuevo."""
+    await ws_manager.connect(ws)
+    try:
+        while True:
+            await ws.receive_text()   # mantiene viva la conexión (ping del cliente)
+    except WebSocketDisconnect:
+        ws_manager.disconnect(ws)
+
+
+@router.post("/internal/notify", include_in_schema=False)
+async def internal_notify():
+    """run_uph.py (puerto 5000) llama esto después de guardar un EventoUPH."""
+    await ws_manager.broadcast("refresh")
+    return {"ok": True, "clients": len(ws_manager._clients)}
+
+
 @router.get("/dashboard/lineas-hoy")
 def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
     """
@@ -1151,25 +1219,117 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
     Retorna por línea: UPH actual, meta, modelo, piezas acumuladas del modelo,
     y por cada operador asignado: sus estaciones con UPH hora y meta.
     """
-    hoy = datetime.now().strftime("%Y-%m-%d")
-    ahora = datetime.now(timezone.utc)
-    inicio_dia = datetime.strptime(hoy, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    ahora     = datetime.now(timezone.utc)
+    ahora_loc = datetime.now()   # naive, hora local del servidor
+
+    # Offset UTC del servidor
+    utc_offset = ahora.replace(tzinfo=None) - ahora_loc
+
+    def _local_to_utc(naive_local: datetime) -> datetime:
+        return (naive_local + utc_offset).replace(tzinfo=timezone.utc)
+
+    # ── Turno activo ─────────────────────────────────────────────
+    # ── Turnos ───────────────────────────────────────────────────
+    # A (id=1): Lun–Jue  06:30–18:30
+    # B (id=2): Lun–Jue  18:30–06:30 (cruza medianoche, termina Vie 06:30)
+    # C (id=3): Vie–Dom  06:30–18:30 (cada día por separado)
+    # Sin turno: Vie–Dom 18:30–06:30
+    #
+    # weekday(): 0=Lun 1=Mar 2=Mié 3=Jue 4=Vie 5=Sáb 6=Dom
+    wd    = ahora_loc.weekday()
+    mins  = ahora_loc.hour * 60 + ahora_loc.minute
+    T_INI = 6 * 60 + 30    # 06:30
+    T_FIN = 18 * 60 + 30   # 18:30
+
+    turno_id_act     = None
+    fecha_asig       = ahora_loc.strftime("%Y-%m-%d")
+    inicio_turno_utc = ahora.replace(minute=0, second=0, microsecond=0)
+
+    if wd in (0, 1, 2, 3):      # Lunes–Jueves
+        if T_INI <= mins < T_FIN:
+            # Turno A diurno
+            turno_id_act     = 1
+            inicio_turno_utc = _local_to_utc(ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0))
+        elif mins >= T_FIN:
+            # Turno B nocturno (empieza hoy)
+            turno_id_act     = 2
+            inicio_turno_utc = _local_to_utc(ahora_loc.replace(hour=18, minute=30, second=0, microsecond=0))
+        else:
+            # 00:00–06:29 → continuación Turno B del día anterior
+            turno_id_act     = 2
+            ayer             = ahora_loc - timedelta(days=1)
+            fecha_asig       = ayer.strftime("%Y-%m-%d")
+            inicio_turno_utc = _local_to_utc(ayer.replace(hour=18, minute=30, second=0, microsecond=0))
+
+    elif wd == 4:                # Viernes
+        if mins < T_INI:
+            # 00:00–06:29 → Turno B nocturno del jueves
+            turno_id_act     = 2
+            ayer             = ahora_loc - timedelta(days=1)
+            fecha_asig       = ayer.strftime("%Y-%m-%d")
+            inicio_turno_utc = _local_to_utc(ayer.replace(hour=18, minute=30, second=0, microsecond=0))
+        elif T_INI <= mins < T_FIN:
+            # Viernes 06:30–18:29 → Turno C
+            turno_id_act     = 3
+            inicio_turno_utc = _local_to_utc(ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0))
+        else:
+            # Viernes 18:30+ → Turno B extra (noche viernes)
+            turno_id_act     = 2
+            inicio_turno_utc = _local_to_utc(ahora_loc.replace(hour=18, minute=30, second=0, microsecond=0))
+
+    elif wd == 5:                # Sábado
+        if mins < T_INI:
+            # 00:00–06:29 → Turno B extra (empezó viernes 18:30)
+            turno_id_act     = 2
+            ayer             = ahora_loc - timedelta(days=1)
+            fecha_asig       = ayer.strftime("%Y-%m-%d")
+            inicio_turno_utc = _local_to_utc(ayer.replace(hour=18, minute=30, second=0, microsecond=0))
+        elif T_INI <= mins < T_FIN:
+            # Sábado 06:30–18:29 → Turno C
+            turno_id_act     = 3
+            inicio_turno_utc = _local_to_utc(ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0))
+        # else: Sábado 18:30+ → sin turno
+
+    elif wd == 6:                # Domingo
+        if T_INI <= mins < T_FIN:
+            # Domingo 06:30–18:29 → Turno C
+            turno_id_act     = 3
+            inicio_turno_utc = _local_to_utc(ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0))
+        # else: Domingo noche → sin turno
+
     inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
+    hoy         = ahora_loc.strftime("%Y-%m-%d")
+
+    # Sin turno activo → dashboard vacío
+    if turno_id_act is None:
+        return {
+            "lineas": [],
+            "turno_activo": None,
+            "fuera_horario": True,
+            "actualizado": ahora.isoformat(),
+        }
 
     lineas = db.query(Linea).order_by(Linea.nombre).all()
 
     resultado = []
     for linea in lineas:
-        # Asignaciones de hoy para esta línea
+        # Asignaciones del turno activo para esta línea
         asignaciones = (
             db.query(Asignacion)
-            .filter(Asignacion.linea_id == linea.id, Asignacion.fecha == hoy)
+            .filter(
+                Asignacion.linea_id == linea.id,
+                Asignacion.fecha    == fecha_asig,
+                Asignacion.turno_id == turno_id_act,
+            )
             .all()
         )
 
         # Modelo actual desde primera asignación
         modelo = asignaciones[0].modelo if asignaciones else None
-        modelo_nombre = modelo.modelo if modelo else None
+        modelo_nombre = modelo.nombre if modelo else None
+
+        # Nombre de línea tal como llega en los eventos (L6, L1, etc.)
+        nombre_evento = _linea_evento(linea.nombre)
 
         # UPH meta específica de la línea
         _num = ''.join(filter(str.isdigit, linea.nombre))
@@ -1177,24 +1337,25 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
         _val = getattr(modelo, _attr, None) if (modelo and _attr) else None
         uph_meta = _val if _val else (modelo.uph_total if modelo else 0) if modelo else 0
 
-        # UPH actual: piezas en la hora actual (clock hour)
+        # UPH actual: piezas desde inicio de la hora en punto (XX:00)
         uph_actual = db.query(func.count(EventoUPH.id)).filter(
-            EventoUPH.linea == linea.nombre,
+            EventoUPH.linea == nombre_evento,
             EventoUPH.evento == "GOOD",
             EventoUPH.timestamp >= inicio_hora,
             EventoUPH.timestamp <= ahora,
         ).scalar() or 0
 
-        # Piezas acumuladas del modelo (total del día)
+        # Piezas acumuladas desde inicio del turno activo
         piezas_modelo = db.query(func.count(EventoUPH.id)).filter(
-            EventoUPH.linea == linea.nombre,
+            EventoUPH.linea == nombre_evento,
             EventoUPH.evento == "GOOD",
-            EventoUPH.timestamp >= inicio_dia,
+            EventoUPH.timestamp >= inicio_turno_utc,
             EventoUPH.timestamp <= ahora,
         ).scalar() or 0
 
-        # Plan del modelo = meta × 8 horas (turno completo)
-        plan_modelo = uph_meta * 8
+        # Plan del modelo: usa plan_interno si la líder lo configuró, sino meta × 12h turno
+        plan_interno = asignaciones[0].plan_interno if asignaciones else None
+        plan_modelo  = plan_interno if plan_interno else round(uph_meta * 12)
 
         # Número de estaciones únicas en esta línea hoy
         estaciones_unicas = list({a.estacion for a in asignaciones})
@@ -1213,7 +1374,7 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                     "foto_url": op.foto_url if op else None,
                     "estaciones": [],
                 }
-            uph_hora_est = _uph_ultima_hora(db, linea.nombre, a.estacion)
+            uph_hora_est = _uph_hora_actual(db, nombre_evento, a.estacion)
             kpi_pct = round((uph_hora_est / uph_meta_est * 100) if uph_meta_est > 0 else 0, 1)
             ops_dict[emp]["estaciones"].append({
                 "estacion": a.estacion,
@@ -1232,7 +1393,11 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
             "operadores": list(ops_dict.values()),
         })
 
-    return {"lineas": resultado, "actualizado": ahora.isoformat()}
+    return {
+        "lineas": resultado,
+        "turno_activo": turno_id_act,
+        "actualizado": ahora.isoformat(),
+    }
 
 
 @router.get("/dashboard", response_class=HTMLResponse)

@@ -1,8 +1,10 @@
 """
 Servidor UPH - escucha en 172.29.67.223:5000
 Solo recibe eventos de PCs de linea (sin internet, VLAN 66/67)
+Después de cada GOOD notifica a localhost:8000 para broadcast WebSocket.
 """
 import uvicorn
+import httpx
 from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -50,9 +52,12 @@ def _append_csv(linea, estacion, evento, contador, ts):
         writer.writerow([ts.isoformat(), linea, estacion, evento, contador])
 
 
+MAIN_APP_NOTIFY = "http://127.0.0.1:8000/api/uph/internal/notify"
+
+
 @app.post("/evento", status_code=201)
 @app.post("/api/uph/evento", status_code=201)
-def recibir_evento(evento: EventoIn, db: Session = Depends(get_uph_db)):
+async def recibir_evento(evento: EventoIn, db: Session = Depends(get_uph_db)):
     if evento.evento != "GOOD":
         return {"ok": False, "detalle": "Solo se registran GOOD"}
 
@@ -68,6 +73,14 @@ def recibir_evento(evento: EventoIn, db: Session = Depends(get_uph_db)):
     db.commit()
     _append_csv(evento.linea, evento.estacion, evento.evento, evento.contador, ts)
     print(f"[{ts.strftime('%H:%M:%S')}] OK  {evento.linea} | {evento.estacion} | cnt={evento.contador}")
+
+    # Notificar al app principal para que haga broadcast WebSocket (fire & forget)
+    try:
+        async with httpx.AsyncClient(timeout=1.0) as client:
+            await client.post(MAIN_APP_NOTIFY)
+    except Exception:
+        pass  # No bloquear si el app principal no está disponible
+
     return {"ok": True, "id": registro.id}
 
 

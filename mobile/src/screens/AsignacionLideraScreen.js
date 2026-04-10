@@ -122,14 +122,13 @@ export default function AsignacionLideraScreen({ navigation }) {
   const [asignacion,   setAsignacion]   = useState({});
   const [expandedSlot, setExpandedSlot] = useState(null); // slot con estaciones expandidas
   const [slotModal,    setSlotModal]    = useState(null);  // slot esperando operador
-  const [busquedaModelo, setBusquedaModelo] = useState('');
-
   const [loading,        setLoading]        = useState(true);
   const [refreshing,     setRefreshing]     = useState(false);
   const [loadingModelos, setLoadingModelos] = useState(false);
   const [guardando,      setGuardando]      = useState(false);
-  const [modeloGuardado, setModeloGuardado] = useState(null); // modelo que está en BD hoy
-  const [guardandoModelo, setGuardandoModelo] = useState(false);
+  const [planInterno,    setPlanInterno]    = useState('');
+  const [modalModelo,    setModalModelo]    = useState(false);
+  const [busquedaModalModelo, setBusquedaModalModelo] = useState('');
 
   const hoy = new Date().toISOString().split('T')[0];
 
@@ -200,6 +199,9 @@ export default function AsignacionLideraScreen({ navigation }) {
           const m = rMod.data.find(x => x.id === rAsig.data.modelo_id);
           if (m) modeloActual = m;
         }
+        if (rAsig.data.plan_interno) {
+          setPlanInterno(String(rAsig.data.plan_interno));
+        }
       } else {
         setAsignacion({});
         setNumSlots(2);
@@ -255,19 +257,6 @@ export default function AsignacionLideraScreen({ navigation }) {
     setExpandedSlot(slotIdx); // expandir para asignar estaciones
   };
 
-  // ── Guardar solo el modelo (cambio de rolling) ──────────
-  const handleGuardarModelo = async () => {
-    if (!modeloSeleccionado || !lineaSeleccionada) return;
-    setGuardandoModelo(true);
-    const result = await uphService.actualizarModeloHoy(lineaSeleccionada.nombre, modeloSeleccionado.id);
-    setGuardandoModelo(false);
-    if (result.success) {
-      setModeloGuardado(modeloSeleccionado);
-      showAlert('✅ Modelo actualizado', `Cambiado a ${modeloSeleccionado.nombre} en ${lineaSeleccionada.nombre}.`);
-    } else {
-      showAlert('Error', result.error);
-    }
-  };
 
   // ── Limpiar asignación del día ──────────────────────────
   const handleLimpiar = () => {
@@ -329,6 +318,7 @@ export default function AsignacionLideraScreen({ navigation }) {
       ? turnoSeleccionado.id : null;
     const result = await uphService.asignarBulk(
       lineaSeleccionada.nombre, hoy, turnoId, modeloSeleccionado?.id || null, items,
+      planInterno ? parseInt(planInterno) : null,
     );
     setGuardando(false);
     if (result.success) {
@@ -385,73 +375,113 @@ export default function AsignacionLideraScreen({ navigation }) {
               tintColor="#2196F3" />
           }
         >
+          {/* ── Modal Cambiar Modelo / Modelo Interno ───── */}
+          <Modal visible={modalModelo} transparent animationType="slide"
+            onRequestClose={() => { setModalModelo(false); setBusquedaModalModelo(''); }}>
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.modalOverlay}>
+              <View style={[s.modalCard, { maxHeight: '85%' }]}>
+                <View style={s.modalHeader}>
+                  <Text style={s.modalTitulo}>Cambiar Modelo / Modelo Interno</Text>
+                  <TouchableOpacity onPress={() => { setModalModelo(false); setBusquedaModalModelo(''); }}>
+                    <Text style={s.modalCerrar}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Buscador */}
+                <TextInput
+                  style={s.searchInput}
+                  placeholder="Buscar modelo..."
+                  placeholderTextColor="#37474F"
+                  value={busquedaModalModelo}
+                  onChangeText={setBusquedaModalModelo}
+                />
+
+                {/* Lista modelos */}
+                <FlatList
+                  data={modelos.filter(m =>
+                    !busquedaModalModelo ||
+                    m.nombre.toLowerCase().includes(busquedaModalModelo.toLowerCase()) ||
+                    (m.modelo_interno || '').toLowerCase().includes(busquedaModalModelo.toLowerCase())
+                  )}
+                  keyExtractor={item => String(item.id)}
+                  style={{ maxHeight: 240 }}
+                  ListEmptyComponent={<Text style={s.emptyText}>Sin resultados</Text>}
+                  ItemSeparatorComponent={() => <View style={s.itemSep} />}
+                  renderItem={({ item }) => {
+                    const activo = modeloSeleccionado?.id === item.id;
+                    return (
+                      <TouchableOpacity
+                        style={[s.opCard, activo && { backgroundColor: '#0D2137', borderColor: '#1565C0' }]}
+                        onPress={() => { setModeloSeleccionado(item); setBusquedaModalModelo(''); }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.opNombre, activo && { color: '#42A5F5' }]}>{item.nombre}</Text>
+                          {item.modelo_interno && <Text style={s.opNum}>{item.modelo_interno}</Text>}
+                        </View>
+                        <Text style={{ color: '#546E7A', fontSize: 11 }}>{getUphLinea(item) ?? '—'} pzs/hr</Text>
+                        {activo && <Text style={{ color: '#42A5F5', marginLeft: 8, fontSize: 16 }}>✓</Text>}
+                      </TouchableOpacity>
+                    );
+                  }}
+                />
+
+                {/* Cantidad modelo interno */}
+                <View style={{ paddingTop: 14, borderTopWidth: 1, borderTopColor: '#1a2a3a', marginTop: 6 }}>
+                  <Text style={[s.secLabel, { marginBottom: 8 }]}>CANTIDAD DEL MODELO INTERNO</Text>
+                  <TextInput
+                    style={[s.searchInput, { fontSize: 20, fontWeight: 'bold', color: '#fff', textAlign: 'center' }]}
+                    placeholder="Ej. 2272"
+                    placeholderTextColor="#37474F"
+                    keyboardType="numeric"
+                    value={planInterno}
+                    onChangeText={v => setPlanInterno(v.replace(/[^0-9]/g, ''))}
+                  />
+                  <Text style={{ color: '#37474F', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
+                    Esta cantidad se mostrará como meta en la barra de Modelo del dashboard
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[s.guardarBtn, { marginTop: 14 }]}
+                  onPress={() => { setModalModelo(false); setBusquedaModalModelo(''); }}
+                >
+                  <Text style={s.guardarBtnText}>✓ Confirmar</Text>
+                </TouchableOpacity>
+              </View>
+            </KeyboardAvoidingView>
+          </Modal>
+
           {/* ── Modelo ──────────────────────────────────── */}
           <Text style={s.secLabel}>MODELO</Text>
           {loadingModelos ? (
             <ActivityIndicator size="small" color="#2196F3" style={{ marginBottom: 12 }} />
-          ) : modelos.length > 0 ? (
+          ) : (
             <>
-              <TextInput
-                style={s.modeloSearch}
-                placeholder="Buscar para cambiar modelo..."
-                placeholderTextColor="#37474F"
-                value={busquedaModelo}
-                onChangeText={setBusquedaModelo}
-              />
-              {busquedaModelo ? (
-                /* Resultados de búsqueda */
-                modelos
-                  .filter(m => m.nombre.toLowerCase().includes(busquedaModelo.toLowerCase()))
-                  .map(m => {
-                    const activo = modeloSeleccionado?.id === m.id;
-                    return (
-                      <TouchableOpacity key={m.id}
-                        style={[s.modeloItem, activo && s.modeloItemActivo]}
-                        onPress={() => {
-                          if (activo) { setBusquedaModelo(''); return; }
-                          showAlert(
-                            'Cambiar modelo',
-                            `¿Cambiar a "${m.nombre}"?`,
-                            [
-                              { text: 'Cancelar', style: 'cancel' },
-                              { text: 'Cambiar', onPress: () => { setModeloSeleccionado(m); setBusquedaModelo(''); } },
-                            ],
-                          );
-                        }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.modeloItemNombre, activo && s.modeloItemNombreActivo]}>{m.nombre}</Text>
-                          {(m.num_placa || m.modelo_interno) && (
-                            <Text style={s.modeloItemSub}>{[m.num_placa, m.modelo_interno].filter(Boolean).join(' · ')}</Text>
-                          )}
-                        </View>
-                        <Text style={[s.modeloItemUph, activo && { color: '#66BB6A' }]}>{getUphLinea(m) ?? '—'} pzs/hr</Text>
-                        {activo && <Text style={s.modeloItemCheck}>✓</Text>}
-                      </TouchableOpacity>
-                    );
-                  })
-              ) : modeloSeleccionado ? (
-                /* Solo el modelo activo */
-                <View style={[s.modeloItem, s.modeloItemActivo]}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.modeloItemNombreActivo}>{modeloSeleccionado.nombre}</Text>
-                    {(modeloSeleccionado.num_placa || modeloSeleccionado.modelo_interno) && (
-                      <Text style={s.modeloItemSub}>{[modeloSeleccionado.num_placa, modeloSeleccionado.modelo_interno].filter(Boolean).join(' · ')}</Text>
-                    )}
-                  </View>
-                  <Text style={{ color: '#66BB6A', fontSize: 12, fontWeight: 'bold', marginRight: 8 }}>{uphLinea ?? '—'} pzs/hr</Text>
-                  <Text style={s.modeloItemCheck}>✓</Text>
+              {/* Card modelo activo + botón cambiar */}
+              <TouchableOpacity style={[s.modeloItem, s.modeloItemActivo, { marginBottom: 10 }]}
+                onPress={() => setModalModelo(true)}>
+                <View style={{ flex: 1 }}>
+                  {modeloSeleccionado ? (
+                    <>
+                      <Text style={s.modeloItemNombreActivo}>{modeloSeleccionado.nombre}</Text>
+                      {modeloSeleccionado.modelo_interno && (
+                        <Text style={s.modeloItemSub}>{modeloSeleccionado.modelo_interno}</Text>
+                      )}
+                    </>
+                  ) : (
+                    <Text style={[s.modeloItemNombre, { color: '#37474F' }]}>Sin modelo seleccionado</Text>
+                  )}
                 </View>
-              ) : null}
-              {/* Botón cambio de modelo (rolling) — solo cuando el modelo difiere del guardado y ya hay operadores */}
-              {modeloSeleccionado && modeloGuardado && modeloSeleccionado.id !== modeloGuardado.id && opsAsignados > 0 && (
-                <TouchableOpacity style={s.cambiarModeloBtn} onPress={handleGuardarModelo} disabled={guardandoModelo}>
-                  {guardandoModelo
-                    ? <ActivityIndicator size="small" color="#fff" />
-                    : <Text style={s.cambiarModeloBtnText}>🔄 Guardar cambio de modelo</Text>
-                  }
-                </TouchableOpacity>
-              )}
+                {planInterno ? (
+                  <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
+                    <Text style={{ color: '#66BB6A', fontSize: 12, fontWeight: 'bold' }}>{parseInt(planInterno).toLocaleString()} pzs</Text>
+                    <Text style={{ color: '#37474F', fontSize: 10 }}>meta interna</Text>
+                  </View>
+                ) : null}
+                <View style={{ backgroundColor: '#1565C0', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
+                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cambiar Modelo / Modelo Interno</Text>
+                </View>
+              </TouchableOpacity>
 
               {modeloSeleccionado && (
                 <View style={s.uphCard}>
@@ -473,18 +503,22 @@ export default function AsignacionLideraScreen({ navigation }) {
                   <View style={s.uphSep} />
                   <View style={s.uphBloque}>
                     <Text style={s.uphLabel}>META TURNO</Text>
-                    <Text style={[s.uphValor, { color: '#66BB6A' }]}>{metaTurno ?? '—'}</Text>
+                    <Text style={[s.uphValor, { color: '#66BB6A' }]}>
+                      {planInterno ? parseInt(planInterno).toLocaleString() : (metaTurno ?? '—')}
+                    </Text>
                     <Text style={s.uphUnidad}>pzs</Text>
                   </View>
                 </View>
               )}
+
+              {modelos.length === 0 && (
+                <View style={s.sinModeloCard}>
+                  <Text style={s.sinModeloIcon}>🔧</Text>
+                  <Text style={s.sinModeloText}>Sin modelos configurados</Text>
+                  <Text style={s.sinModeloHint}>El administrador debe configurar los modelos para esta línea</Text>
+                </View>
+              )}
             </>
-          ) : (
-            <View style={s.sinModeloCard}>
-              <Text style={s.sinModeloIcon}>🔧</Text>
-              <Text style={s.sinModeloText}>Sin modelos configurados</Text>
-              <Text style={s.sinModeloHint}>El administrador debe configurar los modelos para esta línea</Text>
-            </View>
           )}
 
           {/* ── Operadores ──────────────────────────────── */}

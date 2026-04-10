@@ -157,10 +157,10 @@ class UPHService {
     }
   }
 
-  async asignarBulk(linea, fecha, turno_id, modelo_id, asignaciones) {
+  async asignarBulk(linea, fecha, turno_id, modelo_id, asignaciones, plan_interno = null) {
     try {
       const response = await apiClient.post('/uph/asignacion/bulk', {
-        linea, fecha, turno_id, modelo_id, asignaciones,
+        linea, fecha, turno_id, modelo_id, asignaciones, plan_interno,
       });
       return { success: true, data: response.data };
     } catch (error) {

@@ -84,11 +84,15 @@ def init_monitoring(app):
     # Middleware para métricas HTTP
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next: Callable):
+        # WebSocket upgrades no son HTTP — pasar directamente sin métricas
+        if request.headers.get("upgrade", "").lower() == "websocket":
+            return await call_next(request)
+
         start_time = time.time()
-        
+
         # Incrementar conexiones activas
         active_connections.inc()
-        
+
         try:
             response = await call_next(request)
             
