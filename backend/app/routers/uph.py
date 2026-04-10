@@ -1400,6 +1400,96 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
     }
 
 
+@router.get("/tendencias")
+def tendencias_uph(desde: Optional[str] = None, horas: int = 12, db: Session = Depends(get_uph_db)):
+    """
+    UPH por hora para cada línea desde el inicio del turno activo.
+    Acepta `desde` (ISO 8601) o `horas` como fallback.
+    """
+    ahora  = datetime.now(timezone.utc)
+
+    if desde:
+        try:
+            inicio_turno = datetime.fromisoformat(desde.replace('Z', '+00:00'))
+            if inicio_turno.tzinfo is None:
+                inicio_turno = inicio_turno.replace(tzinfo=timezone.utc)
+        except Exception:
+            inicio_turno = ahora - timedelta(hours=horas)
+    else:
+        inicio_turno = ahora - timedelta(hours=horas)
+
+    # Generar slots hora a hora desde inicio_turno hasta ahora
+    # El primer slot empieza exactamente en inicio_turno (ej. 06:30)
+    # Los siguientes en hora en punto
+    slots = []
+    cur = inicio_turno
+    while cur <= ahora:
+        slots.append(cur)
+        # Siguiente slot: siguiente hora en punto
+        next_slot = (cur + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
+        if next_slot == cur:  # ya era hora en punto
+            next_slot = cur + timedelta(hours=1)
+        cur = next_slot
+
+    lineas    = db.query(Linea).order_by(Linea.nombre).all()
+    resultado = []
+
+    from datetime import datetime as _dt
+    hoy = _dt.now().strftime("%Y-%m-%d")
+
+    for linea in lineas:
+        nombre_evento = _linea_evento(linea.nombre)
+
+        # Meta de la línea: buscar modelo activo de hoy
+        asig = db.query(Asignacion).filter(
+            Asignacion.linea_id == linea.id,
+            Asignacion.fecha    == hoy,
+        ).first()
+        modelo  = asig.modelo if asig else None
+        _num    = ''.join(filter(str.isdigit, linea.nombre))
+        _attr   = f"uph_hi{_num}" if _num else None
+        _val    = getattr(modelo, _attr, None) if (modelo and _attr) else None
+        uph_meta = _val if _val else (modelo.uph_total if modelo else 100) if modelo else 100
+
+        puntos = []
+        for idx, slot in enumerate(slots):
+            # fin del slot: siguiente slot o ahora (el último slot está incompleto)
+            if idx + 1 < len(slots):
+                fin = slots[idx + 1]
+            else:
+                fin = ahora
+
+            minutos = max(1, (fin - slot).total_seconds() / 60)
+            conteo  = db.query(func.count(EventoUPH.id)).filter(
+                EventoUPH.linea  == nombre_evento,
+                EventoUPH.evento == "GOOD",
+                EventoUPH.timestamp >= slot,
+                EventoUPH.timestamp <  fin,
+            ).scalar() or 0
+
+            # meta proporcional al slot (ej. 30 min → meta/2)
+            meta_slot = round(uph_meta * minutos / 60)
+
+            puntos.append({
+                "hora":      slot.strftime("%H:%M"),
+                "uph":       conteo,        # piezas reales producidas en el slot
+                "meta_slot": meta_slot,     # meta proporcional (no normalizada)
+                "minutos":   round(minutos),
+            })
+
+        resultado.append({
+            "linea":    linea.nombre,
+            "uph_meta": uph_meta,
+            "puntos":   puntos,
+        })
+
+    return {
+        "lineas":      resultado,
+        "horas":       horas,
+        "actualizado": ahora.isoformat(),
+    }
+
+
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
     """Dashboard HTML de testing — sin autenticación."""

@@ -175,6 +175,10 @@ export default function UPHDashboardScreen({ navigation }) {
             <Text style={s.titulo}>UPH en vivo</Text>
             <Text style={s.subtitulo}>{horaActual} · cada 15s</Text>
           </View>
+          <TouchableOpacity style={s.btnTendencias}
+            onPress={() => navigation.navigate('TendenciasUPH')}>
+            <Text style={s.btnReporteText}>📈 Tendencias</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={s.btnReporte}
             onPress={() => navigation.navigate('ReporteSemanalUPH')}>
             <Text style={s.btnReporteText}>📊 Reporte</Text>
@@ -261,6 +265,7 @@ const s = StyleSheet.create({
   },
   titulo:    { color: '#fff', fontSize: 20, fontWeight: '800' },
   subtitulo: { color: '#546E7A', fontSize: 11, marginTop: 2 },
+  btnTendencias: { backgroundColor: '#00695C', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   btnReporte: { backgroundColor: '#1565C0', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 8 },
   btnReporteText: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
 

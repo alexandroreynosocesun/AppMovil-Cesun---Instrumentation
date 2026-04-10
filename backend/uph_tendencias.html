@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Tendencias UPH · Hisense AMI</title>
+  <script src="/chart.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: #040f0e; color: #e0f7f5;
+      font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden;
+    }
+    body { display: flex; flex-direction: column; }
+
+    /* ─── HEADER ─── */
+    header {
+      height: 50px; flex-shrink: 0;
+      display: flex; align-items: center; padding: 0 16px; gap: 14px;
+      background: #061412; border-bottom: 1px solid #0a2e2a;
+    }
+    .h-logo  { font-size: 2rem; font-weight: 900; letter-spacing: 3px;
+               color: #00c8b8; text-shadow: 0 0 20px #00c8b877; }
+    .h-sep   { width: 1px; height: 24px; background: #0a2e2a; }
+    .h-title { font-size: 0.82rem; font-weight: 800; letter-spacing: 2px;
+               text-transform: uppercase; color: #00856e; }
+    .h-live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #00c8b8;
+      box-shadow: 0 0 8px #00c8b8; flex-shrink: 0;
+      animation: blink 1.5s ease-in-out infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
+    .h-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+    .h-clock { font-size: 1.4rem; font-weight: 200; letter-spacing: 3px;
+               color: #00c8b8; font-variant-numeric: tabular-nums; }
+    .h-selector { display: flex; gap: 6px; }
+    .sel-btn {
+      padding: 4px 14px; border-radius: 14px; font-size: 0.65rem; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer;
+      background: #061412; border: 1px solid #0a2e2a; color: #00856e;
+      transition: all 0.25s;
+    }
+    .sel-btn.act { background: #00877a; border-color: #00c8b8; color: #fff;
+                   box-shadow: 0 0 12px #00c8b844; }
+    .h-turno-badge {
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 2px; text-transform: uppercase;
+      color: #fff; background: #00877a; border: 1px solid #00c8b8;
+      border-radius: 14px; padding: 3px 14px;
+      box-shadow: 0 0 12px #00c8b844;
+    }
+    .h-back {
+      padding: 5px 16px; border-radius: 14px; font-size: 0.65rem; font-weight: 700;
+      letter-spacing: 1.5px; text-transform: uppercase; cursor: pointer;
+      background: transparent; border: 1px solid #0a2e2a; color: #00856e;
+      text-decoration: none; transition: all 0.25s;
+    }
+    .h-back:hover { border-color: #00c8b8; color: #00c8b8; }
+
+    /* ─── GRID 6 LÍNEAS ─── */
+    .main { flex: 1; min-height: 0; padding: 8px; display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 8px; }
+
+    /* ─── CARD ─── */
+    .card {
+      background: #061412; border: 1px solid #0a2e2a;
+      border-radius: 14px; display: flex; flex-direction: column;
+      padding: 10px 14px 8px; gap: 6px; overflow: hidden;
+      transition: border-color 0.5s;
+    }
+    .card.verde    { border-color: #00877a88; }
+    .card.amarillo { border-color: #cc770066; }
+    .card.rojo     { border-color: #cc222266; }
+
+    /* ─── CARD HEADER ─── */
+    .card-head { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+    .card-label { font-size: 2rem; font-weight: 900; line-height: 1;
+                  letter-spacing: -1px; }
+    .card-label.verde    { color: #1eb8ff; text-shadow: 0 0 20px #1eb8ff88; }
+    .card-label.amarillo { color: #ff8c00; text-shadow: 0 0 16px #ff8c0066; }
+    .card-label.rojo     { color: #ff5555; text-shadow: 0 0 16px #ff555566; }
+    .card-label.gris     { color: #00c8b8; text-shadow: 0 0 12px #00c8b844; }
+    .card-info { display: flex; flex-direction: column; gap: 2px; }
+    .card-modelo { font-size: 0.55rem; color: #00856e; letter-spacing: 1px;
+                   text-transform: uppercase; }
+
+    /* UPH actual grande */
+    .card-uph-wrap { display: flex; align-items: baseline; gap: 6px; }
+    .card-uph-val  { font-size: 1.6rem; font-weight: 900;
+                     font-variant-numeric: tabular-nums; line-height: 1; }
+    .card-uph-val.verde    { color: #00c8b8; text-shadow: 0 0 16px #00c8b866; }
+    .card-uph-val.amarillo { color: #ff8800; }
+    .card-uph-val.rojo     { color: #ff4040; }
+    .card-uph-val.gris     { color: #2a6060; }
+    .card-uph-meta { font-size: 0.65rem; color: #00856e; font-weight: 600; }
+    .card-uph-pct  { font-size: 0.75rem; font-weight: 800; }
+    .card-uph-pct.verde    { color: #69f0ae; }
+    .card-uph-pct.amarillo { color: #ffcc80; }
+    .card-uph-pct.rojo     { color: #ff8a80; }
+
+    /* Flecha tendencia */
+    .card-trend { font-size: 1.4rem; line-height: 1; margin-left: auto; flex-shrink: 0; }
+
+    /* ─── GRÁFICA ─── */
+    .card-chart { flex: 1; min-height: 0; position: relative; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="h-live-dot" id="live-dot"></div>
+  <span class="h-logo">Hisense</span>
+  <div class="h-sep"></div>
+  <span class="h-title">📈 Tendencias UPH · Por hora</span>
+  <span class="h-turno-badge" id="h-turno-badge"></span>
+  <div class="h-right">
+    <div class="h-clock" id="clock">--:--:--</div>
+    <a class="h-back" href="/dashboard_operadores.html">← Dashboard</a>
+  </div>
+</header>
+
+<div class="main" id="grid"></div>
+
+<script>
+  const API = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+  let _charts = {};
+
+  // ── Calcular inicio del turno activo (misma lógica que el backend) ──
+  function turnoActivo() {
+    const ahora = new Date();
+    const wd    = ahora.getDay(); // 0=Dom 1=Lun ... 6=Sáb
+    const mins  = ahora.getHours() * 60 + ahora.getMinutes();
+    const T_INI = 6 * 60 + 30;   // 06:30
+    const T_FIN = 18 * 60 + 30;  // 18:30
+
+    let nombre = null, inicio = new Date(ahora);
+
+    const esLunJue = wd >= 1 && wd <= 4;
+    const esVie    = wd === 5;
+    const esSabDom = wd === 6 || wd === 0;
+
+    if (esLunJue) {
+      if (mins >= T_INI && mins < T_FIN) {
+        nombre = 'Turno A'; inicio.setHours(6,30,0,0);
+      } else if (mins >= T_FIN) {
+        nombre = 'Turno B'; inicio.setHours(18,30,0,0);
+      } else {
+        // madrugada → turno B del día anterior
+        nombre = 'Turno B';
+        inicio.setDate(inicio.getDate()-1); inicio.setHours(18,30,0,0);
+      }
+    } else if (esVie) {
+      if (mins < T_INI) {
+        nombre = 'Turno B';
+        inicio.setDate(inicio.getDate()-1); inicio.setHours(18,30,0,0);
+      } else if (mins >= T_INI && mins < T_FIN) {
+        nombre = 'Turno C'; inicio.setHours(6,30,0,0);
+      } else {
+        nombre = 'Turno B'; inicio.setHours(18,30,0,0);
+      }
+    } else if (esSabDom) {
+      if (mins >= T_INI && mins < T_FIN) {
+        nombre = 'Turno C'; inicio.setHours(6,30,0,0);
+      } else if (mins < T_INI && wd === 6) {
+        // sábado madrugada → turno B viernes
+        nombre = 'Turno B';
+        inicio.setDate(inicio.getDate()-1); inicio.setHours(18,30,0,0);
+      } else {
+        nombre = null; inicio = null; // fuera de horario
+      }
+    }
+
+    return { nombre, inicio };
+  }
+
+  function col(pct) {
+    if (pct == null || pct === 0) return 'gris';
+    return pct >= 100 ? 'verde' : pct >= 90 ? 'amarillo' : 'rojo';
+  }
+
+  function lineaLabel(l) {
+    return (l||'').replace(/^HI-?/i,'L');
+  }
+
+  function tendenciaFlecha(puntos) {
+    // Compara las últimas 2 horas con datos
+    const conDatos = puntos.filter(p => p.uph > 0);
+    if (conDatos.length < 2) return { flecha: '—', color: '#2a6060' };
+    const ult  = conDatos[conDatos.length - 1].uph;
+    const prev = conDatos[conDatos.length - 2].uph;
+    const diff = ult - prev;
+    if (diff > 2)       return { flecha: '↑', color: '#00c8b8' };
+    if (diff < -2)      return { flecha: '↓', color: '#ff4040' };
+    return              { flecha: '→', color: '#ff8800' };
+  }
+
+  function renderGrid(data) {
+    const grid = document.getElementById('grid');
+
+    // Primera vez: crear cards
+    if (grid.children.length === 0) {
+      data.lineas.forEach(linea => {
+        const lbl = lineaLabel(linea.linea);
+        const div = document.createElement('div');
+        div.className = 'card gris';
+        div.id = `card-${lbl}`;
+        div.innerHTML = `
+          <div class="card-head">
+            <span class="card-label gris" id="lbl-${lbl}">${lbl}</span>
+            <div class="card-info">
+              <span class="card-modelo" id="modelo-${lbl}">—</span>
+              <div class="card-uph-wrap">
+                <span class="card-uph-val gris" id="uph-${lbl}">—</span>
+                <span class="card-uph-meta" id="meta-${lbl}"></span>
+                <span class="card-uph-pct gris" id="pct-${lbl}"></span>
+              </div>
+            </div>
+            <span class="card-trend" id="trend-${lbl}">—</span>
+          </div>
+          <div class="card-chart"><canvas id="cv-${lbl}"></canvas></div>`;
+        grid.appendChild(div);
+      });
+    }
+
+    data.lineas.forEach(linea => {
+      const lbl    = lineaLabel(linea.linea);
+      const puntos = linea.puntos || [];
+      const meta   = linea.uph_meta || 100;
+
+      // UPH actual = último punto con datos, normalizado a tasa horaria
+      const conDatos  = puntos.filter(p => p.uph > 0);
+      const ultPunto  = conDatos.length ? conDatos[conDatos.length - 1] : null;
+      const uphAct    = ultPunto
+        ? (ultPunto.minutos > 0 ? Math.round(ultPunto.uph / ultPunto.minutos * 60) : ultPunto.uph)
+        : 0;
+      const pct       = meta > 0 ? Math.round(uphAct / meta * 100) : null;
+      const c        = col(pct);
+      const { flecha, color: fColor } = tendenciaFlecha(puntos);
+
+      // Actualizar textos
+      const card = document.getElementById(`card-${lbl}`);
+      if (!card) return;
+      card.className = `card ${c}`;
+      document.getElementById(`lbl-${lbl}`).className    = `card-label ${c}`;
+      document.getElementById(`uph-${lbl}`).className    = `card-uph-val ${c}`;
+      document.getElementById(`uph-${lbl}`).textContent  = uphAct;
+      document.getElementById(`meta-${lbl}`).textContent = `/ ${meta}`;
+      document.getElementById(`pct-${lbl}`).className    = `card-uph-pct ${c}`;
+      document.getElementById(`pct-${lbl}`).textContent  = pct != null ? `${pct}%` : '';
+      const trendEl = document.getElementById(`trend-${lbl}`);
+      trendEl.textContent  = flecha;
+      trendEl.style.color  = fColor;
+      trendEl.style.filter = `drop-shadow(0 0 8px ${fColor}99)`;
+
+      // Para display: normalizar a tasa horaria (piezas/minuto × 60)
+      // Para colores: comparar piezas reales vs meta_slot proporcional
+      const labels   = puntos.map(p => p.hora);
+      const uphs     = puntos.map(p => p.minutos > 0 ? Math.round(p.uph / p.minutos * 60) : p.uph);
+      const metas    = puntos.map(p => p.meta_slot != null ? p.meta_slot : meta);
+      const ptColors = puntos.map((p, i) => {
+        const ms = metas[i];
+        const pct = ms > 0 ? p.uph / ms * 100 : 0;
+        return pct >= 100 ? '#00c8b8' : pct >= 90 ? '#ff8800' : p.uph === 0 ? '#0a2e2a' : '#ff4040';
+      });
+
+      // Plugin: dibuja flecha + delta encima de cada punto
+      const labelPlugin = {
+        id: `labels-${lbl}`,
+        afterDatasetDraw(chart) {
+          const ds = chart.data.datasets[0];
+          const meta_ = chart.getDatasetMeta(0);
+          const ctx2  = chart.ctx;
+          const uhMeta = linea.uph_meta || 100;
+          ds.data.forEach((u, i) => {
+            if (u === 0) return;
+            const pt      = meta_.data[i];
+            // u ya es tasa horaria normalizada (display); comparar contra uhMeta
+            const pct_    = uhMeta > 0 ? u / uhMeta * 100 : 0;
+            const delta   = u - uhMeta;
+            let flc, clr;
+            if (pct_ >= 100)      { flc = '▲'; clr = '#00e5cc'; }
+            else if (pct_ >= 90)  { flc = '▶'; clr = '#ff8800'; }
+            else                  { flc = '▼'; clr = '#ff4040'; }
+            const txt = delta >= 0 ? `+${delta}` : `${delta}`;
+            ctx2.save();
+            ctx2.font = 'bold 9px Segoe UI';
+            ctx2.fillStyle = clr;
+            ctx2.textAlign = 'center';
+            ctx2.fillText(flc,  pt.x, pt.y - 16);
+            ctx2.font = '8px Segoe UI';
+            ctx2.fillText(txt, pt.x, pt.y - 7);
+            ctx2.restore();
+          });
+        }
+      };
+
+      const cv = document.getElementById(`cv-${lbl}`);
+      if (_charts[lbl]) {
+        _charts[lbl].data.labels = labels;
+        _charts[lbl].data.datasets[0].data = uphs;
+        _charts[lbl].data.datasets[0].pointBackgroundColor = ptColors;
+        _charts[lbl].data.datasets[0].pointBorderColor     = ptColors;
+        _charts[lbl].data.datasets[1].data = Array(uphs.length).fill(meta);
+        _charts[lbl].update('none');
+      } else {
+        _charts[lbl] = new Chart(cv, {
+          type: 'line',
+          data: {
+            labels,
+            datasets: [{
+              label: 'UPH',
+              data: uphs,
+              borderColor: '#00c8b8',
+              backgroundColor: 'rgba(0,200,184,0.08)',
+              borderWidth: 2,
+              pointBackgroundColor: ptColors,
+              pointBorderColor:     ptColors,
+              pointRadius: 4,
+              pointHoverRadius: 6,
+              fill: true,
+              tension: 0.35,
+              spanGaps: false,
+            }, {
+              label: 'Meta',
+              data: Array(uphs.length).fill(meta),
+              borderColor: 'rgba(255,255,255,0.25)',
+              borderWidth: 1.5,
+              borderDash: [5, 4],
+              pointRadius: 0,
+              fill: false,
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: { duration: 600 },
+            layout: { padding: { top: 26 } },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                backgroundColor: '#061412',
+                borderColor: '#0a2e2a',
+                borderWidth: 1,
+                titleColor: '#00856e',
+                bodyColor: '#e0f7f5',
+                callbacks: {
+                  label: ctx => {
+                    const u = ctx.parsed.y;  // ya normalizado
+                    const p = meta > 0 ? Math.round(u / meta * 100) : 0;
+                    const d = u - meta;
+                    return ` UPH: ${u}  (${p}%)  ${d>=0?'+'+d:d}`;
+                  }
+                }
+              }
+            },
+            scales: {
+              x: {
+                ticks: { color: '#00856e', font: { size: 9 }, maxRotation: 0 },
+                grid:  { color: 'rgba(255,255,255,0.04)' },
+              },
+              y: {
+                ticks: {
+                  font: { size: 9 },
+                  color: ctx => {
+                    const v = ctx.tick.value;
+                    // Y-axis ticks: comparar contra meta horaria completa
+                    const p = meta > 0 ? v / meta * 100 : 0;
+                    return p >= 100 ? '#00e5cc' : p >= 90 ? '#ff8800' : '#ff4040';
+                  },
+                  callback: v => v,
+                },
+                grid: { color: 'rgba(255,255,255,0.04)' },
+                min: 0,
+                suggestedMax: Math.max(meta * 1.2, Math.max(...uphs) * 1.15 || meta * 1.2),
+              }
+            }
+          },
+          plugins: [labelPlugin],
+        });
+      }
+    });
+
+    document.getElementById('live-dot').className = 'h-live-dot';
+  }
+
+  // Genera puntos mock con variación realista
+  // Mock: genera puntos desde inicio del turno hasta ahora, hora por hora
+  // base = tasa horaria (pzs/hr), meta = meta horaria
+  // Genera piezas REALES por slot (proporcional a duración)
+  function mockPuntos(base, inicio, meta) {
+    const ahora  = new Date();
+    const puntos = [];
+    let tasa     = base; // tasa horaria que varía
+    const cur    = new Date(inicio);
+
+    let first = true;
+    while (cur <= ahora) {
+      let fin;
+      if (first) {
+        fin = new Date(cur);
+        fin.setMinutes(0, 0, 0);
+        fin.setHours(fin.getHours() + 1);
+        first = false;
+      } else {
+        fin = new Date(cur);
+        fin.setHours(fin.getHours() + 1);
+      }
+      if (fin > ahora) fin = new Date(ahora);
+
+      const minutos  = Math.max(1, (fin - cur) / 60000);
+      tasa = Math.max(0, Math.round(tasa + (Math.random() - 0.48) * 16));
+      // piezas reales del slot (proporcional al tiempo, no normalizado)
+      const piezas   = Math.round(tasa * minutos / 60);
+      const metaSlot = Math.round(meta * minutos / 60);
+      const horaStr  = `${String(cur.getHours()).padStart(2,'0')}:${String(cur.getMinutes()).padStart(2,'0')}`;
+      puntos.push({ hora: horaStr, uph: piezas, meta_slot: metaSlot, minutos: Math.round(minutos) });
+
+      const next = new Date(cur);
+      next.setMinutes(0, 0, 0);
+      next.setHours(next.getHours() + 1);
+      cur.setTime(next.getTime());
+    }
+    return puntos;
+  }
+
+  function mockData(inicio) {
+    return {
+      lineas: [
+        { linea:'HI-1', uph_meta:100, puntos: mockPuntos(112, inicio, 100) },
+        { linea:'HI-2', uph_meta:100, puntos: mockPuntos(94,  inicio, 100) },
+        { linea:'HI-3', uph_meta:100, puntos: mockPuntos(78,  inicio, 100) },
+        { linea:'HI-4', uph_meta:100, puntos: mockPuntos(103, inicio, 100) },
+        { linea:'HI-5', uph_meta:100, puntos: mockPuntos(88,  inicio, 100) },
+        { linea:'HI-6', uph_meta:100, puntos: mockPuntos(100, inicio, 100) },
+      ]
+    };
+  }
+
+  async function fetchData() {
+    const { nombre, inicio } = turnoActivo();
+
+    // Mostrar badge de turno
+    const badge = document.getElementById('h-turno-badge');
+    badge.textContent = nombre || 'Fuera de horario';
+    badge.style.background = nombre ? '#00877a' : '#333';
+
+    if (!inicio) {
+      document.getElementById('grid').innerHTML =
+        `<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;color:#0a3530;font-size:1rem;font-weight:700;letter-spacing:2px;">🌙 FUERA DE HORARIO</div>`;
+      return;
+    }
+
+    const desdeISO = inicio.toISOString();
+
+    try {
+      const res  = await fetch(`${API}/api/uph/tendencias?desde=${encodeURIComponent(desdeISO)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      const sinDatos = data.lineas.every(l => l.puntos.every(p => p.uph === 0));
+      renderGrid(sinDatos ? mockData(inicio) : data);
+    } catch(e) {
+      renderGrid(mockData(inicio));
+      document.getElementById('live-dot').className = 'h-live-dot err';
+    }
+  }
+
+  // Reloj
+  function tick() {
+    const now = new Date(), pad = n => String(n).padStart(2,'0');
+    document.getElementById('clock').textContent =
+      `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  }
+  tick(); setInterval(tick, 1000);
+
+  // Carga inicial + refresco cada 60s
+  fetchData();
+  setInterval(fetchData, 60000);
+
+  // WebSocket para refresco en tiempo real
+  (function connectWS() {
+    const ws = new WebSocket(`${location.protocol==='https:'?'wss:':'ws:'}//${location.host}/api/uph/ws`);
+    ws.onmessage = e => { if (e.data === 'refresh') fetchData(); };
+    ws.onclose   = () => setTimeout(connectWS, 3000);
+    ws.onerror   = () => ws.close();
+    setInterval(() => ws.readyState === 1 && ws.send('ping'), 25000);
+  })();
+</script>
+
+<style>
+  .h-live-dot {
+    width: 8px; height: 8px; border-radius: 50%; background: #00c8b8;
+    box-shadow: 0 0 8px #00c8b8; flex-shrink: 0;
+    animation: blink 1.5s ease-in-out infinite;
+  }
+  .h-live-dot.err { background: #ff4040; box-shadow: 0 0 8px #ff4040; }
+</style>
+</body>
+</html>

@@ -60,6 +60,7 @@ import InventarioScreen from '../screens/InventarioScreen';
 import UPHDashboardScreen from '../screens/UPHDashboardScreen';
 import ReporteSemanalUPHScreen from '../screens/ReporteSemanalUPHScreen';
 import OperadorHistorialScreen from '../screens/OperadorHistorialScreen';
+import TendenciasUPHScreen from '../screens/TendenciasUPHScreen';
 // Pantallas Modelos UPH
 import ModelosUPHAdminScreen from '../screens/ModelosUPHAdminScreen';
 import ModeloLideraScreen from '../screens/ModeloLideraScreen';
@@ -356,6 +357,11 @@ export default function AuthNavigator() {
             name="ReporteSemanalUPH"
             component={ReporteSemanalUPHScreen}
             options={{ title: 'Reporte Semanal UPH' }}
+          />
+          <Stack.Screen
+            name="TendenciasUPH"
+            component={TendenciasUPHScreen}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="OperadorHistorial"

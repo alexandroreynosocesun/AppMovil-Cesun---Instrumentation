@@ -20,32 +20,61 @@
       border-bottom: 1px solid #0a2e2a;
     }
     .h-logo-wrap { display: flex; align-items: center; gap: 10px; }
-    .h-logo  { font-size: 1.7rem; font-weight: 900; letter-spacing: 3px;
+    .h-logo  { font-size: 2.8rem; font-weight: 900; letter-spacing: 3px;
                color: #00c8b8; text-shadow: 0 0 28px #00c8b888; }
     .h-sep   { width: 1px; height: 26px; background: #0a2e2a; margin: 0 10px; }
-    .h-title { font-size: 0.62rem; font-weight: 600; color: #00856e;
-               letter-spacing: 2px; text-transform: uppercase; }
+    .h-title { display: flex; align-items: center; gap: 8px; }
+    .h-live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #00c8b8; flex-shrink: 0;
+      box-shadow: 0 0 8px #00c8b8;
+      animation: blink-live 1.5s ease-in-out infinite;
+    }
+    .h-live-dot.err { background: #ff4040; box-shadow: 0 0 8px #ff4040; }
+    @keyframes blink-live { 0%,100%{opacity:1;} 50%{opacity:0.2;} }
+    .h-live-text { font-size: 0.78rem; font-weight: 700; color: #00c8b8;
+                   letter-spacing: 2px; text-transform: uppercase;
+                   text-shadow: 0 0 10px #00c8b855; }
+    .h-live-sub  { font-size: 0.58rem; font-weight: 600; color: #00856e;
+                   letter-spacing: 1.5px; text-transform: uppercase; }
     .h-center {
       position: absolute; left: 50%; transform: translateX(-50%);
-      display: flex; flex-direction: column; align-items: center; gap: 0;
+      display: flex; flex-direction: row; align-items: center; gap: 14px;
     }
-    .h-empresa { font-size: 0.7rem; font-weight: 500; color: #00856e; margin-top: 1px; }
+    .h-sep { width: 1px; height: 28px; background: #0a4a40; }
+    .h-empresa { font-size: 1.1rem; font-weight: 600; color: #00856e; white-space: nowrap; letter-spacing: 1px; }
     .h-right { margin-left: auto; display: flex; align-items: center; gap: 14px; }
     .h-turnos { display: flex; gap: 6px; }
     .t-pill { padding: 3px 14px; border-radius: 16px; font-size: 0.72rem; font-weight: 700;
               border: 1px solid #0a2e2a; color: #1a4040; background: #061412; transition: all 0.4s; }
-    .t-pill.act-A { background: #00877a; color: #fff; border-color: #00c8b8; box-shadow: 0 0 14px #00c8b844; }
-    .t-pill.act-B { background: #005544; color: #69f0ae; border-color: #00aa88; }
-    .t-pill.act-C { background: #003322; color: #b2dfdb; border-color: #008866; }
+    .t-pill.act-A { background: #00877a; color: #fff; border-color: #00c8b8; box-shadow: 0 0 18px #00c8b877; padding: 4px 18px; font-size: 0.82rem; }
+    .t-pill.act-B { background: #00877a; color: #fff; border-color: #00c8b8; box-shadow: 0 0 18px #00c8b877; padding: 4px 18px; font-size: 0.82rem; }
+    .t-pill.act-C { background: #00877a; color: #fff; border-color: #00c8b8; box-shadow: 0 0 18px #00c8b877; padding: 4px 18px; font-size: 0.82rem; }
     .h-clock { font-size: 1.65rem; font-weight: 200; letter-spacing: 3px;
                color: #00c8b8; font-variant-numeric: tabular-nums;
                text-shadow: 0 0 28px #00c8b844; }
     /* Monitor SVG */
-    .h-monitor { width: 54px; height: 44px; flex-shrink: 0; }
-    .h-monitor svg { width: 100%; height: 100%; }
+    .h-monitor { flex-shrink: 0; cursor: pointer; text-decoration: none;
+                 display: flex; align-items: center; justify-content: center;
+                 font-size: 2.4rem; line-height: 1;
+                 filter: drop-shadow(0 0 10px #ffd70099);
+                 animation: money-pulse 2s ease-in-out infinite;
+                 transition: transform 0.2s; }
+    .h-monitor:hover { transform: scale(1.2); filter: drop-shadow(0 0 20px #ffd700cc); }
+    .h-tendencias {
+      flex-shrink: 0; cursor: pointer; text-decoration: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem; line-height: 1;
+      filter: drop-shadow(0 0 8px #00c8b855);
+      transition: transform 0.2s, filter 0.2s;
+    }
+    .h-tendencias:hover { transform: scale(1.2); filter: drop-shadow(0 0 16px #00c8b8cc); }
+    @keyframes money-pulse {
+      0%,100% { filter: drop-shadow(0 0 8px #ffd70066); }
+      50%      { filter: drop-shadow(0 0 22px #ffd700ff) drop-shadow(0 0 40px #ffd70066); }
+    }
 
     /* ─── LAYOUT ─────────────────────────────────────── */
-    .main { flex: 1; min-height: 0; padding: 10px; display: flex; gap: 10px; }
+    .main { flex: 1; min-height: 0; padding: 6px; display: flex; gap: 6px; }
     .lines-grid {
       flex: 1; min-width: 0; height: 100%;
       display: grid;
@@ -63,38 +92,59 @@
     .card.verde    { border-color: #00877a99; box-shadow: 0 0 22px #00877a18; }
     .card.amarillo { border-color: #cc770066; box-shadow: 0 0 22px #cc770012; }
     .card.rojo     { border-color: #cc222266; box-shadow: 0 0 22px #cc222214; }
-    .card.rank-1   { border-color: #ffd700cc !important; border-width: 2px;
-                     animation: pulse-gold 2s ease-in-out infinite; }
-    .card.rank-2   { border-color: #c0c0c099 !important; box-shadow: 0 0 30px #c0c0c033 !important; }
-    .card.rank-3   { border-color: #cd7f3288 !important; }
+    .card.rank-1 {
+      border-color: #ffd700 !important; border-width: 3px;
+      background: linear-gradient(160deg, #131000 0%, #1c1700 50%, #080800 100%) !important;
+      animation: pulse-gold 1.6s ease-in-out infinite;
+    }
+    .card.rank-2 {
+      border-color: #d0d0d0 !important; border-width: 2px;
+      background: linear-gradient(160deg, #111111 0%, #181818 50%, #0d0d0d 100%) !important;
+      animation: pulse-silver 2s ease-in-out infinite;
+    }
+    .card.rank-3 {
+      border-color: #cd7f32cc !important; border-width: 2px;
+      background: linear-gradient(160deg, #110800 0%, #1a0e00 50%, #0d0800 100%) !important;
+      animation: pulse-bronze 2.2s ease-in-out infinite;
+    }
     @keyframes pulse-gold {
-      0%,100% { box-shadow: 0 0 25px #ffd70066, 0 0 50px #ffd70022; }
-      50%     { box-shadow: 0 0 60px #ffd700bb, 0 0 100px #ffd70055; }
+      0%,100% { box-shadow: 0 0 30px #ffd700bb, 0 0 70px #ffd70055, inset 0 0 30px #ffd70008; }
+      50%     { box-shadow: 0 0 70px #ffd700ff, 0 0 140px #ffd700aa, 0 0 220px #ffd70044, inset 0 0 50px #ffd70014; }
+    }
+    @keyframes pulse-silver {
+      0%,100% { box-shadow: 0 0 20px #c0c0c066, 0 0 50px #c0c0c022, inset 0 0 20px #c0c0c006; }
+      50%      { box-shadow: 0 0 45px #c0c0c0bb, 0 0 90px #c0c0c055, inset 0 0 35px #c0c0c010; }
+    }
+    @keyframes pulse-bronze {
+      0%,100% { box-shadow: 0 0 8px #cd7f3233, 0 0 18px #cd7f3211; }
+      50%      { box-shadow: 0 0 18px #cd7f3255, 0 0 35px #cd7f3222; }
     }
 
     /* ── Card top ── */
     .card-top {
       display: flex; flex-direction: row; align-items: center;
-      padding: 10px 4px 16px 10px; gap: 8px; flex-shrink: 0;
+      padding: 4px 8px 4px 8px; gap: 8px; flex-shrink: 0;
       border-bottom: 1px solid #0a2e2a;
     }
-    .card-id { display: flex; flex-direction: column; justify-content: center;
-               min-width: 68px; flex-shrink: 0; }
-    .id-top   { display: flex; align-items: baseline; gap: 4px; }
-    .id-medal { font-size: 1rem; }
-    .id-linea { font-size: 2rem; font-weight: 900; line-height: 1; letter-spacing: -1px; }
-    .id-linea.verde    { color: #00c8b8; text-shadow: 0 0 20px #00c8b855; }
-    .id-linea.amarillo { color: #ff8c00; text-shadow: 0 0 16px #ff8c0044; }
-    .id-linea.rojo     { color: #ff5555; }
-    .id-linea.gris     { color: #2e6b3e; }
-    .id-modelo { font-size: 0.58rem; color: #00856e; letter-spacing: 1px;
-                 text-transform: uppercase; margin-top: 2px; }
-    .card-kpis { flex: 1; display: flex; flex-direction: column; gap: 8px; justify-content: center; }
+    .card-id { display: flex; flex-direction: column; align-items: center; justify-content: center;
+               min-width: 60px; flex-shrink: 0; gap: 0; }
+    .id-medal { font-size: 1.6rem; line-height: 1; filter: drop-shadow(0 0 8px rgba(255,220,50,0.9)); }
+    .id-medal.oro     { filter: drop-shadow(0 0 12px #ffd70099) drop-shadow(0 0 24px #ffaa0066); }
+    .id-medal.plata   { filter: drop-shadow(0 0 10px #c0c0c099) drop-shadow(0 0 20px #a0a0a055); }
+    .id-medal.bronce  { filter: drop-shadow(0 0 10px #cd7f3299) drop-shadow(0 0 20px #a0500055); }
+    .id-linea { font-size: 2.6rem; font-weight: 900; line-height: 1; letter-spacing: -2px; }
+    .id-linea.verde    { color: #00c8b8; text-shadow: 0 0 28px #00c8b8cc, 0 0 50px #00c8b866; }
+    .id-linea.amarillo { color: #ff8c00; text-shadow: 0 0 20px #ff8c0066; }
+    .id-linea.rojo     { color: #ff5555; text-shadow: 0 0 20px #ff555566; }
+    .id-linea.gris     { color: #00c8b8; text-shadow: 0 0 16px #00c8b866; }
+    .id-modelo { font-size: 0.48rem; color: #00856e; letter-spacing: 1px;
+                 text-transform: uppercase; }
+    .card-kpis { flex: 1; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
 
     /* ── Barras KPI ── */
     .kpi-row { display: flex; align-items: stretch; }
     .kpi-track {
-      flex: 1; height: 38px; background: #071a17; border-radius: 19px;
+      flex: 1; height: 30px; background: #071a17; border-radius: 15px;
       position: relative; overflow: visible;
       box-shadow: inset 0 2px 8px rgba(0,0,0,0.8);
     }
@@ -127,66 +177,115 @@
     @keyframes pulso-rojo { 0%,100%{filter:brightness(0.85);} 50%{filter:brightness(1.1);} }
     .kpi-inner-label {
       position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
-      font-size: 0.48rem; font-weight: 700; letter-spacing: 1.5px;
-      text-transform: uppercase; color: rgba(255,255,255,0.4); z-index: 3;
+      font-size: 0.68rem; font-weight: 800; letter-spacing: 2.5px;
+      text-transform: uppercase; color: rgba(255,255,255,0.88); z-index: 3;
+      text-shadow: 0 1px 5px rgba(0,0,0,0.9);
+      pointer-events: none;
     }
     .kpi-fill-val {
-      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-      display: flex; align-items: baseline; gap: 5px; z-index: 3; white-space: nowrap;
+      position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+      display: flex; align-items: baseline; gap: 4px; z-index: 3; white-space: nowrap;
     }
-    .kpi-fill-num { font-size: 0.95rem; font-weight: 900; font-variant-numeric: tabular-nums;
-                    color: rgba(255,255,255,0.97); text-shadow: 0 1px 6px rgba(0,0,0,0.7); }
-    .kpi-fill-pct { font-size: 0.7rem; font-weight: 800; color: rgba(255,255,255,0.7); }
+    .kpi-fill-num { font-size: 1.1rem; font-weight: 900; font-variant-numeric: tabular-nums;
+                    color: #ffffff; text-shadow: 0 0 10px rgba(0,0,0,1), 0 1px 6px rgba(0,0,0,0.9); }
+    .kpi-fill-pct { font-size: 0.82rem; font-weight: 900; }
+    .kpi-fill-pct.verde    { color: #69f0ae; text-shadow: 0 0 8px #69f0ae88; }
+    .kpi-fill-pct.amarillo { color: #ffcc80; text-shadow: 0 0 8px #ffcc8088; }
+    .kpi-fill-pct.rojo     { color: #ff8a80; text-shadow: 0 0 8px #ff8a8088; }
+    .kpi-fill-pct.azul     { color: #80deea; text-shadow: 0 0 8px #80deea88; }
+    .kpi-sep { color: rgba(255,255,255,0.35); font-size: 0.9rem; margin: 0 3px; }
+    .kpi-meta { font-size: 0.72rem; font-weight: 700; color: rgba(255,255,255,0.6);
+                font-variant-numeric: tabular-nums; }
+    .kpi-avg-line {
+      position: absolute; top: -5px; bottom: -5px; width: 2px;
+      background: rgba(255,255,255,0.5); border-radius: 2px; z-index: 6;
+      box-shadow: 0 0 6px rgba(255,255,255,0.4);
+    }
+    .kpi-avg-label {
+      position: absolute; top: -16px; transform: translateX(-50%);
+      font-size: 0.42rem; font-weight: 700; color: rgba(255,255,255,0.5);
+      white-space: nowrap; letter-spacing: 0.5px;
+    }
     .kpi-target-end {
-      position: absolute; right: 0; top: -6px; bottom: -6px; width: 3px;
-      background: rgba(255,255,255,0.65); border-radius: 2px; z-index: 5;
-      box-shadow: 0 0 8px rgba(255,255,255,0.55);
+      position: absolute; right: 0; top: -6px; bottom: -6px; width: 2px;
+      background: rgba(255,255,255,0.3); border-radius: 2px; z-index: 5;
     }
-    .kpi-target-end-label {
-      position: absolute; right: 5px; bottom: -18px;
-      font-size: 0.48rem; font-weight: 700; color: rgba(255,255,255,0.5); white-space: nowrap;
-    }
+    .kpi-target-end-label { display: none; }
 
     /* ── Operadores — zona scrollable ── */
     .card-ops {
-      flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden;
+      flex: 1; min-height: 0; overflow: hidden;
       display: flex; flex-direction: row; align-items: stretch;
       padding: 8px 10px; gap: 7px;
-      scrollbar-width: thin; scrollbar-color: #0a2e2a transparent;
     }
-    .card-ops::-webkit-scrollbar { height: 4px; }
-    .card-ops::-webkit-scrollbar-thumb { background: #0a2e2a; border-radius: 2px; }
     .card-ops.vacia { align-items: center; justify-content: center; }
     .ops-empty { color: #0a3530; font-size: 0.75rem; }
+
+    /* ── Mini scoreboard por línea ── */
+    .card-scoreboard {
+      flex-shrink: 0; padding: 5px 10px 8px; display: flex; flex-direction: column; gap: 4px;
+      border-top: 1px solid #0a2e2a;
+    }
+    .csb-title { font-size: 0.45rem; font-weight: 700; letter-spacing: 2px; color: #00856e;
+                 text-transform: uppercase; margin-bottom: 2px; }
+    .csb-row { display: flex; align-items: center; gap: 6px; }
+    .csb-pos  { font-size: 0.9rem; width: 18px; text-align: center; flex-shrink: 0; }
+    .csb-avatar { width: 22px; height: 22px; border-radius: 50%; object-fit: cover;
+                  flex-shrink: 0; border: 1px solid #0a2e2a; }
+    .csb-avatar-ini { width: 22px; height: 22px; border-radius: 50%; border: 1px solid #0a2e2a;
+                      background: #071a17; display: flex; align-items: center; justify-content: center;
+                      font-size: 0.45rem; font-weight: 800; color: #00c8b8; flex-shrink: 0; }
+    .csb-nombre { flex: 1; font-size: 0.58rem; font-weight: 700; color: #b2dfdb;
+                  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .csb-row.csb-1 .csb-nombre { color: #ffd700; }
+    .csb-row.csb-2 .csb-nombre { color: #d0d0d0; }
+    .csb-bar-wrap { width: 50px; height: 5px; background: #071a17; border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+    .csb-bar-fill { height: 100%; border-radius: 3px; transition: width 1s; }
+    .csb-bar-fill.verde    { background: linear-gradient(90deg, #003d2a, #00c8b8); }
+    .csb-bar-fill.amarillo { background: linear-gradient(90deg, #5c2000, #ff8c00); }
+    .csb-bar-fill.rojo     { background: linear-gradient(90deg, #550000, #ff4545); }
+    .csb-uph { font-size: 0.65rem; font-weight: 900; min-width: 28px; text-align: right;
+               font-variant-numeric: tabular-nums; color: #00c8b8; flex-shrink: 0; }
+    .csb-row.csb-1 .csb-uph { color: #ffd700; }
+    .csb-row.csb-2 .csb-uph { color: #d0d0d0; }
 
     /* ── Mini-card por operador (Opción B) ── */
     .op-card {
       display: flex; flex-direction: column; align-items: center;
-      flex-shrink: 0; gap: 5px;
+      flex: 1; min-width: 0; gap: 5px;
       background: #040f0e;
       border-radius: 12px;
       border: 1px solid #0d2e29;
       padding: 10px 8px 8px;
-      min-width: 80px;
       transition: border-color 0.4s, box-shadow 0.4s;
     }
-    .op-card.kpi-verde    { border-color: #00877a99; box-shadow: 0 0 14px #00877a22; }
-    .op-card.kpi-amarillo { border-color: #cc770066; box-shadow: 0 0 10px #cc770011; }
-    .op-card.kpi-rojo     { border-color: #cc222266; box-shadow: 0 0 10px #cc222211; }
+    .op-card.kpi-verde {
+      border-color: #00c8b8cc;
+      box-shadow: 0 0 22px #00c8b844, inset 0 0 18px #00c8b808;
+      background: linear-gradient(160deg, #061f1c 0%, #04130f 100%);
+    }
+    .op-card.kpi-amarillo { border-color: #ff880066; box-shadow: 0 0 12px #ff880018; }
+    .op-card.kpi-rojo     { border-color: #ff404066; box-shadow: 0 0 12px #ff404018; }
 
     /* Avatar dentro de la mini-card */
     .op-avatar { width: 48px; height: 48px; border-radius: 50%; object-fit: cover;
                  flex-shrink: 0; border: 2px solid #0a2e2a; }
-    .op-avatar.kpi-verde    { border-color: #00c8b8; box-shadow: 0 0 10px #00c8b855; }
+    .op-avatar.kpi-verde    { border-color: #00c8b8; border-width: 3px;
+                              box-shadow: 0 0 16px #00c8b877, 0 0 32px #00c8b833; }
     .op-avatar.kpi-amarillo { border-color: #ff8800aa; }
     .op-avatar.kpi-rojo     { border-color: #ff4040aa; }
     .op-avatar-ini { width: 48px; height: 48px; border-radius: 50%;
                      border: 2px solid #0a2e2a; background: #071a17;
                      display: flex; align-items: center; justify-content: center;
                      font-size: 0.75rem; font-weight: 800; color: #00c8b8; flex-shrink: 0; }
+    .op-card.kpi-verde .op-avatar-ini {
+      border-color: #00c8b8; border-width: 3px;
+      box-shadow: 0 0 16px #00c8b877;
+    }
     .op-name { font-size: 0.58rem; font-weight: 700; color: #7ecdc4; text-align: center;
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
                letter-spacing: 0.5px; }
+    .op-card.kpi-verde .op-name { color: #00e5cc; text-shadow: 0 0 8px #00c8b866; }
 
     /* Barras de estaciones dentro de la card */
     .op-stations { display: flex; flex-direction: row; gap: 6px;
@@ -194,13 +293,13 @@
                    width: 100%; justify-content: center; }
     .st-col { display: flex; flex-direction: column; align-items: center;
               gap: 3px; width: 30px; }
-    .st-bar-outer { flex: 1; min-height: 30px; display: flex;
+    .st-bar-outer { flex: 1; min-height: 60px; display: flex;
                     flex-direction: column; align-items: center; justify-content: flex-end; }
     .st-bar-wrap { width: 22px; position: relative; background: #071a17;
                    border-radius: 6px; overflow: visible; }
     .st-bar-fill { width: 100%; border-radius: 6px; min-height: 3px; transition: height 0.9s cubic-bezier(.4,0,.2,1); }
-    .st-bar-fill.verde    { background: linear-gradient(0deg, #003d2a, #00877a, #00c8b8);
-                            box-shadow: 0 0 8px #00c8b833; }
+    .st-bar-fill.verde    { background: linear-gradient(0deg, #003d2a, #00877a, #00e5cc);
+                            box-shadow: 0 0 12px #00c8b855, 0 0 4px #00e5ccaa; }
     .st-bar-fill.amarillo { background: linear-gradient(0deg, #5c2000, #cc5500, #ff8800); }
     .st-bar-fill.rojo     { background: linear-gradient(0deg, #550000, #bb1111, #ff4040);
                             animation: pulso-rojo 2s ease-in-out infinite; }
@@ -217,7 +316,7 @@
     .st-pct.amarillo { color: #ff8800; }
     .st-pct.rojo     { color: #ff4040; }
     .st-pct.gris     { color: #1a5048; }
-    .st-label { font-size: 0.48rem; color: #1a7060; font-weight: 600; letter-spacing: 0.5px; }
+    .st-label { font-size: 0.62rem; color: #1a7060; font-weight: 700; letter-spacing: 0.5px; }
 
     /* ─── SIDEBAR ────────────────────────────────────── */
     .sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
@@ -234,6 +333,40 @@
     .sb-turno-val   { font-size: 1.4rem; font-weight: 900; color: #00c8b8;
                       text-shadow: 0 0 20px #00c8b855; letter-spacing: 2px; }
     .sb-turno-hora  { font-size: 0.55rem; color: #00856e; margin-top: 2px; }
+    .sb-hero-bottom {
+      display: flex; align-items: center; justify-content: center; gap: 5px; padding: 4px 0 2px;
+      white-space: nowrap; flex-wrap: nowrap;
+    }
+    .sb-trophy { font-size: 1.3rem; filter: drop-shadow(0 0 6px #ffd70099); flex-shrink: 0; }
+    .sb-ranking-label { font-size: 0.78rem; font-weight: 800; letter-spacing: 1.5px;
+                        text-transform: uppercase; color: #00c8b8; text-shadow: 0 0 10px #00c8b877; }
+    .sb-hero-sep { color: #00856e; font-size: 0.78rem; }
+    .sb-turno-badge {
+      font-size: 0.78rem; font-weight: 800; letter-spacing: 1.5px;
+      text-transform: uppercase; color: #00c8b8;
+      text-shadow: 0 0 10px #00c8b877;
+    }
+    .sb-monito-wrap {
+      display: flex; justify-content: center; align-items: center; padding: 4px 0 2px;
+      position: relative;
+    }
+    .sb-monito-wrap::before, .sb-monito-wrap::after {
+      content: '';
+      position: absolute;
+      top: 10%; bottom: 10%;
+      width: 18px; border-radius: 50%;
+      background: #00c8b8;
+      filter: blur(14px);
+      opacity: 0.75;
+      animation: glow-pulse 2.5s ease-in-out infinite;
+    }
+    .sb-monito-wrap::before { left: 0; }
+    .sb-monito-wrap::after  { right: 0; }
+    @keyframes glow-pulse {
+      0%,100% { opacity: 0.55; filter: blur(14px); }
+      50%      { opacity: 1;    filter: blur(20px); }
+    }
+    .sb-monito { width: 100%; max-height: 160px; object-fit: contain; display: block; position: relative; z-index: 1; }
     .sb-sec-title   { font-size: 0.48rem; font-weight: 700; letter-spacing: 2px;
                       color: #00856e; text-transform: uppercase; margin-bottom: 5px; padding: 0 2px; }
     .sb-ranking {
@@ -291,26 +424,68 @@
     .lp-delta { font-size: 0.54rem; font-weight: 700; min-width: 40px; text-align: right; flex-shrink: 0; }
     .lp-delta.pos { color: #00c8b8; } .lp-delta.neg { color: #ff4040; }
 
-    /* ─── FOOTER ─────────────────────────────────────── */
-    footer {
-      height: 16px; flex-shrink: 0; background: #071a17;
-      border-top: 1px solid #0a2e2a;
-      display: flex; justify-content: space-between; align-items: center;
-      padding: 0 16px; font-size: 0.54rem; color: #0a2e2a;
+    /* ─── MODAL PASSWORD ─────────────────────────────── */
+    .pwd-overlay {
+      position: fixed; inset: 0; z-index: 999;
+      background: rgba(4,15,14,0.88); backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.3s;
     }
-    .ft-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; margin-right: 4px;
-              background: #00c8b8; box-shadow: 0 0 6px #00c8b8; }
-    .ft-dot.err { background: #ff4040; box-shadow: 0 0 6px #ff4040; }
+    .pwd-overlay.visible { opacity: 1; pointer-events: all; }
+    .pwd-box {
+      background: #061412; border: 1px solid #0a2e2a;
+      border-radius: 20px; padding: 32px 36px; display: flex;
+      flex-direction: column; align-items: center; gap: 16px;
+      box-shadow: 0 0 60px #ffd70022;
+      animation: pwd-drop 0.3s cubic-bezier(.36,1.6,.4,1);
+    }
+    @keyframes pwd-drop {
+      0%   { transform: scale(0.8) translateY(-20px); opacity: 0; }
+      100% { transform: scale(1) translateY(0);       opacity: 1; }
+    }
+    .pwd-icon  { font-size: 2.8rem; filter: drop-shadow(0 0 16px #ffd70099); }
+    .pwd-title { font-size: 0.72rem; font-weight: 800; letter-spacing: 3px;
+                 text-transform: uppercase; color: #00856e; }
+    .pwd-input {
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 10px;
+      padding: 10px 18px; color: #e0f7f5; font-size: 1.1rem; font-weight: 700;
+      letter-spacing: 6px; text-align: center; outline: none; width: 180px;
+      transition: border-color 0.3s;
+    }
+    .pwd-input:focus { border-color: #00c8b8; box-shadow: 0 0 12px #00c8b833; }
+    .pwd-input.err   { border-color: #ff4040; animation: pwd-shake 0.3s; }
+    @keyframes pwd-shake {
+      0%,100%{ transform:translateX(0); } 25%{ transform:translateX(-8px); } 75%{ transform:translateX(8px); }
+    }
+    .pwd-btn {
+      padding: 10px 32px; border-radius: 20px; font-size: 0.72rem; font-weight: 800;
+      letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+      background: #00877a; border: none; color: #fff;
+      box-shadow: 0 0 20px #00877a55; transition: all 0.2s;
+    }
+    .pwd-btn:hover { background: #00c8b8; box-shadow: 0 0 28px #00c8b877; }
+    .pwd-err { font-size: 0.62rem; color: #ff6060; letter-spacing: 1px; min-height: 14px; }
+
+    /* ─── FOOTER ─────────────────────────────────────── */
+    footer { display: none; }
+    .ft-dot { display: none; }
   </style>
 </head>
 <body>
 
 <header>
   <div class="h-logo-wrap">
-    <span class="h-title">Dashboard UPH · Producción en Vivo</span>
+    <div class="h-title">
+      <div class="h-live-dot" id="h-live-dot"></div>
+      <div>
+        <div class="h-live-text">EN VIVO · Dashboard UPH</div>
+        <div class="h-live-sub">Producción en tiempo real</div>
+      </div>
+    </div>
   </div>
   <div class="h-center">
     <span class="h-logo">Hisense</span>
+    <div class="h-sep"></div>
     <span class="h-empresa">Electrónica de México S.A. de C.V.</span>
   </div>
   <div class="h-right">
@@ -320,21 +495,19 @@
       <span class="t-pill" id="pill-C">Turno C</span>
     </div>
     <div class="h-clock" id="clock">--:--:--</div>
-    <div class="h-monitor">
-      <svg viewBox="0 0 54 44" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="2" width="50" height="32" rx="3" fill="#071a17" stroke="#00c8b8" stroke-width="1.5"/>
-        <rect x="5" y="5" width="44" height="26" rx="2" fill="#071a17"/>
-        <rect x="8" y="10" width="22" height="4" rx="2" fill="#00c8b8" opacity="0.7"/>
-        <rect x="8" y="16" width="16" height="4" rx="2" fill="#ff8800" opacity="0.6"/>
-        <rect x="8" y="22" width="28" height="4" rx="2" fill="#00c8b8" opacity="0.8"/>
-        <line x1="32" y1="8" x2="32" y2="30" stroke="rgba(255,255,255,0.35)" stroke-width="1" stroke-dasharray="2,2"/>
-        <path d="M20 34 L24 40 L30 40 L34 34" fill="none" stroke="#00c8b8" stroke-width="1.2" opacity="0.6"/>
-        <rect x="19" y="39" width="16" height="2" rx="1" fill="#00c8b8" opacity="0.4"/>
-        <circle cx="27" cy="35" r="1" fill="#00c8b8" opacity="0.9">
-          <animate attributeName="opacity" values="0.4;1;0.4" dur="2s" repeatCount="indefinite"/>
-        </circle>
+    <a href="/uph-tendencias.html" class="h-tendencias" title="Tendencias UPH por hora">
+      <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="28" height="28" rx="7" fill="#00c8b811"/>
+        <polyline points="4,22 10,15 15,17 24,6" stroke="#00e5cc" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+        <polyline points="19,6 24,6 24,11" stroke="#00e5cc" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round" fill="none"/>
+        <circle cx="10" cy="15" r="1.8" fill="#00e5cc"/>
+        <circle cx="15" cy="17" r="1.8" fill="#00e5cc"/>
+        <circle cx="24" cy="6" r="1.8" fill="#00e5cc"/>
       </svg>
-    </div>
+    </a>
+    <a href="#" class="h-monitor" title="Ver ranking semanal · Bono semanal" onclick="abrirRanking(event)">
+      💰
+    </a>
   </div>
 </header>
 
@@ -343,17 +516,34 @@
   <aside class="sidebar">
     <div class="sb-hero">
       <div class="sb-hero-glow"></div>
-      <div class="sb-turno-label">Turno activo</div>
-      <div class="sb-turno-val" id="sb-turno-val">—</div>
-      <div class="sb-turno-hora" id="sb-turno-hora"></div>
+      <div class="sb-monito-wrap">
+        <img src="/monito.jpg" class="sb-monito" alt="monito">
+      </div>
+      <div class="sb-hero-bottom">
+        <span class="sb-trophy">🏆</span>
+        <span class="sb-ranking-label">Ranking</span>
+        <span class="sb-hero-sep">·</span>
+        <div class="sb-turno-badge" id="sb-turno-badge">—</div>
+      </div>
     </div>
-    <div class="sb-sec-title">🏅 Ranking operadores · UPH</div>
     <div class="sb-ranking" id="sb-ranking"></div>
     <div class="sb-lineas">
       <div class="sb-sec-title">📦 Piezas acumuladas en turno</div>
       <div id="sb-lineas-list"></div>
     </div>
   </aside>
+</div>
+
+<div class="pwd-overlay" id="pwd-overlay" onclick="cerrarPwdSiAfuera(event)">
+  <div class="pwd-box" id="pwd-box">
+    <div class="pwd-icon">💰</div>
+    <div class="pwd-title">Acceso restringido</div>
+    <input class="pwd-input" id="pwd-input" type="password" placeholder="••••••"
+      maxlength="20" autocomplete="off"
+      onkeydown="if(event.key==='Enter')verificarPwd(); if(event.key==='Escape')cerrarPwd();">
+    <div class="pwd-err" id="pwd-err"></div>
+    <button class="pwd-btn" onclick="verificarPwd()">Entrar</button>
+  </div>
 </div>
 
 <footer>
@@ -364,7 +554,36 @@
 
 <script>
   const API       = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
-  const ST_MAX    = 130;
+
+  // ── Modal contraseña ──────────────────────────────────────────
+  function abrirRanking(e) {
+    e.preventDefault();
+    document.getElementById('pwd-input').value = '';
+    document.getElementById('pwd-err').textContent = '';
+    document.getElementById('pwd-input').classList.remove('err');
+    document.getElementById('pwd-overlay').classList.add('visible');
+    setTimeout(() => document.getElementById('pwd-input').focus(), 50);
+  }
+  function cerrarPwd() {
+    document.getElementById('pwd-overlay').classList.remove('visible');
+  }
+  function cerrarPwdSiAfuera(e) {
+    if (e.target === document.getElementById('pwd-overlay')) cerrarPwd();
+  }
+  function verificarPwd() {
+    const val = document.getElementById('pwd-input').value;
+    if (val === 'admin') {
+      cerrarPwd();
+      window.location.href = '/ranking-semanal.html';
+    } else {
+      const inp = document.getElementById('pwd-input');
+      inp.classList.add('err');
+      document.getElementById('pwd-err').textContent = 'Contraseña incorrecta';
+      inp.value = '';
+      setTimeout(() => inp.classList.remove('err'), 400);
+    }
+  }
+  const ST_MAX    = 110;
 
   function col(pct) {
     if (pct == null) return 'gris';
@@ -392,16 +611,19 @@
   function kpiRowHTML(label, actual, meta, clase) {
     const fillPct = meta > 0 ? Math.min(actual / meta / 1.25 * 100, 100).toFixed(1) : '0';
     const pct     = meta > 0 ? Math.round(actual / meta * 100) : null;
+    // Línea de promedio al 80% del ancho de la meta (referencia visual)
+    const avgPct  = meta > 0 ? (1 / 1.25 * 100).toFixed(1) : null;
     return `
       <div class="kpi-row">
         <div class="kpi-track">
           <span class="kpi-inner-label">${label}</span>
           <div class="kpi-fill ${clase}" style="width:${fillPct}%"></div>
+          ${avgPct ? `<div class="kpi-avg-line" style="left:${avgPct}%"></div>` : ''}
           <div class="kpi-fill-val">
-            <span class="kpi-fill-num">${actual.toLocaleString()}</span>
-            ${pct != null ? `<span class="kpi-fill-pct">${pct}%</span>` : ''}
+            ${pct != null ? `<span class="kpi-fill-pct ${clase}">${pct}%</span>` : ''}
+            <span class="kpi-sep">|</span>
+            <span class="kpi-fill-num">${actual.toLocaleString()}${meta > 0 ? `<span class="kpi-meta">/${meta.toLocaleString()}</span>` : ''}</span>
           </div>
-          ${meta > 0 ? `<div class="kpi-target-end"><span class="kpi-target-end-label">${meta.toLocaleString()}</span></div>` : ''}
         </div>
       </div>`;
   }
@@ -424,7 +646,7 @@
             </div>
           </div>
         </div>
-        <span class="st-label">${st.estacion||'—'}</span>
+        <span class="st-label">${(st.estacion||'—').replace(/^E/i,'')}</span>
       </div>`;
   }
 
@@ -443,13 +665,55 @@
       </div>`;
   }
 
+  function miniScoreHTML(operadores) {
+    if (!operadores || operadores.length === 0) return '';
+    const ranked = [...operadores].map(op => {
+      const ests = op.estaciones||[];
+      const best = ests.reduce((b,s) => s.uph_hora > b ? s.uph_hora : b, 0);
+      const meta = ests[0]?.uph_meta||0;
+      return { ...op, uph: Math.round(best), meta };
+    }).sort((a,b) => b.uph - a.uph).slice(0, 3);
+
+    const maxUph = ranked[0]?.uph || 1;
+    const medals = ['🥇','🥈','🥉'];
+    const clsMap = ['csb-1','csb-2','csb-3'];
+
+    return `
+      <div class="card-scoreboard">
+        <div class="csb-title">⚡ Top operadores</div>
+        ${ranked.map((op, i) => {
+          const nombre2 = (op.nombre||'').split(' ').slice(0,2).join(' ');
+          const pct = op.meta > 0 ? Math.round(op.uph/op.meta*100) : null;
+          const c = col(pct);
+          const src = op.foto_url ? (op.foto_url.startsWith('http') ? op.foto_url : `${API}${op.foto_url}`) : '';
+          const avatar = src
+            ? `<img class="csb-avatar" src="${src}" onerror="this.outerHTML='<div class=\\'csb-avatar-ini\\'>${ini(op.nombre)}</div>'">`
+            : `<div class="csb-avatar-ini">${ini(op.nombre)}</div>`;
+          return `
+            <div class="csb-row ${clsMap[i]}">
+              <span class="csb-pos">${medals[i]}</span>
+              ${avatar}
+              <span class="csb-nombre">${nombre2}</span>
+              <div class="csb-bar-wrap"><div class="csb-bar-fill ${c}" style="width:${Math.round(op.uph/maxUph*100)}%"></div></div>
+              <span class="csb-uph">${op.uph}</span>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  function lineaLabel(l) {
+    return (l||'').replace(/^HI-?/i, 'L');
+  }
+
   // ── Card ─────────────────────────────────────────────────────
   function cardHTML(linea, rankMap) {
     const uphPct  = linea.uph_meta > 0 ? Math.round(linea.uph_actual/linea.uph_meta*100) : null;
     const uphCol  = col(uphPct);
     const rank    = rankMap[linea.linea]||99;
     const rankCls = rank<=3 ? `rank-${rank}` : '';
-    const medal   = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
+    const medalEmoji = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
+    const medalClass = rank===1?'oro':rank===2?'plata':rank===3?'bronce':'';
+    const medal = medalEmoji;
     const ops     = (linea.operadores||[]).map(opColHTML).join('');
     const opsSection = linea.operadores.length > 0
       ? `<div class="card-ops">${ops}</div>`
@@ -458,7 +722,8 @@
       <div class="card ${uphCol} ${rankCls}">
         <div class="card-top">
           <div class="card-id">
-            <div class="id-top">${medal?`<span class="id-medal">${medal}</span>`:''}<span class="id-linea ${uphCol}">${linea.linea}</span></div>
+            ${medal ? `<span class="id-medal ${medalClass}">${medal}</span>` : ''}
+            <span class="id-linea ${uphCol}">${lineaLabel(linea.linea)}</span>
             <span class="id-modelo">${linea.modelo||'—'}</span>
           </div>
           <div class="card-kpis">
@@ -466,6 +731,7 @@
             ${kpiRowHTML('Modelo', linea.piezas_modelo, linea.plan_modelo, 'azul')}
           </div>
         </div>
+
         ${opsSection}
       </div>`;
   }
@@ -481,8 +747,8 @@
   function renderSidebar(lineas, turno_activo) {
     const turnoNombre = turno_activo === 1 ? 'A' : turno_activo === 2 ? 'B' : 'C';
     const turnoHora   = {1:'06:30–18:30 · Lun–Jue', 2:'18:30–06:30 · Lun–Vie', 3:'06:30–18:30 · Vie–Dom'}[turno_activo] || '—';
-    document.getElementById('sb-turno-val').textContent  = `TURNO ${turnoNombre}`;
-    document.getElementById('sb-turno-hora').textContent = turnoHora;
+    document.getElementById('sb-turno-badge').textContent = `Turno ${turnoNombre}`;
+    document.getElementById('sb-turno-badge').textContent = `Turno ${turnoNombre}`;
     ['A','B','C'].forEach(x => {
       const el = document.getElementById(`pill-${x}`);
       if (el) el.className = `t-pill${x===turnoNombre?' act-'+x:''}`;
@@ -529,7 +795,7 @@
       const c     = col(pct>=100?100:pct>=90?95:0);
       return `
         <div class="lp-row">
-          <span class="lp-id">${linea.linea}</span>
+          <span class="lp-id">${lineaLabel(linea.linea)}</span>
           <div class="lp-track"><div class="lp-fill ${c}" style="width:${pct}%"></div></div>
           <span class="lp-val">${(linea.piezas_modelo||0).toLocaleString()} pzs</span>
           <span class="lp-delta ${delta>=0?'pos':'neg'}">${delta>=0?'↑ +'+delta.toLocaleString():'↓ '+delta.toLocaleString()}</span>
@@ -540,10 +806,53 @@
   // ── Fetch ────────────────────────────────────────────────────
   async function fetchData() {
     const dot = document.getElementById('ft-dot');
+    const liveDot = document.getElementById('h-live-dot');
     try {
-      const r = await fetch(`${API}/api/uph/dashboard/lineas-hoy`);
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const data = await r.json();
+      // DATOS DE PRUEBA — borrar después
+      const _ahora = new Date(), _wd = _ahora.getDay(), _mins = _ahora.getHours()*60+_ahora.getMinutes();
+      // 0=Dom 1=Lun...4=Jue 5=Vie 6=Sáb
+      let _turnoMock = 2; // default B
+      if ([1,2,3,4].includes(_wd) && _mins>=390 && _mins<1110) _turnoMock = 1; // A: Lun-Jue día
+      else if ([5,6,0].includes(_wd) && _mins>=390 && _mins<1110) _turnoMock = 3; // C: Vie-Dom día
+      const data = {
+        turno_activo: _turnoMock,
+        lineas: [
+          { linea:"HI-1", modelo:"55A6K", uph_actual:112, uph_meta:100, piezas_modelo:890, plan_modelo:960,
+            operadores:[
+              { nombre:"María López García",   foto_url:"https://randomuser.me/api/portraits/women/44.jpg", estaciones:[{estacion:"E101",uph_hora:115,uph_meta:100},{estacion:"E102",uph_hora:108,uph_meta:100}]},
+              { nombre:"Carlos Ramírez Soto",  foto_url:"https://randomuser.me/api/portraits/men/32.jpg",   estaciones:[{estacion:"E103",uph_hora:109,uph_meta:100},{estacion:"E104",uph_hora:104,uph_meta:100}]},
+              { nombre:"Ana Torres Jiménez",   foto_url:"https://randomuser.me/api/portraits/women/68.jpg", estaciones:[{estacion:"E105",uph_hora:95, uph_meta:100},{estacion:"E106",uph_hora:92, uph_meta:100}]},
+              { nombre:"Luis Mendoza Pérez",   foto_url:"https://randomuser.me/api/portraits/men/75.jpg",   estaciones:[{estacion:"E107",uph_hora:88, uph_meta:100}]},
+            ]},
+          { linea:"HI-2", modelo:"65U7K", uph_actual:94, uph_meta:100, piezas_modelo:750, plan_modelo:960,
+            operadores:[
+              { nombre:"Sofía Vega Morales",   foto_url:"https://randomuser.me/api/portraits/women/12.jpg", estaciones:[{estacion:"E201",uph_hora:96, uph_meta:100},{estacion:"E202",uph_hora:91, uph_meta:100}]},
+              { nombre:"Jorge Castillo Ruiz",  foto_url:"https://randomuser.me/api/portraits/men/55.jpg",   estaciones:[{estacion:"E203",uph_hora:78, uph_meta:100},{estacion:"E204",uph_hora:82, uph_meta:100}]},
+              { nombre:"Laura Díaz Hernández", foto_url:"https://randomuser.me/api/portraits/women/90.jpg", estaciones:[{estacion:"E205",uph_hora:105,uph_meta:100},{estacion:"E206",uph_hora:99, uph_meta:100}]},
+              { nombre:"Pedro Flores Cruz",    foto_url:"https://randomuser.me/api/portraits/men/21.jpg",   estaciones:[{estacion:"E207",uph_hora:72, uph_meta:100}]},
+            ]},
+          { linea:"HI-3", modelo:"43A4K", uph_actual:78, uph_meta:100, piezas_modelo:620, plan_modelo:960,
+            operadores:[
+              { nombre:"Daniela Reyes Luna",   foto_url:"https://randomuser.me/api/portraits/women/33.jpg", estaciones:[{estacion:"E301",uph_hora:80,uph_meta:100},{estacion:"E302",uph_hora:75,uph_meta:100},{estacion:"E303",uph_hora:78,uph_meta:100}]},
+              { nombre:"Roberto Navarro Gil",  foto_url:"https://randomuser.me/api/portraits/men/88.jpg",   estaciones:[{estacion:"E304",uph_hora:92,uph_meta:100},{estacion:"E305",uph_hora:88,uph_meta:100},{estacion:"E306",uph_hora:85,uph_meta:100}]},
+            ]},
+          { linea:"HI-4", modelo:"50A6K", uph_actual:103, uph_meta:100, piezas_modelo:820, plan_modelo:960,
+            operadores:[
+              { nombre:"Valeria Ramos Ortiz",  foto_url:"https://randomuser.me/api/portraits/women/55.jpg", estaciones:[{estacion:"E401",uph_hora:105,uph_meta:100},{estacion:"E402",uph_hora:101,uph_meta:100},{estacion:"E403",uph_hora:99, uph_meta:100}]},
+              { nombre:"Miguel Ángel Sosa",    foto_url:"https://randomuser.me/api/portraits/men/62.jpg",   estaciones:[{estacion:"E404",uph_hora:110,uph_meta:100},{estacion:"E405",uph_hora:107,uph_meta:100},{estacion:"E406",uph_hora:103,uph_meta:100}]},
+            ]},
+          { linea:"HI-5", modelo:"58U6K", uph_actual:88, uph_meta:100, piezas_modelo:700, plan_modelo:960,
+            operadores:[
+              { nombre:"Patricia Luna Reyes",  foto_url:"https://randomuser.me/api/portraits/women/77.jpg", estaciones:[{estacion:"E501",uph_hora:88,uph_meta:100},{estacion:"E502",uph_hora:85,uph_meta:100},{estacion:"E503",uph_hora:90,uph_meta:100}]},
+              { nombre:"Fernando Cruz Díaz",   foto_url:"https://randomuser.me/api/portraits/men/41.jpg",   estaciones:[{estacion:"E504",uph_hora:82,uph_meta:100},{estacion:"E505",uph_hora:79,uph_meta:100},{estacion:"E506",uph_hora:84,uph_meta:100}]},
+            ]},
+          { linea:"HI-6", modelo:"75U8K", uph_actual:100, uph_meta:100, piezas_modelo:800, plan_modelo:960,
+            operadores:[
+              { nombre:"Gabriela Mora Vega",   foto_url:"https://randomuser.me/api/portraits/women/91.jpg", estaciones:[{estacion:"E601",uph_hora:100,uph_meta:100},{estacion:"E602",uph_hora:99, uph_meta:100},{estacion:"E603",uph_hora:102,uph_meta:100}]},
+              { nombre:"Ricardo Peña Salinas", foto_url:"https://randomuser.me/api/portraits/men/17.jpg",   estaciones:[{estacion:"E604",uph_hora:97, uph_meta:100},{estacion:"E605",uph_hora:95, uph_meta:100},{estacion:"E606",uph_hora:98, uph_meta:100}]},
+            ]},
+        ]
+      };
       const lineas = data.lineas||[];
       if (data.fuera_horario) {
         document.getElementById('lines').innerHTML =
@@ -552,8 +861,8 @@
             <span style="color:#0a3530;font-size:1.1rem;font-weight:700;letter-spacing:2px;">FUERA DE HORARIO</span>
             <span style="color:#071a17;font-size:0.75rem;">Sáb 18:30–Dom 06:30 · Dom 18:30–Lun 06:30 sin operaciones</span>
           </div>`;
-        document.getElementById('sb-turno-val').textContent  = '—';
-        document.getElementById('sb-turno-hora').textContent = 'Sin turno activo';
+        document.getElementById('sb-turno-badge').textContent = '—';
+        document.getElementById('sb-ranking-title').textContent = '🏆 Ranking · Turno —';
         document.getElementById('sb-ranking').innerHTML      = '';
         document.getElementById('sb-lineas-list').innerHTML  = '';
       } else if (lineas.length > 0) {
@@ -564,9 +873,11 @@
           `<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;color:#00856e;font-size:1rem;">Sin datos · asigna operadores para comenzar</div>`;
       }
       dot.className = 'ft-dot';
+      liveDot.className = 'h-live-dot';
       document.getElementById('last-upd').textContent = `Actualizado: ${new Date().toLocaleTimeString('es-MX')}`;
     } catch(e) {
       dot.className = 'ft-dot err';
+      liveDot.className = 'h-live-dot err';
       document.getElementById('last-upd').textContent = `Sin conexión · ${e.message}`;
     }
   }

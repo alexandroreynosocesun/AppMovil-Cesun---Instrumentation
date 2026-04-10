@@ -200,6 +200,32 @@ uploads_dir = Path(__file__).parent / "uploads"
 uploads_dir.mkdir(exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=str(uploads_dir)), name="uploads")
 
+# Servir dashboard_operadores.html
+from fastapi.responses import FileResponse
+@app.get("/dashboard_operadores.html")
+async def dashboard_operadores():
+    return FileResponse(Path(__file__).parent / "dashboard_operadores.html")
+
+@app.get("/monito.jpg")
+async def monito():
+    return FileResponse(Path(__file__).parent / "monito.jpg")
+
+@app.get("/ranking-semanal.html")
+async def ranking_semanal_page():
+    return FileResponse(Path(__file__).parent / "ranking_semanal.html")
+
+@app.get("/xlsx.min.js")
+async def xlsx_js():
+    return FileResponse(Path(__file__).parent / "xlsx.min.js", media_type="application/javascript")
+
+@app.get("/chart.min.js")
+async def chart_js():
+    return FileResponse(Path(__file__).parent / "chart.min.js", media_type="application/javascript")
+
+@app.get("/uph-tendencias.html")
+async def uph_tendencias_page():
+    return FileResponse(Path(__file__).parent / "uph_tendencias.html")
+
 @app.get("/")
 @limiter.limit("10/minute")
 async def root(request: Request):

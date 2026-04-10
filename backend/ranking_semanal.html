@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <title>Ranking Semanal · Hisense AMI</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: #040f0e; color: #e0f7f5;
+      font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden;
+    }
+
+    /* ── FUEGOS ARTIFICIALES ── */
+    .fireworks { position: fixed; inset: 0; pointer-events: none; z-index: 8; }
+    .fw-particle {
+      position: absolute; width: 6px; height: 6px; border-radius: 50%;
+      animation: fw-explode ease-out forwards;
+    }
+    @keyframes fw-explode {
+      0%   { opacity: 1; transform: translate(0,0) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); }
+    }
+
+    /* ── CONFETTI ── */
+    .confetti-wrap { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
+    .confetti-piece {
+      position: absolute; top: -20px;
+      animation: confetti-fall linear forwards;
+      border-radius: 2px;
+    }
+    @keyframes confetti-fall {
+      0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+
+    /* ── SPOTLIGHT ── */
+    .spotlight {
+      position: fixed; inset: 0; pointer-events: none; z-index: 7;
+      background: radial-gradient(ellipse 400px 500px at 50% 45%, transparent 0%, #040f0ecc 70%);
+      opacity: 0; transition: opacity 1.5s;
+    }
+    .spotlight.on { opacity: 1; }
+
+    /* ── FASE 1: SOLO TROFEO ── */
+    #fase-trofeo {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px;
+    }
+    .trofeo-emoji {
+      font-size: 10rem; line-height: 1;
+      filter: drop-shadow(0 0 50px #ffd700cc);
+      animation: trofeo-drop 1s cubic-bezier(.36,1.6,.4,1) forwards;
+      opacity: 0;
+    }
+    @keyframes trofeo-drop {
+      0%   { opacity: 0; transform: translateY(-120px) scale(0.5) rotate(-15deg); }
+      70%  { transform: translateY(10px) scale(1.05) rotate(3deg); }
+      100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+    }
+    .trofeo-sub {
+      font-size: 1rem; font-weight: 700; letter-spacing: 4px; text-transform: uppercase;
+      color: #ffd700; opacity: 0;
+      animation: fade-up 0.6s ease forwards 0.8s;
+      text-shadow: 0 0 20px #ffd70077;
+    }
+    @keyframes fade-up {
+      0%   { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── FASE 2: CELEBRACIÓN COMPLETA ── */
+    #pantalla-celebracion {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 18px; opacity: 0; pointer-events: none; transition: opacity 0.8s;
+    }
+    #pantalla-celebracion.visible { opacity: 1; pointer-events: all; }
+
+    .celeb-foto-wrap { position: relative; }
+    .celeb-foto {
+      width: 200px; height: 200px; border-radius: 50%; object-fit: cover;
+      border: 5px solid #ffd700;
+      box-shadow: 0 0 80px #ffd700aa, 0 0 150px #ffd70033;
+      animation: foto-appear 0.8s cubic-bezier(.36,1.6,.4,1) forwards; opacity: 0;
+    }
+    @keyframes foto-appear {
+      0%   { opacity: 0; transform: scale(0.4); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+    .celeb-foto-ini {
+      width: 200px; height: 200px; border-radius: 50%;
+      border: 5px solid #ffd700; box-shadow: 0 0 80px #ffd700aa;
+      background: #071a17; display: flex; align-items: center; justify-content: center;
+      font-size: 3.5rem; font-weight: 900; color: #00c8b8;
+      animation: foto-appear 0.8s cubic-bezier(.36,1.6,.4,1) forwards; opacity: 0;
+    }
+    .celeb-ring  { position: absolute; inset: -14px; border-radius: 50%;
+                   border: 3px solid #ffd700; opacity: 0.6;
+                   animation: ring-pulse 1.5s ease-in-out infinite; }
+    .celeb-ring2 { position: absolute; inset: -28px; border-radius: 50%;
+                   border: 2px solid #ffd70055;
+                   animation: ring-pulse 1.5s ease-in-out infinite 0.3s; }
+    @keyframes ring-pulse {
+      0%,100% { transform: scale(1); opacity: 0.5; }
+      50%      { transform: scale(1.05); opacity: 1; }
+    }
+
+    .celeb-nombre {
+      font-size: 3rem; font-weight: 900; color: #ffd700;
+      text-shadow: 0 0 50px #ffd700cc; letter-spacing: 2px; text-align: center;
+      animation: fade-up 0.7s ease forwards 0.2s; opacity: 0;
+    }
+    .celeb-msg {
+      font-size: 1.1rem; font-weight: 600; color: #00c8b8;
+      text-align: center; max-width: 640px; line-height: 1.7;
+      text-shadow: 0 0 20px #00c8b855; letter-spacing: 0.5px;
+      animation: fade-up 0.7s ease forwards 0.4s; opacity: 0;
+    }
+    .celeb-badges {
+      display: flex; gap: 12px; align-items: center;
+      animation: fade-up 0.7s ease forwards 0.6s; opacity: 0;
+    }
+    .celeb-badge {
+      font-size: 0.72rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      color: #00856e; background: #061412; border: 1px solid #0a2e2a;
+      border-radius: 20px; padding: 5px 18px;
+    }
+    .celeb-badge.gold { border-color: #ffd70066; color: #ffd700; }
+    .celeb-uph {
+      font-size: 1.6rem; font-weight: 900; color: #00c8b8;
+      text-shadow: 0 0 20px #00c8b8aa;
+      animation: fade-up 0.7s ease forwards 0.8s; opacity: 0;
+    }
+
+    /* ── COUNTDOWN ── */
+    .celeb-countdown {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 12px;
+      animation: fade-up 0.7s ease forwards 1s; opacity: 0;
+    }
+    .countdown-track {
+      width: 220px; height: 4px; background: #0a2e2a; border-radius: 2px; overflow: hidden;
+    }
+    .countdown-fill {
+      height: 100%; background: linear-gradient(90deg, #00877a, #00c8b8);
+      border-radius: 2px; width: 100%;
+      transition: width linear;
+    }
+    .countdown-num {
+      font-size: 0.65rem; font-weight: 700; color: #00856e; letter-spacing: 2px;
+      text-transform: uppercase; white-space: nowrap;
+    }
+
+    /* ── SCOREBOARD ── */
+    #pantalla-scoreboard {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 30px 40px; gap: 14px;
+      opacity: 0; pointer-events: none; transition: opacity 0.8s;
+    }
+    #pantalla-scoreboard.visible { opacity: 1; pointer-events: all; }
+    .sb-header { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .sb-titulo { font-size: 1.8rem; font-weight: 900; color: #ffd700;
+                 text-shadow: 0 0 30px #ffd700aa; letter-spacing: 3px; text-transform: uppercase; }
+    .sb-subtitulo { font-size: 0.7rem; color: #00856e; letter-spacing: 3px; text-transform: uppercase; }
+
+    .sb-list {
+      width: 100%; max-width: 860px; display: flex; flex-direction: column; gap: 7px; flex: 1;
+      overflow-y: auto; min-height: 0;
+      scrollbar-width: thin; scrollbar-color: #0a2e2a transparent;
+    }
+    .sb-list::-webkit-scrollbar { width: 4px; }
+    .sb-list::-webkit-scrollbar-thumb { background: #0a2e2a; border-radius: 2px; }
+
+    .sb-row {
+      display: flex; align-items: center; gap: 14px;
+      background: #061412; border: 1px solid #0a2e2a;
+      border-radius: 14px; padding: 10px 16px;
+      opacity: 0; transform: translateX(-60px);
+      transition: opacity 0.5s, transform 0.5s;
+      position: relative; overflow: hidden;
+    }
+    .sb-row.visible { opacity: 1; transform: translateX(0); }
+
+    /* ── TOP 1 ── */
+    .sb-row.top-1 {
+      border-color: #ffd700;
+      background: linear-gradient(105deg, #131000 0%, #1a1500 60%, #0a0e00 100%);
+      box-shadow: 0 0 32px #ffd70044, inset 0 0 40px #ffd70008;
+      padding: 14px 18px;
+    }
+    .sb-row.top-1::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      background: linear-gradient(180deg, #ffd700, #ff8c00);
+      border-radius: 14px 0 0 14px;
+    }
+    /* ── TOP 2 ── */
+    .sb-row.top-2 {
+      border-color: #c0c0c0bb;
+      background: linear-gradient(105deg, #111111 0%, #181818 60%, #0d0d0d 100%);
+      box-shadow: 0 0 22px #c0c0c033, inset 0 0 30px #c0c0c006;
+      padding: 13px 18px;
+    }
+    .sb-row.top-2::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      background: linear-gradient(180deg, #e8e8e8, #888);
+      border-radius: 14px 0 0 14px;
+    }
+    /* ── TOP 3 ── */
+    .sb-row.top-3 {
+      border-color: #cd7f32aa;
+      background: linear-gradient(105deg, #110800 0%, #1a0e00 60%, #0d0800 100%);
+      box-shadow: 0 0 18px #cd7f3233, inset 0 0 25px #cd7f3206;
+      padding: 12px 18px;
+    }
+    .sb-row.top-3::before {
+      content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+      background: linear-gradient(180deg, #e8a050, #7a3e00);
+      border-radius: 14px 0 0 14px;
+    }
+
+    .sb-pos { font-size: 1.4rem; font-weight: 900; min-width: 40px; text-align: center; }
+    .sb-pos.top-1 { font-size: 1.9rem; text-shadow: 0 0 20px #ffd700cc, 0 0 40px #ffd70066; }
+    .sb-pos.top-2 { font-size: 1.7rem; text-shadow: 0 0 14px #c0c0c099; }
+    .sb-pos.top-3 { font-size: 1.6rem; text-shadow: 0 0 12px #cd7f3288; }
+    .sb-pos.resto { color: #00856e; font-size: 1rem; }
+
+    .sb-avatar { width: 52px; height: 52px; border-radius: 50%; object-fit: cover;
+                 flex-shrink: 0; border: 2px solid #0a2e2a; }
+    .sb-avatar.top-1 { width: 62px; height: 62px; border-color: #ffd700; border-width: 3px;
+                       box-shadow: 0 0 20px #ffd70088, 0 0 40px #ffd70033; }
+    .sb-avatar.top-2 { width: 58px; height: 58px; border-color: #c0c0c0; border-width: 2px;
+                       box-shadow: 0 0 12px #c0c0c055; }
+    .sb-avatar.top-3 { width: 55px; height: 55px; border-color: #cd7f32; border-width: 2px;
+                       box-shadow: 0 0 10px #cd7f3244; }
+    .sb-avatar-ini { width: 52px; height: 52px; border-radius: 50%; border: 2px solid #0a2e2a;
+                     background: #071a17; display: flex; align-items: center; justify-content: center;
+                     font-size: 1rem; font-weight: 800; color: #00c8b8; flex-shrink: 0; }
+    .sb-row.top-1 .sb-avatar-ini { width: 62px; height: 62px; font-size: 1.2rem; border-color: #ffd700; border-width: 3px; box-shadow: 0 0 20px #ffd70066; }
+    .sb-row.top-2 .sb-avatar-ini { width: 58px; height: 58px; border-color: #c0c0c0; border-width: 2px; }
+    .sb-row.top-3 .sb-avatar-ini { width: 55px; height: 55px; border-color: #cd7f32; border-width: 2px; }
+
+    .sb-info { flex: 1; min-width: 0; }
+    .sb-nombre { font-size: 1rem; font-weight: 700; color: #e0f7f5;
+                 white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .sb-row.top-1 .sb-nombre { color: #ffd700; font-size: 1.2rem; font-weight: 900; text-shadow: 0 0 12px #ffd70066; }
+    .sb-row.top-2 .sb-nombre { color: #e0e0e0; font-size: 1.1rem; font-weight: 800; }
+    .sb-row.top-3 .sb-nombre { color: #e8a060; font-size: 1.05rem; font-weight: 800; }
+    .sb-sub { font-size: 0.6rem; color: #00856e; margin-top: 2px; letter-spacing: 1px; }
+
+    .sb-turno-pill { font-size: 0.55rem; font-weight: 700; letter-spacing: 1.5px;
+                     text-transform: uppercase; padding: 2px 8px; border-radius: 10px;
+                     background: #071a17; border: 1px solid #0a2e2a; color: #00856e;
+                     display: inline-block; margin-top: 3px; }
+
+    .sb-bar-wrap { flex: 1; height: 10px; background: #071a17; border-radius: 5px; overflow: hidden; min-width: 80px; }
+    .sb-row.top-1 .sb-bar-wrap { height: 12px; }
+    .sb-row.top-2 .sb-bar-wrap { height: 11px; }
+    .sb-bar-fill { height: 100%; border-radius: 5px; width: 0; transition: width 1s cubic-bezier(.4,0,.2,1); }
+    .sb-bar-fill.top-1 { background: linear-gradient(90deg, #6a4500, #ffd700, #fff7aa); box-shadow: 0 0 8px #ffd70066; }
+    .sb-bar-fill.top-2 { background: linear-gradient(90deg, #404040, #c0c0c0, #f0f0f0); box-shadow: 0 0 6px #c0c0c044; }
+    .sb-bar-fill.top-3 { background: linear-gradient(90deg, #5a3000, #cd7f32, #e8a060); }
+    .sb-bar-fill.resto { background: linear-gradient(90deg, #003d2a, #00c8b8); }
+
+    .sb-uph { font-size: 1.3rem; font-weight: 900; min-width: 65px; text-align: right;
+              font-variant-numeric: tabular-nums; }
+    .sb-uph.top-1 { font-size: 1.7rem; color: #ffd700; text-shadow: 0 0 18px #ffd700aa, 0 0 35px #ffd70044; }
+    .sb-uph.top-2 { font-size: 1.5rem; color: #e0e0e0; text-shadow: 0 0 12px #c0c0c077; }
+    .sb-uph.top-3 { font-size: 1.4rem; color: #e8a060; text-shadow: 0 0 10px #cd7f3266; }
+    .sb-uph.resto { color: #00c8b8; }
+
+    .sb-btn-back {
+      padding: 10px 32px; border-radius: 20px;
+      background: transparent; border: 1px solid #0a2e2a; color: #00856e;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .sb-btn-back:hover { border-color: #00c8b8; color: #00c8b8; box-shadow: 0 0 14px #00c8b844; }
+    .sb-export-bar {
+      display: flex; gap: 10px; align-items: center; flex-wrap: wrap; justify-content: center;
+    }
+    .btn-export {
+      padding: 9px 24px; border-radius: 20px; font-size: 0.7rem; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; cursor: pointer; transition: all 0.3s;
+      border: 1px solid; display: flex; align-items: center; gap: 7px;
+    }
+    .btn-export.pdf  { background: transparent; border-color: #ff4545aa; color: #ff8080; }
+    .btn-export.pdf:hover  { background: #ff454522; box-shadow: 0 0 14px #ff454544; }
+    .btn-export.xlsx { background: transparent; border-color: #00c8b8aa; color: #00c8b8; }
+    .btn-export.xlsx:hover { background: #00c8b822; box-shadow: 0 0 14px #00c8b844; }
+    .sb-top10-badge {
+      font-size: 1rem; font-weight: 900; color: #040f0e;
+      background: #ffd700; border-radius: 8px; padding: 2px 10px;
+      letter-spacing: 1px; margin-left: 10px;
+      box-shadow: 0 0 16px #ffd70077;
+    }
+    .btn-export.charts { background: transparent; border-color: #ffd700aa; color: #ffd700; }
+    .btn-export.charts:hover { background: #ffd70011; box-shadow: 0 0 14px #ffd70044; }
+
+    /* ── PANTALLA ANÁLISIS ── */
+    #pantalla-analisis {
+      position: fixed; inset: 0; z-index: 10;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 20px 30px 16px; gap: 14px; overflow-y: auto;
+      opacity: 0; pointer-events: none; transition: opacity 0.6s;
+      background: #040f0e;
+    }
+    #pantalla-analisis.visible { opacity: 1; pointer-events: all; }
+    .an-header { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+    .an-titulo  { font-size: 1.4rem; font-weight: 900; color: #ffd700;
+                  text-shadow: 0 0 24px #ffd700aa; letter-spacing: 3px; text-transform: uppercase; }
+    .an-sub     { font-size: 0.65rem; color: #00856e; letter-spacing: 3px; text-transform: uppercase; }
+    .an-grid {
+      display: grid; width: 100%; max-width: 1100px;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: auto auto;
+      gap: 16px; flex: 1;
+    }
+    .an-card {
+      background: #061412; border: 1px solid #0a2e2a; border-radius: 16px;
+      padding: 16px 20px; display: flex; flex-direction: column; gap: 8px;
+    }
+    .an-card.wide { grid-column: 1 / -1; }
+    .an-card-title {
+      font-size: 0.6rem; font-weight: 800; letter-spacing: 2.5px; color: #00856e;
+      text-transform: uppercase;
+    }
+    .an-canvas-wrap { flex: 1; position: relative; min-height: 200px; }
+    .an-bar { background: #0a2e2a; }
+    .an-footer { display: flex; gap: 10px; flex-shrink: 0; align-items: center; flex-wrap: wrap; justify-content: center; }
+  </style>
+  <style media="print">
+    body { background: #fff !important; color: #000 !important; }
+    .fireworks, .confetti-wrap, .spotlight,
+    #fase-trofeo, #pantalla-celebracion, .celeb-countdown,
+    .sb-export-bar, .sb-btn-back { display: none !important; }
+    #pantalla-scoreboard { position: static !important; opacity: 1 !important; pointer-events: all !important; padding: 10mm 14mm !important; }
+    .sb-titulo { color: #b8860b !important; text-shadow: none !important; font-size: 18pt !important; }
+    .sb-subtitulo { color: #006655 !important; }
+    .sb-list { overflow: visible !important; }
+    .sb-row { background: #fff !important; border: 1px solid #ccc !important; border-radius: 6px !important; margin-bottom: 4px; page-break-inside: avoid; }
+    .sb-row.top-1 { border-color: #b8860b !important; }
+    .sb-row.top-2 { border-color: #888 !important; }
+    .sb-row.top-3 { border-color: #8b4513 !important; }
+    .sb-nombre { color: #000 !important; }
+    .sb-row.top-1 .sb-nombre { color: #b8860b !important; }
+    .sb-row.top-2 .sb-nombre { color: #555 !important; }
+    .sb-sub { color: #333 !important; }
+    .sb-uph { color: #006655 !important; }
+    .sb-row.top-1 .sb-uph { color: #b8860b !important; }
+    .sb-bar-wrap { background: #eee !important; }
+    .sb-bar-fill { background: #aaa !important; }
+    .sb-row.top-1 .sb-bar-fill { background: #b8860b !important; }
+    .sb-avatar { border: 2px solid #ccc !important; }
+    .sb-turno-pill { background: #eee !important; color: #333 !important; border: 1px solid #ccc !important; }
+    .print-header { display: block !important; }
+  </style>
+  <script src="/xlsx.min.js"></script>
+  <script src="/chart.min.js"></script>
+</head>
+<body>
+
+<div class="fireworks" id="fireworks"></div>
+<div class="confetti-wrap" id="confetti"></div>
+<div class="spotlight" id="spotlight"></div>
+
+<!-- FASE 1: SOLO TROFEO -->
+<div id="fase-trofeo">
+  <div class="trofeo-emoji">🏆</div>
+  <div class="trofeo-sub">Mejor operador de la semana</div>
+</div>
+
+<!-- FASE 2: CELEBRACIÓN COMPLETA -->
+<div id="pantalla-celebracion">
+  <div class="celeb-foto-wrap">
+    <div class="celeb-ring"></div>
+    <div class="celeb-ring2"></div>
+    <div class="celeb-foto-ini" id="celeb-foto">?</div>
+  </div>
+  <div class="celeb-nombre" id="celeb-nombre">—</div>
+  <div class="celeb-msg" id="celeb-msg"></div>
+  <div class="celeb-badges">
+    <div class="celeb-badge gold" id="celeb-turno">Turno —</div>
+    <div class="celeb-badge" id="celeb-uph"></div>
+  </div>
+  <div class="celeb-countdown">
+    <span class="countdown-num" id="countdown-txt">Ranking en 7s</span>
+    <div class="countdown-track">
+      <div class="countdown-fill" id="countdown-fill"></div>
+    </div>
+  </div>
+</div>
+
+<!-- PANTALLA SCOREBOARD -->
+<div id="pantalla-scoreboard">
+  <div class="print-header" style="display:none; text-align:center; margin-bottom:8px; font-family:Arial,sans-serif;">
+    <div style="font-size:11pt; color:#888; margin-bottom:2px;">Hisense Electrónica de México S.A. de C.V.</div>
+    <div id="print-fecha" style="font-size:9pt; color:#aaa;"></div>
+  </div>
+  <div class="sb-header">
+    <div class="sb-titulo">🏆 Top Operadores · Semana <span class="sb-top10-badge">TOP 10</span></div>
+    <div class="sb-subtitulo" id="sb-subtitulo">UPH promedio · últimos 7 días</div>
+  </div>
+  <div class="sb-list" id="sb-list"></div>
+  <div class="sb-export-bar">
+    <button class="btn-export pdf"    onclick="exportarPDF()">📄 Reporte PDF</button>
+    <button class="btn-export xlsx"   onclick="exportarExcel()">📊 Power BI Excel</button>
+    <button class="btn-export charts" onclick="mostrarAnalisis()">📈 Análisis</button>
+    <button class="sb-btn-back" onclick="window.location.href='/dashboard_operadores.html'">← Volver</button>
+  </div>
+</div>
+
+<!-- PANTALLA ANÁLISIS -->
+<div id="pantalla-analisis">
+  <div class="an-header">
+    <div class="an-titulo">📊 Análisis · Semana</div>
+    <div class="an-sub">UPH promedio · top 10 operadores · últimos 7 días</div>
+  </div>
+  <div class="an-grid">
+    <div class="an-card wide">
+      <div class="an-card-title">🏅 UPH Promedio por operador</div>
+      <div class="an-canvas-wrap"><canvas id="chart-barras"></canvas></div>
+    </div>
+    <div class="an-card">
+      <div class="an-card-title">🥧 Distribución por turno</div>
+      <div class="an-canvas-wrap"><canvas id="chart-pastel"></canvas></div>
+    </div>
+    <div class="an-card">
+      <div class="an-card-title">📉 Eficiencia vs meta (UPH meta = 100)</div>
+      <div class="an-canvas-wrap"><canvas id="chart-linea"></canvas></div>
+    </div>
+  </div>
+  <div class="an-footer">
+    <button class="btn-export pdf"    onclick="exportarPDF()">📄 Reporte PDF</button>
+    <button class="btn-export xlsx"   onclick="exportarExcel()">📊 Power BI Excel</button>
+    <button class="sb-btn-back" onclick="ocultarAnalisis()">← Ranking</button>
+  </div>
+</div>
+
+<script>
+  const API = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+  const fwColors = ['#ffd700','#ff4040','#00c8b8','#ff8800','#c0c0c0','#69f0ae','#ff69b4'];
+  const confColors = ['#ffd700','#00c8b8','#ff4040','#ff8800','#c0c0c0','#69f0ae'];
+
+  function ini(n) { return (n||'?').trim().split(' ').slice(0,2).map(p=>p[0]||'').join('').toUpperCase(); }
+
+  // ── Fuegos artificiales ──
+  function fuego(x, y) {
+    const cont = document.getElementById('fireworks');
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('div');
+      p.className = 'fw-particle';
+      const angle = (Math.PI * 2 / 30) * i;
+      const dist = Math.random() * 120 + 60;
+      p.style.cssText = `
+        left:${x}px; top:${y}px;
+        background:${fwColors[Math.floor(Math.random()*fwColors.length)]};
+        --tx:${Math.cos(angle)*dist}px;
+        --ty:${Math.sin(angle)*dist}px;
+        animation-duration:${Math.random()*0.6+0.6}s;
+        animation-delay:${Math.random()*0.2}s;
+        width:${Math.random()*5+4}px; height:${Math.random()*5+4}px;
+      `;
+      cont.appendChild(p);
+      setTimeout(() => p.remove(), 1200);
+    }
+  }
+
+  function lanzarFuegos() {
+    const posiciones = [
+      [80, 80], [window.innerWidth-80, 80],
+      [80, window.innerHeight*0.4], [window.innerWidth-80, window.innerHeight*0.4],
+      [window.innerWidth*0.3, 60], [window.innerWidth*0.7, 60],
+    ];
+    posiciones.forEach((pos, i) => setTimeout(() => fuego(pos[0], pos[1]), i * 200));
+  }
+
+  // ── Confetti ──
+  function lanzarConfetti() {
+    const cont = document.getElementById('confetti');
+    for (let i = 0; i < 100; i++) {
+      const c = document.createElement('div');
+      c.className = 'confetti-piece';
+      c.style.cssText = `
+        left:${Math.random()*100}%;
+        background:${confColors[Math.floor(Math.random()*confColors.length)]};
+        width:${Math.random()*10+5}px; height:${Math.random()*10+5}px;
+        border-radius:${Math.random()>0.5?'50%':'2px'};
+        animation-duration:${Math.random()*2+2.5}s;
+        animation-delay:${Math.random()*1.5}s;
+      `;
+      cont.appendChild(c);
+      setTimeout(() => c.remove(), 5000);
+    }
+  }
+
+  // ── Countdown ──
+  function startCountdown(segundos, onDone) {
+    const fill = document.getElementById('countdown-fill');
+    const txt  = document.getElementById('countdown-txt');
+    fill.style.transition = 'none';
+    fill.style.width = '100%';
+    let remaining = segundos;
+    txt.textContent = `Ranking en ${remaining}s`;
+    setTimeout(() => {
+      fill.style.transition = `width ${segundos}s linear`;
+      fill.style.width = '0%';
+    }, 50);
+    const iv = setInterval(() => {
+      remaining--;
+      txt.textContent = remaining > 0 ? `Ranking en ${remaining}s` : 'Cargando ranking…';
+      if (remaining <= 0) { clearInterval(iv); onDone(); }
+    }, 1000);
+  }
+
+  // ── Ranking global para exportar ──
+  let _rankingData = [];
+
+  // ── Datos ──
+  async function cargar() {
+    // DATOS DE PRUEBA — borrar después
+    const ranking = [
+      { nombre: "María López García",   estacion: "E1", turno: "A", uph_promedio: 98.5, total_eventos: 8278, foto_url: "https://randomuser.me/api/portraits/women/44.jpg" },
+      { nombre: "Carlos Ramírez Soto",  estacion: "E3", turno: "B", uph_promedio: 91.2, total_eventos: 7661, foto_url: "https://randomuser.me/api/portraits/men/32.jpg" },
+      { nombre: "Ana Torres Jiménez",   estacion: "E2", turno: "A", uph_promedio: 87.4, total_eventos: 7342, foto_url: "https://randomuser.me/api/portraits/women/68.jpg" },
+      { nombre: "Luis Mendoza Pérez",   estacion: "E5", turno: "C", uph_promedio: 83.1, total_eventos: 6980, foto_url: "https://randomuser.me/api/portraits/men/75.jpg" },
+      { nombre: "Sofía Vega Morales",   estacion: "E4", turno: "B", uph_promedio: 79.8, total_eventos: 6703, foto_url: "https://randomuser.me/api/portraits/women/12.jpg" },
+      { nombre: "Jorge Castillo Ruiz",  estacion: "E6", turno: "A", uph_promedio: 74.3, total_eventos: 6241, foto_url: "https://randomuser.me/api/portraits/men/55.jpg" },
+      { nombre: "Laura Díaz Hernández", estacion: "E7", turno: "C", uph_promedio: 70.1, total_eventos: 5888, foto_url: "https://randomuser.me/api/portraits/women/90.jpg" },
+      { nombre: "Pedro Flores Cruz",    estacion: "E8", turno: "B", uph_promedio: 66.5, total_eventos: 5586, foto_url: "https://randomuser.me/api/portraits/men/21.jpg" },
+      { nombre: "Daniela Reyes Luna",   estacion: "E2", turno: "A", uph_promedio: 61.9, total_eventos: 5200, foto_url: "https://randomuser.me/api/portraits/women/33.jpg" },
+      { nombre: "Roberto Navarro Gil",  estacion: "E9", turno: "C", uph_promedio: 57.2, total_eventos: 4804, foto_url: "https://randomuser.me/api/portraits/men/88.jpg" },
+    ];
+
+    _rankingData = ranking;
+    const top = ranking[0];
+    const maxUph = top.uph_promedio;
+    const nombreCorto = (top.nombre||'').split(' ').slice(0,2).join(' ');
+
+    // ── FASE 1: trofeo solo (2.5s) ──
+    setTimeout(() => {
+      lanzarFuegos();
+      setTimeout(lanzarFuegos, 800);
+      setTimeout(lanzarFuegos, 1600);
+    }, 500);
+
+    // ── FASE 2: celebración completa (después de 2.5s) ──
+    setTimeout(() => {
+      document.getElementById('fase-trofeo').style.display = 'none';
+      document.getElementById('spotlight').classList.add('on');
+
+      const celeb = document.getElementById('pantalla-celebracion');
+      celeb.classList.add('visible');
+
+      // Foto
+      const fotoEl = document.getElementById('celeb-foto');
+      const src = top.foto_url || '';
+      if (src) {
+        fotoEl.outerHTML = `<img class="celeb-foto" src="${src}" alt="${ini(top.nombre)}" onerror="this.className='celeb-foto-ini';this.textContent='${ini(top.nombre)}'">`;
+      } else {
+        fotoEl.textContent = ini(top.nombre);
+      }
+
+      document.getElementById('celeb-nombre').textContent = nombreCorto;
+      document.getElementById('celeb-msg').textContent    = `🎉 ¡Felicidades ${nombreCorto}! Esta semana fuiste imparable — el operador más productivo de la planta 🎉`;
+      document.getElementById('celeb-turno').textContent  = `Turno ${top.turno||'—'}`;
+      document.getElementById('celeb-uph').textContent    = `UPH ${top.uph_promedio} prom.`;
+
+      lanzarConfetti();
+      setTimeout(lanzarConfetti, 2000);
+      setTimeout(lanzarFuegos, 500);
+      setTimeout(lanzarFuegos, 2000);
+
+      // Countdown 7s → scoreboard
+      setTimeout(() => startCountdown(7, mostrarScoreboard), 1200);
+
+    }, 2500);
+
+    // ── Preparar scoreboard ──
+    const sbList = document.getElementById('sb-list');
+    sbList.innerHTML = ranking.map((op, i) => {
+      const pos = i + 1;
+      const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':pos;
+      const cls = pos===1?'top-1':pos===2?'top-2':pos===3?'top-3':'resto';
+      const pct = Math.round(op.uph_promedio / maxUph * 100);
+      const nombre2 = (op.nombre||'Sin asignar').split(' ').slice(0,2).join(' ');
+      const src2 = op.foto_url || '';
+      const avatarHTML = src2
+        ? `<img class="sb-avatar ${cls}" src="${src2}" alt="${ini(op.nombre)}" onerror="this.outerHTML='<div class=&quot;sb-avatar-ini&quot;>${ini(op.nombre)}</div>'">`
+        : `<div class="sb-avatar-ini">${ini(op.nombre)}</div>`;
+      return `
+        <div class="sb-row ${cls}" id="row-${i}">
+          <div class="sb-pos ${cls}">${medal}</div>
+          ${avatarHTML}
+          <div class="sb-info">
+            <div class="sb-nombre">${nombre2}</div>
+            <div class="sb-sub">Est. ${op.estacion||'—'} · ${op.total_eventos||0} pzs
+              <span class="sb-turno-pill">Turno ${op.turno||'—'}</span>
+            </div>
+          </div>
+          <div class="sb-bar-wrap">
+            <div class="sb-bar-fill ${cls}" id="bar-${i}"></div>
+          </div>
+          <div class="sb-uph ${cls}">${op.uph_promedio}</div>
+        </div>`;
+    }).join('');
+
+    function mostrarScoreboard() {
+      const celeb = document.getElementById('pantalla-celebracion');
+      celeb.style.transition = 'opacity 1s';
+      celeb.style.opacity = '0';
+      setTimeout(() => {
+        celeb.style.display = 'none';
+        document.getElementById('spotlight').style.opacity = '0';
+        const sb = document.getElementById('pantalla-scoreboard');
+        sb.classList.add('visible');
+        lanzarFuegos();
+        ranking.forEach((op, i) => {
+          setTimeout(() => {
+            document.getElementById(`row-${i}`)?.classList.add('visible');
+            setTimeout(() => {
+              const bar = document.getElementById(`bar-${i}`);
+              if (bar) bar.style.width = `${Math.round(op.uph_promedio / maxUph * 100)}%`;
+            }, 200);
+          }, i * 100);
+        });
+      }, 1000);
+    }
+  }
+
+  // ── Exportar PDF (via print del navegador — sin dependencias) ──
+  function exportarPDF() {
+    if (!_rankingData.length) return;
+    const fecha = new Date().toLocaleDateString('es-MX', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    document.getElementById('print-fecha').textContent = `Generado: ${fecha}`;
+    // Asegurar que el scoreboard esté visible antes de imprimir
+    document.getElementById('pantalla-scoreboard').classList.add('visible');
+    setTimeout(() => window.print(), 100);
+  }
+
+  // ── Exportar Excel (.xlsx para Power BI) ─────────────────────
+  function exportarExcel() {
+    if (!_rankingData.length) return;
+    if (typeof XLSX === 'undefined') { alert('Librería Excel no cargada, intenta recargar la página.'); return; }
+
+    const fecha = new Date().toLocaleDateString('es-MX', { weekday:'long', year:'numeric', month:'long', day:'numeric' });
+    const medals = ['🥇 1ro','🥈 2do','🥉 3ro'];
+
+    // ── Hoja Ranking ──────────────────────────────────────────────
+    const wsData = [
+      ['TOP 10 OPERADORES · SEMANA'],
+      ['UPH Promedio · Últimos 7 días · Hisense Electrónica de México'],
+      [`Generado: ${fecha}`],
+      [],
+      ['Posición', 'Nombre completo', 'Estación', 'Turno', 'UPH Promedio', 'Total Piezas', '% vs 1er lugar'],
+      ..._rankingData.map((op, i) => {
+        const pct = _rankingData[0].uph_promedio > 0
+          ? Math.round(op.uph_promedio / _rankingData[0].uph_promedio * 100) / 100
+          : 0;
+        return [
+          i < 3 ? medals[i] : `#${i+1}`,
+          op.nombre || 'Sin asignar',
+          op.estacion || '—',
+          `Turno ${op.turno || '—'}`,
+          parseFloat(op.uph_promedio.toFixed(2)),
+          op.total_eventos || 0,
+          pct,
+        ];
+      })
+    ];
+
+    const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+    // Anchos de columna
+    ws['!cols'] = [
+      { wch: 12 }, { wch: 30 }, { wch: 11 }, { wch: 10 },
+      { wch: 14 }, { wch: 14 }, { wch: 16 },
+    ];
+
+    // Merge encabezados (filas 0-2)
+    ws['!merges'] = [
+      { s:{r:0,c:0}, e:{r:0,c:6} },
+      { s:{r:1,c:0}, e:{r:1,c:6} },
+      { s:{r:2,c:0}, e:{r:2,c:6} },
+    ];
+
+    // Formato % en columna G (índice 6) para filas de datos
+    _rankingData.forEach((_, i) => {
+      const cellRef = XLSX.utils.encode_cell({ r: 5 + i, c: 6 });
+      if (ws[cellRef]) ws[cellRef].z = '0%';
+    });
+
+    // ── Hoja Power BI (tabla limpia optimizada para análisis) ──
+    const ahora = new Date();
+    const numSemana = Math.ceil((ahora - new Date(ahora.getFullYear(),0,1)) / 604800000);
+    const maxUph = _rankingData[0].uph_promedio || 1;
+
+    const pbiRows = _rankingData.map((op, i) => {
+      const pos = i + 1;
+      const rango = pos === 1 ? 'Oro' : pos === 2 ? 'Plata' : pos === 3 ? 'Bronce' : 'Top 10';
+      const pct_vs_lider = maxUph > 0 ? parseFloat((op.uph_promedio / maxUph * 100).toFixed(1)) : 0;
+      // UPH meta asumida 100 — ajustar cuando se conecte a datos reales
+      const uph_meta   = 100;
+      const eficiencia = parseFloat((op.uph_promedio / uph_meta * 100).toFixed(1));
+      const estado     = eficiencia >= 100 ? 'Verde' : eficiencia >= 90 ? 'Amarillo' : 'Rojo';
+      return [
+        pos,
+        rango,
+        op.nombre       || 'Sin asignar',
+        op.estacion     || '',
+        (op.turno       || '').replace(/^Turno\s*/i, ''),
+        parseFloat(op.uph_promedio.toFixed(2)),
+        uph_meta,
+        eficiencia,
+        estado,
+        op.total_eventos || 0,
+        pct_vs_lider,
+        numSemana,
+        ahora.getFullYear(),
+        ahora.toISOString().slice(0, 10),
+      ];
+    });
+
+    const wsPBI = XLSX.utils.aoa_to_sheet([
+      [
+        'Posicion', 'Rango', 'Nombre', 'Estacion', 'Turno',
+        'UPH_Promedio', 'UPH_Meta', 'Eficiencia_Pct', 'Estado',
+        'Total_Piezas', 'Pct_vs_Lider', 'Num_Semana', 'Año', 'Fecha'
+      ],
+      ...pbiRows
+    ]);
+
+    // Formato % en columnas Eficiencia y Pct_vs_Lider
+    pbiRows.forEach((_, i) => {
+      ['H','K'].forEach(col => {
+        const ref = `${col}${i+2}`;
+        if (wsPBI[ref]) wsPBI[ref].z = '0.0"%"';
+      });
+    });
+
+    wsPBI['!cols'] = [
+      {wch:10},{wch:10},{wch:30},{wch:11},{wch:7},
+      {wch:14},{wch:10},{wch:16},{wch:10},
+      {wch:14},{wch:14},{wch:12},{wch:6},{wch:12},
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws,   'Ranking Semanal');
+    XLSX.utils.book_append_sheet(wb, wsPBI, 'PowerBI_Data');
+
+    XLSX.writeFile(wb, `ranking_semanal_${new Date().toISOString().slice(0,10)}.xlsx`);
+  }
+
+  // ── Análisis / Gráficas ───────────────────────────────────────
+  let _chartBarras = null, _chartPastel = null, _chartLinea = null;
+
+  function mostrarAnalisis() {
+    if (!_rankingData.length) return;
+    document.getElementById('pantalla-scoreboard').style.opacity = '0';
+    document.getElementById('pantalla-scoreboard').style.pointerEvents = 'none';
+    document.getElementById('pantalla-analisis').classList.add('visible');
+    setTimeout(renderCharts, 80);
+  }
+
+  function ocultarAnalisis() {
+    document.getElementById('pantalla-analisis').classList.remove('visible');
+    document.getElementById('pantalla-scoreboard').style.opacity = '1';
+    document.getElementById('pantalla-scoreboard').style.pointerEvents = 'all';
+  }
+
+  function renderCharts() {
+    const nombres   = _rankingData.map(o => (o.nombre||'').split(' ').slice(0,2).join(' '));
+    const uphs      = _rankingData.map(o => parseFloat(o.uph_promedio.toFixed(1)));
+    const meta      = 100;
+    const efics     = uphs.map(u => parseFloat((u / meta * 100).toFixed(1)));
+    const colores   = uphs.map(u => u >= meta ? '#00c8b8' : u >= 90 ? '#ff8800' : '#ff4040');
+    const coloresFade = colores.map(c => c + '99');
+
+    const gridColor  = 'rgba(255,255,255,0.06)';
+    const tickColor  = '#00856e';
+    const baseFont   = { family: "'Segoe UI', sans-serif", size: 11 };
+
+    // ── Barras: UPH por operador ──────────────────────────────
+    if (_chartBarras) _chartBarras.destroy();
+    _chartBarras = new Chart(document.getElementById('chart-barras'), {
+      type: 'bar',
+      data: {
+        labels: nombres,
+        datasets: [{
+          label: 'UPH Promedio',
+          data: uphs,
+          backgroundColor: coloresFade,
+          borderColor: colores,
+          borderWidth: 2,
+          borderRadius: 8,
+        }, {
+          label: 'Meta (100)',
+          data: Array(uphs.length).fill(meta),
+          type: 'line',
+          borderColor: 'rgba(255,255,255,0.4)',
+          borderWidth: 2,
+          borderDash: [6,4],
+          pointRadius: 0,
+          fill: false,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: tickColor, font: baseFont } },
+          tooltip: { callbacks: { label: ctx => ` UPH: ${ctx.parsed.y}` } }
+        },
+        scales: {
+          x: { ticks: { color: tickColor, font: baseFont }, grid: { color: gridColor } },
+          y: { ticks: { color: tickColor, font: baseFont }, grid: { color: gridColor },
+               min: Math.max(0, Math.min(...uphs) - 10) }
+        }
+      }
+    });
+
+    // ── Pastel: distribución piezas por turno ─────────────────
+    const porTurno = {};
+    _rankingData.forEach(o => {
+      const t = `Turno ${o.turno || '?'}`;
+      porTurno[t] = (porTurno[t] || 0) + (o.total_eventos || 0);
+    });
+    if (_chartPastel) _chartPastel.destroy();
+    _chartPastel = new Chart(document.getElementById('chart-pastel'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(porTurno),
+        datasets: [{
+          data: Object.values(porTurno),
+          backgroundColor: ['#00c8b899','#ffd70099','#ff880099','#c0c0c099'],
+          borderColor:     ['#00c8b8',  '#ffd700',  '#ff8800',  '#c0c0c0'],
+          borderWidth: 2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '60%',
+        plugins: {
+          legend: { position: 'bottom', labels: { color: tickColor, font: baseFont, padding: 14 } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${ctx.parsed.toLocaleString()} pzs` } }
+        }
+      }
+    });
+
+    // ── Línea: eficiencia % vs meta ───────────────────────────
+    if (_chartLinea) _chartLinea.destroy();
+    _chartLinea = new Chart(document.getElementById('chart-linea'), {
+      type: 'line',
+      data: {
+        labels: nombres,
+        datasets: [{
+          label: 'Eficiencia %',
+          data: efics,
+          borderColor: '#00c8b8',
+          backgroundColor: 'rgba(0,200,184,0.12)',
+          borderWidth: 2,
+          pointBackgroundColor: colores,
+          pointBorderColor: colores,
+          pointRadius: 5,
+          fill: true,
+          tension: 0.35,
+        }, {
+          label: 'Meta 100%',
+          data: Array(efics.length).fill(100),
+          borderColor: 'rgba(255,255,255,0.35)',
+          borderWidth: 2,
+          borderDash: [6,4],
+          pointRadius: 0,
+          fill: false,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: tickColor, font: baseFont } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.parsed.y}%` } }
+        },
+        scales: {
+          x: { ticks: { color: tickColor, font: baseFont }, grid: { color: gridColor } },
+          y: { ticks: { color: tickColor, font: baseFont, callback: v => v+'%' },
+               grid: { color: gridColor }, min: Math.max(0, Math.min(...efics) - 10), max: 115 }
+        }
+      }
+    });
+  }
+
+  cargar();
+</script>
+</body>
+</html>
