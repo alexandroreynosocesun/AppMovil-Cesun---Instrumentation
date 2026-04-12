@@ -523,6 +523,11 @@
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json = await res.json();
     const ranking = json.ranking || [];
+    // Actualizar subtítulo con período real
+    const sub = json.semana_cerrada
+      ? `Semana ${json.periodo_inicio} → ${json.periodo_fin} · cerrada`
+      : `Semana del ${json.periodo_inicio} · ${json.horas_semana}h trabajadas`;
+    document.getElementById('sb-subtitulo').textContent = sub;
 
     _rankingData = ranking;
     const top = ranking[0];

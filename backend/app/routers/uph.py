@@ -342,56 +342,84 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
 
     horas_semana = max(horas_semana, 1.0)   # evitar división por cero
 
-    # ── Eventos de la semana por estación ───────────────────────
-    resultados = (
+    # ── Construir mapa estacion→operador por día de la semana ────
+    # Para cada asignación de la semana, saber qué operador trabajó en qué estación
+    desde_fecha_str = lunes_local.strftime("%Y-%m-%d")
+    hasta_fecha_str = viernes_fin.strftime("%Y-%m-%d")
+
+    asignaciones_semana = (
+        db.query(Asignacion)
+        .filter(
+            Asignacion.fecha >= desde_fecha_str,
+            Asignacion.fecha <= hasta_fecha_str,
+        )
+        .all()
+    )
+
+    # mapa: (fecha, estacion) → num_empleado
+    mapa_est: dict = {}
+    for a in asignaciones_semana:
+        mapa_est[(a.fecha, a.estacion)] = a.num_empleado
+
+    # ── Eventos de la semana por estación+fecha ──────────────────
+    eventos_raw = (
         db.query(
             EventoUPH.estacion,
-            func.count(EventoUPH.id).label("total_eventos"),
+            EventoUPH.linea,
+            func.date_trunc('day', EventoUPH.timestamp).label("dia"),
+            func.count(EventoUPH.id).label("cnt"),
         )
         .filter(
             EventoUPH.evento    == "GOOD",
             EventoUPH.timestamp >= inicio_semana_utc,
             EventoUPH.timestamp <  corte_utc,
         )
-        .group_by(EventoUPH.estacion)
+        .group_by(EventoUPH.estacion, EventoUPH.linea,
+                  func.date_trunc('day', EventoUPH.timestamp))
         .all()
     )
 
+    # ── Acumular eventos por operador ────────────────────────────
+    # Necesitamos convertir el día UTC del evento a fecha local para buscar en mapa_est
+    op_totales: dict = {}   # num_empleado → total_eventos
+    for ev in eventos_raw:
+        # dia es UTC; convertir a fecha local
+        dia_local = (ev.dia.replace(tzinfo=timezone.utc) - utc_offset).strftime("%Y-%m-%d")
+        emp = mapa_est.get((dia_local, ev.estacion))
+        if not emp:
+            # Fallback: buscar la asignación más reciente para esa estación
+            asig_fb = (
+                db.query(Asignacion)
+                .filter(
+                    Asignacion.estacion == ev.estacion,
+                    Asignacion.fecha    <= hasta_fecha_str,
+                    Asignacion.fecha    >= desde_fecha_str,
+                )
+                .order_by(Asignacion.fecha.desc())
+                .first()
+            )
+            emp = asig_fb.num_empleado if asig_fb else None
+        if emp:
+            op_totales[emp] = op_totales.get(emp, 0) + ev.cnt
+
+    # ── Construir ranking uno por operador ───────────────────────
     hoy = ahora_loc.strftime("%Y-%m-%d")
     ranking = []
-    for row in resultados:
-        asig = (
-            db.query(Asignacion)
-            .filter(Asignacion.estacion == row.estacion, Asignacion.fecha <= hoy)
-            .order_by(Asignacion.fecha.desc())
-            .first()
-        )
-        operador = asig.operador if asig else None
-        # Turno real del perfil; si no está, moda de asignaciones de la semana
-        turno_nombre = operador.turno if (operador and operador.turno) else None
-        if not turno_nombre and operador:
-            desde_fecha = lunes_local.strftime("%Y-%m-%d")
-            turno_counts: dict = {}
-            for a7 in db.query(Asignacion).filter(
-                Asignacion.num_empleado == operador.num_empleado,
-                Asignacion.fecha >= desde_fecha,
-                Asignacion.turno_id != None,
-            ).all():
-                t7 = db.query(Turno).filter(Turno.id == a7.turno_id).first()
-                if t7:
-                    turno_counts[t7.nombre] = turno_counts.get(t7.nombre, 0) + 1
-            if turno_counts:
-                turno_nombre = max(turno_counts, key=turno_counts.get)
+    for num_empleado, total_eventos in op_totales.items():
+        operador = db.query(Operador).filter(Operador.num_empleado == num_empleado).first()
+        if not operador:
+            continue
+        # Turno real del perfil
+        turno_nombre = operador.turno if operador.turno else None
 
-        uph_promedio = round(row.total_eventos / horas_semana, 2)
+        uph_promedio = round(total_eventos / horas_semana, 2)
         ranking.append({
-            "estacion":      row.estacion,
-            "num_empleado":  operador.num_empleado if operador else None,
-            "nombre":        operador.nombre if operador else "Sin asignar",
-            "foto_url":      operador.foto_url if operador else None,
+            "num_empleado":  num_empleado,
+            "nombre":        operador.nombre,
+            "foto_url":      operador.foto_url,
             "turno":         turno_nombre,
             "uph_promedio":  uph_promedio,
-            "total_eventos": row.total_eventos,
+            "total_eventos": total_eventos,
         })
 
     ranking.sort(key=lambda x: x["uph_promedio"], reverse=True)
