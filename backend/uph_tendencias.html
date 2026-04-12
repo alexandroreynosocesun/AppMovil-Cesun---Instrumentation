@@ -2,7 +2,24 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Tendencias UPH · Hisense AMI</title>
+  <script>
+  (function() {
+    const TARGET_W = 1920;
+    function aplicarZoom() {
+      const sw = window.screen.width;
+      if (sw <= TARGET_W) return;
+      const scale = sw / TARGET_W;
+      document.documentElement.style.zoom = scale.toFixed(4);
+      document.documentElement.style.width = (100/scale).toFixed(4) + 'vw';
+      document.documentElement.style.height = (100/scale).toFixed(4) + 'vh';
+      document.documentElement.style.overflow = 'hidden';
+    }
+    document.addEventListener('DOMContentLoaded', aplicarZoom);
+    window.addEventListener('resize', aplicarZoom);
+  })();
+  </script>
   <script src="/chart.min.js"></script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
