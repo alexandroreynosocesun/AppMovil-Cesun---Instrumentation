@@ -116,7 +116,6 @@ export default function AsignacionLideraScreen({ navigation }) {
   const [lineaSeleccionada,  setLineaSeleccionada]  = useState(null);
   const [turnoSeleccionado,  setTurnoSeleccionado]  = useState(null);
   const [modeloSeleccionado, setModeloSeleccionado] = useState(null);
-  const [modeloGuardado,     setModeloGuardado]     = useState(null); // modelo que ya estaba guardado en BD
 
   // asignacion: { slotIdx: { op: operador, estaciones: ['101','102'] } }
   const [numSlots,     setNumSlots]     = useState(2);
@@ -209,7 +208,6 @@ export default function AsignacionLideraScreen({ navigation }) {
       }
 
       setModeloSeleccionado(modeloActual);
-      setModeloGuardado(modeloActual);
       setLoadingModelos(false);
     }
     cargar();
@@ -306,7 +304,7 @@ export default function AsignacionLideraScreen({ navigation }) {
   // ── Guardar ─────────────────────────────────────────────
   const handleGuardar = async () => {
     if (!lineaSeleccionada) return showAlert('Falta línea', 'Configura tu línea en Inicio.');
-    if (opsAsignados === 0)  return showAlert('Sin operadores', 'Asigna al menos un operador.');
+    if (opsAsignados < 2)    return showAlert('Pocos operadores', 'Asigna al menos 2 operadores antes de guardar.');
     const items = [];
     Object.values(asignacion).forEach(v => {
       if (v?.op && v.estaciones.length > 0) {
@@ -644,15 +642,13 @@ export default function AsignacionLideraScreen({ navigation }) {
 
         {/* ── Guardar ─────────────────────────────────────── */}
         <TouchableOpacity
-          style={[s.guardarBtn, (guardando || opsAsignados === 0) && s.guardarBtnDisabled]}
+          style={[s.guardarBtn, (guardando || opsAsignados < 2) && s.guardarBtnDisabled]}
           onPress={handleGuardar}
-          disabled={guardando || opsAsignados === 0}
+          disabled={guardando || opsAsignados < 2}
         >
           {guardando
             ? <ActivityIndicator size="small" color="#fff" />
-            : <Text style={s.guardarBtnText}>
-                Guardar asignación · {opsAsignados} operador{opsAsignados !== 1 ? 'es' : ''}
-              </Text>}
+            : <Text style={s.guardarBtnText}>Guardar</Text>}
         </TouchableOpacity>
 
         <ModalOperador
