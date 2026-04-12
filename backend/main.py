@@ -337,6 +337,47 @@ try:
 except Exception as e:
     logger.error(f"No se pudo iniciar scheduler CSV UPH: {e}", exc_info=True)
 
+# Limpieza nocturna de eventos UPH — conserva semana actual + semana pasada
+try:
+    from app.routers.uph import EventoUPH
+
+    def _cleanup_uph_eventos():
+        import datetime as _dt
+        from sqlalchemy import text as _text
+        while True:
+            ahora = _dt.datetime.now()
+            # Esperar hasta las 3:00 AM del día siguiente
+            manana_3am = (ahora + _dt.timedelta(days=1)).replace(hour=3, minute=0, second=0, microsecond=0)
+            if ahora.hour < 3:
+                manana_3am = ahora.replace(hour=3, minute=0, second=0, microsecond=0)
+            _time.sleep((manana_3am - ahora).total_seconds())
+            try:
+                # Inicio de la semana actual (lunes 06:30)
+                now = _dt.datetime.now()
+                wd = now.weekday()
+                lunes_actual = now.replace(hour=6, minute=30, second=0, microsecond=0) \
+                               - _dt.timedelta(days=wd)
+                # Inicio de la semana pasada = lunes anterior
+                lunes_pasado = lunes_actual - _dt.timedelta(days=7)
+                # Convertir a UTC
+                from datetime import timezone as _tz
+                utc_offset = _dt.datetime.now(_tz.utc).replace(tzinfo=None) - now
+                corte_utc = (lunes_pasado + utc_offset).replace(tzinfo=_tz.utc)
+
+                db = UphSessionLocal()
+                deleted = db.query(EventoUPH).filter(EventoUPH.timestamp < corte_utc).delete()
+                db.commit()
+                db.close()
+                logger.info(f"🧹 Limpieza UPH: {deleted} eventos eliminados (anteriores a {lunes_pasado.date()})")
+            except Exception as ex:
+                logger.error(f"Error en limpieza UPH: {ex}")
+
+    t_cleanup = threading.Thread(target=_cleanup_uph_eventos, daemon=True)
+    t_cleanup.start()
+    logger.info("✅ Scheduler limpieza UPH iniciado (3:00 AM diario, conserva 2 semanas)")
+except Exception as e:
+    logger.error(f"No se pudo iniciar limpieza UPH: {e}", exc_info=True)
+
 if __name__ == "__main__":
     logger.info(f"Iniciando servidor en {API_HOST}:{API_PORT} (Entorno: {'PRODUCCIÓN' if IS_PRODUCTION else 'DESARROLLO'})")
     uvicorn.run(app, host=API_HOST, port=API_PORT)
