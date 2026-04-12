@@ -157,6 +157,33 @@ class UPHService {
     }
   }
 
+  async getEstadoDescanso(linea) {
+    try {
+      const response = await apiClient.get(`/uph/descanso/${encodeURIComponent(linea)}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async iniciarDescanso(linea) {
+    try {
+      const response = await apiClient.post(`/uph/descanso/${encodeURIComponent(linea)}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async terminarDescanso(linea) {
+    try {
+      const response = await apiClient.put(`/uph/descanso/${encodeURIComponent(linea)}/fin`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
   async getPlanLinea(linea) {
     try {
       const response = await apiClient.get(`/uph/plan-linea/${encodeURIComponent(linea)}`);

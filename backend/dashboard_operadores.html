@@ -111,6 +111,15 @@
     .card.verde    { border-color: #00877a99; box-shadow: 0 0 22px #00877a18; }
     .card.amarillo { border-color: #cc770066; box-shadow: 0 0 22px #cc770012; }
     .card.rojo     { border-color: #cc222266; box-shadow: 0 0 22px #cc222214; }
+    .card.descanso { border-color: #5a4a2066; box-shadow: 0 0 22px #5a4a2018; opacity: 0.72; }
+    .card-descanso { position: relative; }
+    .descanso-banner {
+      position: absolute; top: 0; left: 0; right: 0;
+      background: linear-gradient(90deg, #3a2a0a, #5a4010, #3a2a0a);
+      color: #f5c842; font-size: 0.72rem; font-weight: 800;
+      letter-spacing: 3px; text-align: center; padding: 4px 0;
+      border-radius: 16px 16px 0 0; z-index: 2;
+    }
     .card.rank-1 {
       border-color: #ffd700 !important; border-width: 3px;
       background: linear-gradient(160deg, #131000 0%, #1c1700 50%, #080800 100%) !important;
@@ -714,9 +723,10 @@
 
   // ── Card ─────────────────────────────────────────────────────
   function cardHTML(linea, rankMap) {
+    const enDescanso = !!linea.en_descanso;
     const uphPct  = linea.uph_meta > 0 ? Math.round(linea.uph_actual/linea.uph_meta*100) : null;
-    const uphCol  = col(uphPct);
-    const rank    = rankMap[linea.linea]||99;
+    const uphCol  = enDescanso ? 'descanso' : col(uphPct);
+    const rank    = enDescanso ? 99 : (rankMap[linea.linea]||99);
     const rankCls = rank<=3 ? `rank-${rank}` : '';
     const medalEmoji = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
     const medalClass = rank===1?'oro':rank===2?'plata':rank===3?'bronce':'';
@@ -726,7 +736,8 @@
       ? `<div class="card-ops">${ops}</div>`
       : `<div class="card-ops vacia"><span class="ops-empty">Sin operadores asignados</span></div>`;
     return `
-      <div class="card ${uphCol} ${rankCls}">
+      <div class="card ${uphCol} ${rankCls}${enDescanso?' card-descanso':''}">
+        ${enDescanso ? `<div class="descanso-banner">☕ DESCANSO</div>` : ''}
         <div class="card-top">
           <div class="card-id">
             ${medal ? `<span class="id-medal ${medalClass}">${medal}</span>` : ''}

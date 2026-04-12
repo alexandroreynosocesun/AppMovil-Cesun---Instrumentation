@@ -79,6 +79,20 @@ class Asignacion(UphBase):
     modelo = relationship("ModeloUPH", back_populates="asignaciones")
 
 
+class DescansoLinea(UphBase):
+    """Descanso manual registrado por el líder.
+    Complementa el horario fijo; activo mientras fin sea None."""
+    __tablename__ = "descansos_linea"
+
+    id        = Column(Integer, primary_key=True, index=True)
+    linea_id  = Column(Integer, ForeignKey("lineas.id"), nullable=False)
+    inicio    = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    fin       = Column(DateTime(timezone=True), nullable=True)   # None = activo ahora
+    activo    = Column(Boolean, default=True)
+
+    linea = relationship("Linea")
+
+
 class PlanLinea(UphBase):
     """Plan de producción multi-turno por línea.
     Persiste entre turnos; se cierra solo cuando el líder cambia de modelo."""

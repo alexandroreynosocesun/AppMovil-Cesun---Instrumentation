@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 from ..database_uph import get_uph_db
-from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH, PlanLinea
+from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH, PlanLinea, DescansoLinea
 from ..auth import get_current_user
 from ..models.models import Tecnico
 
@@ -36,6 +36,70 @@ def _append_csv(linea: str, estacion: str, evento: str, contador, ts: datetime):
         if escribir_header:
             writer.writerow(["timestamp", "linea", "estacion", "evento", "contador"])
         writer.writerow([ts.isoformat(), linea, estacion, evento, contador])
+
+# ─────────────────────────────────────────────
+# Horarios de descanso fijos por turno
+# ─────────────────────────────────────────────
+# Cada entrada: (HH:MM inicio, HH:MM fin)
+# Turno B: el segundo descanso cruza medianoche (02:30-03:00)
+# Turno C viernes: igual que Turno A
+# Turno C sáb/dom: solo un descanso
+
+_DESCANSOS_TURNO = {
+    1: [("09:30", "10:00"), ("14:00", "14:30")],          # Turno A
+    2: [("21:10", "21:40"), ("02:30", "03:00")],          # Turno B
+    "C_finde": [("09:00", "09:30")],                      # Turno C sáb/dom
+    "C_viernes": [("09:30", "10:00"), ("14:00", "14:30")],# Turno C viernes (= A)
+}
+
+
+def _minutos(hhmm: str) -> int:
+    """'09:30' → 570 minutos desde medianoche."""
+    h, m = map(int, hhmm.split(":"))
+    return h * 60 + m
+
+
+def _esta_en_descanso_fijo(turno_id: int) -> bool:
+    """Devuelve True si la hora local actual cae dentro de un descanso fijo."""
+    ahora_loc = datetime.now()
+    ahora_min = ahora_loc.hour * 60 + ahora_loc.minute
+    wd = ahora_loc.weekday()  # 0=Lun…4=Vie, 5=Sab, 6=Dom
+
+    # Determinar clave de horario
+    if turno_id == 3:
+        clave = "C_viernes" if wd == 4 else "C_finde"
+    else:
+        clave = turno_id
+
+    ventanas = _DESCANSOS_TURNO.get(clave, [])
+    for ini_str, fin_str in ventanas:
+        ini_min = _minutos(ini_str)
+        fin_min = _minutos(fin_str)
+        if ini_min <= fin_min:
+            # Ventana normal (no cruza medianoche)
+            if ini_min <= ahora_min < fin_min:
+                return True
+        else:
+            # Cruza medianoche (ej. 02:30-03:00 en turno B)
+            if ahora_min >= ini_min or ahora_min < fin_min:
+                return True
+    return False
+
+
+def _descanso_manual_activo(db, linea_id: int) -> bool:
+    """Devuelve True si hay un descanso manual sin cerrar para esta línea."""
+    d = db.query(DescansoLinea).filter(
+        DescansoLinea.linea_id == linea_id,
+        DescansoLinea.activo   == True,
+        DescansoLinea.fin      == None,
+    ).first()
+    return d is not None
+
+
+def _esta_en_descanso(db, linea_id: int, turno_id: int) -> bool:
+    """Combina descanso manual + horario fijo."""
+    return _descanso_manual_activo(db, linea_id) or _esta_en_descanso_fijo(turno_id)
+
 
 # ─────────────────────────────────────────────
 # WebSocket — broadcast en tiempo real
@@ -1309,6 +1373,95 @@ def limpiar_eventos(data: LimpiarIn, db: Session = Depends(get_uph_db)):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Descansos
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/descanso/{linea}", status_code=201)
+def iniciar_descanso(
+    linea: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Líder inicia un descanso manual para su línea."""
+    _ensure_admin_or_jefa(current_user)
+    l = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    # Cerrar cualquier descanso previo sin cerrar
+    db.query(DescansoLinea).filter(
+        DescansoLinea.linea_id == l.id,
+        DescansoLinea.activo   == True,
+        DescansoLinea.fin      == None,
+    ).update({"fin": datetime.now(timezone.utc), "activo": False})
+    d = DescansoLinea(linea_id=l.id, inicio=datetime.now(timezone.utc))
+    db.add(d)
+    db.commit()
+    db.refresh(d)
+    return {"id": d.id, "ok": True, "inicio": d.inicio.isoformat()}
+
+
+@router.put("/descanso/{linea}/fin")
+def terminar_descanso(
+    linea: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Líder termina el descanso manual activo."""
+    _ensure_admin_or_jefa(current_user)
+    l = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    ahora = datetime.now(timezone.utc)
+    updated = db.query(DescansoLinea).filter(
+        DescansoLinea.linea_id == l.id,
+        DescansoLinea.activo   == True,
+        DescansoLinea.fin      == None,
+    ).update({"fin": ahora, "activo": False})
+    db.commit()
+    return {"ok": True, "cerrados": updated}
+
+
+@router.get("/descanso/{linea}")
+def estado_descanso(
+    linea: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Estado actual de descanso para una línea (manual + fijo)."""
+    l = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+
+    # Turno activo
+    ahora_loc = datetime.now()
+    mins = ahora_loc.hour * 60 + ahora_loc.minute
+    wd   = ahora_loc.weekday()
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30
+    if wd in (0, 1, 2, 3):
+        turno_id = 1 if T_INI <= mins < T_FIN else 2
+    elif wd == 4:
+        turno_id = 2 if mins < T_INI else (3 if T_INI <= mins < T_FIN else 2)
+    elif wd == 5:
+        turno_id = 2 if mins < T_INI else (3 if T_INI <= mins < T_FIN else 2)
+    else:
+        turno_id = 3 if T_INI <= mins < T_FIN else 2
+
+    manual = db.query(DescansoLinea).filter(
+        DescansoLinea.linea_id == l.id,
+        DescansoLinea.activo   == True,
+        DescansoLinea.fin      == None,
+    ).first()
+
+    en_descanso = bool(manual) or _esta_en_descanso_fijo(turno_id)
+    return {
+        "linea":        linea,
+        "en_descanso":  en_descanso,
+        "tipo":         "manual" if manual else ("fijo" if en_descanso else None),
+        "inicio":       manual.inicio.isoformat() if manual else None,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Plan multi-turno por línea
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -1658,6 +1811,8 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                 "kpi_pct": kpi_pct,
             })
 
+        en_descanso = _esta_en_descanso(db, linea.id, turno_id_act)
+
         resultado.append({
             "linea": linea.nombre,
             "modelo": modelo_nombre,
@@ -1665,6 +1820,7 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
             "uph_meta": uph_meta,
             "piezas_modelo": piezas_modelo,
             "plan_modelo": plan_modelo,
+            "en_descanso": en_descanso,
             "operadores": list(ops_dict.values()),
         })
 

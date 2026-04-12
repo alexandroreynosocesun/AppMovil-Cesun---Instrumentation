@@ -132,6 +132,8 @@ export default function LiderDashboardScreen() {
   const [loading, setLoading]   = useState(true);
   const [loadingOps, setLoadingOps] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [enDescanso,  setEnDescanso]  = useState(false);
+  const [toggleandoDescanso, setToggleandoDescanso] = useState(false);
 
   const saveTimeout = useRef(null);
 
@@ -170,21 +172,34 @@ export default function LiderDashboardScreen() {
   }, []);
 
   const cargar = useCallback(async () => {
-    const [rResumen, rAsig] = await Promise.all([
+    const [rResumen, rAsig, rDescanso] = await Promise.all([
       uphService.getResumen(),
       lineaLocal ? uphService.getAsignacionHoy(lineaLocal) : Promise.resolve({ success: false }),
+      lineaLocal ? uphService.getEstadoDescanso(lineaLocal) : Promise.resolve({ success: false }),
     ]);
     if (rResumen.success && lineaLocal) {
       const lineas = rResumen.data?.lineas || [];
       setResumenLinea(lineas.find(l => l.linea === lineaLocal) || null);
     }
-    if (rAsig.success) {
-      setAsignacionHoy(rAsig.data);
-    }
+    if (rAsig.success) setAsignacionHoy(rAsig.data);
+    if (rDescanso.success) setEnDescanso(rDescanso.data.en_descanso || false);
     setLoading(false);
     setRefreshing(false);
     cargarOperadores(lineaLocal);
   }, [lineaLocal, cargarOperadores]);
+
+  const handleToggleDescanso = async () => {
+    if (!lineaLocal || toggleandoDescanso) return;
+    setToggleandoDescanso(true);
+    if (enDescanso) {
+      await uphService.terminarDescanso(lineaLocal);
+      setEnDescanso(false);
+    } else {
+      await uphService.iniciarDescanso(lineaLocal);
+      setEnDescanso(true);
+    }
+    setToggleandoDescanso(false);
+  };
 
   useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
 
@@ -284,6 +299,19 @@ export default function LiderDashboardScreen() {
             )}
           </View>
 
+          {/* ── Botón descanso ─────────────────────────────── */}
+          {lineaLocal && (
+            <TouchableOpacity
+              style={[s.descansoBtn, enDescanso && s.descansoBtnActivo]}
+              onPress={handleToggleDescanso}
+              disabled={toggleandoDescanso}
+            >
+              <Text style={[s.descansoBtnText, enDescanso && s.descansoBtnTextActivo]}>
+                {toggleandoDescanso ? '...' : enDescanso ? '▶  Terminar descanso' : '☕  Iniciar descanso'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {/* ── Resumen de la línea hoy ─────────────────────── */}
           {lineaLocal && (
             <>
@@ -291,7 +319,13 @@ export default function LiderDashboardScreen() {
               {loading ? (
                 <ActivityIndicator color="#2196F3" style={{ marginVertical: 20 }} />
               ) : resumenLinea ? (
-                <View style={[s.lineaCard, semaforo && { borderColor: semaforo.border, backgroundColor: semaforo.bg }]}>
+                <View style={[s.lineaCard, semaforo && { borderColor: semaforo.border, backgroundColor: semaforo.bg },
+                              enDescanso && { borderColor: '#f5c842', backgroundColor: '#3a2a0a33', opacity: 0.85 }]}>
+                  {enDescanso && (
+                    <View style={s.descansoOverlay}>
+                      <Text style={s.descansoOverlayText}>☕  DESCANSO</Text>
+                    </View>
+                  )}
                   <View style={s.lineaCardTop}>
                     <View style={[s.dot, semaforo && { backgroundColor: semaforo.dot }]} />
                     <Text style={s.modeloNombre}>{resumenLinea.modelo || asignacionHoy.modelo_nombre || 'Sin modelo asignado'}</Text>
@@ -516,6 +550,25 @@ const s = StyleSheet.create({
     backgroundColor: '#0D1B2A', borderRadius: 14,
     borderWidth: 1, borderColor: '#1A2E40',
     padding: 12, marginBottom: 8,
+  },
+
+  descansoBtn: {
+    borderRadius: 10, borderWidth: 1, borderColor: '#37474F',
+    backgroundColor: '#141414', paddingVertical: 10,
+    alignItems: 'center', marginBottom: 12,
+  },
+  descansoBtnActivo: {
+    backgroundColor: '#3a2a0a', borderColor: '#f5c842',
+  },
+  descansoBtnText:       { color: '#757575', fontSize: 14, fontWeight: '700' },
+  descansoBtnTextActivo: { color: '#f5c842' },
+
+  descansoOverlay: {
+    backgroundColor: '#3a2a0acc', borderRadius: 8,
+    paddingVertical: 5, alignItems: 'center', marginBottom: 10,
+  },
+  descansoOverlayText: {
+    color: '#f5c842', fontSize: 13, fontWeight: '800', letterSpacing: 2,
   },
   chartTitulo: { color: '#2196F3', fontSize: 11, fontWeight: 'bold', letterSpacing: 1, marginBottom: 8 },
 });
