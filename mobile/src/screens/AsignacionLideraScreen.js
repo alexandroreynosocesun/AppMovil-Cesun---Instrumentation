@@ -152,11 +152,9 @@ export default function AsignacionLideraScreen({ navigation }) {
           { id: 'B', nombre: 'B', hora_inicio: '18:00', hora_fin: '06:00' },
           { id: 'C', nombre: 'C', hora_inicio: '08:00', hora_fin: '20:00' },
         ];
-    let elegido = turnoUsuario ? turnosData.find(t => t.nombre === turnoUsuario) || null : null;
-    if (!elegido) {
-      const rActual = await uphService.getTurnoActual();
-      elegido = rActual.success ? (rActual.data.turno ?? rActual.data) : turnosData[0];
-    }
+    // Siempre detectar turno por hora/día del servidor (ignora perfil de usuario)
+    const rActual = await uphService.getTurnoActual();
+    let elegido = rActual.success && rActual.data.turno ? rActual.data.turno : turnosData[0];
     setTurnoSeleccionado(elegido);
     if (rOps.success) setOperadores(rOps.data);
     setLoading(false);

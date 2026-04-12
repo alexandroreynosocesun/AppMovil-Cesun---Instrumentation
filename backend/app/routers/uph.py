@@ -1360,6 +1360,7 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
     resultado = []
     for linea in lineas:
         # Asignaciones del turno activo para esta línea
+        # Primero buscar por turno activo exacto; si no hay, usar cualquier asignación del día
         asignaciones = (
             db.query(Asignacion)
             .filter(
@@ -1369,6 +1370,15 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
             )
             .all()
         )
+        if not asignaciones:
+            asignaciones = (
+                db.query(Asignacion)
+                .filter(
+                    Asignacion.linea_id == linea.id,
+                    Asignacion.fecha    == fecha_asig,
+                )
+                .all()
+            )
 
         # Modelo actual desde primera asignación
         modelo = asignaciones[0].modelo if asignaciones else None
