@@ -874,7 +874,13 @@ def get_asignacion_hoy(
             "estaciones": estaciones,
         })
 
-    return {"operadores": resultado, "modelo_id": modelo_id, "plan_interno": plan_interno}
+    modelo_obj = db.query(ModeloUPH).filter(ModeloUPH.id == modelo_id).first() if modelo_id else None
+    return {
+        "operadores": resultado,
+        "modelo_id": modelo_id,
+        "modelo_nombre": modelo_obj.nombre if modelo_obj else None,
+        "plan_interno": plan_interno,
+    }
 
 
 @router.patch("/asignacion/hoy/modelo")

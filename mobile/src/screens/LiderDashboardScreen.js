@@ -128,6 +128,7 @@ export default function LiderDashboardScreen() {
 
   const [resumenLinea, setResumenLinea] = useState(null);
   const [operadoresHoy, setOperadoresHoy] = useState([]);
+  const [asignacionHoy, setAsignacionHoy] = useState({ operadores: [], modelo_nombre: null });
   const [loading, setLoading]   = useState(true);
   const [loadingOps, setLoadingOps] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -169,10 +170,16 @@ export default function LiderDashboardScreen() {
   }, []);
 
   const cargar = useCallback(async () => {
-    const rResumen = await uphService.getResumen();
+    const [rResumen, rAsig] = await Promise.all([
+      uphService.getResumen(),
+      lineaLocal ? uphService.getAsignacionHoy(lineaLocal) : Promise.resolve({ success: false }),
+    ]);
     if (rResumen.success && lineaLocal) {
       const lineas = rResumen.data?.lineas || [];
       setResumenLinea(lineas.find(l => l.linea === lineaLocal) || null);
+    }
+    if (rAsig.success) {
+      setAsignacionHoy(rAsig.data);
     }
     setLoading(false);
     setRefreshing(false);
@@ -287,7 +294,7 @@ export default function LiderDashboardScreen() {
                 <View style={[s.lineaCard, semaforo && { borderColor: semaforo.border, backgroundColor: semaforo.bg }]}>
                   <View style={s.lineaCardTop}>
                     <View style={[s.dot, semaforo && { backgroundColor: semaforo.dot }]} />
-                    <Text style={s.modeloNombre}>{resumenLinea.modelo || 'Sin modelo asignado'}</Text>
+                    <Text style={s.modeloNombre}>{resumenLinea.modelo || asignacionHoy.modelo_nombre || 'Sin modelo asignado'}</Text>
                   </View>
                   <View style={s.metricasRow}>
                     <View style={s.metrica}>
@@ -336,14 +343,23 @@ export default function LiderDashboardScreen() {
 
               {loadingOps ? (
                 <ActivityIndicator color="#2196F3" style={{ marginVertical: 12 }} />
-              ) : operadoresHoy.length === 0 ? (
-                <View style={s.emptyCard}>
-                  <Text style={s.emptyOpsText}>Sin operadores asignados hoy</Text>
-                </View>
-              ) : (
+              ) : (() => {
+                // Si scoreboard vacío pero hay asignados, usar asignados como base
+                const opsAsignados = (asignacionHoy.operadores || []).map(op => ({
+                  ...op,
+                  total_hoy: 0,
+                  total_estaciones: op.estaciones?.length || 0,
+                }));
+                const lista = operadoresHoy.length > 0 ? operadoresHoy : opsAsignados;
+                if (lista.length === 0) return (
+                  <View style={s.emptyCard}>
+                    <Text style={s.emptyOpsText}>Sin operadores asignados hoy</Text>
+                  </View>
+                );
+                return (
                 <>
-                  {operadoresHoy.map((op, i) => {
-                    const maxPzs = operadoresHoy[0]?.total_hoy || 1;
+                  {lista.map((op, i) => {
+                    const maxPzs = lista[0]?.total_hoy || 1;
                     const pctOp = Math.round(((op.total_hoy || 0) / Math.max(maxPzs, 1)) * 100);
                     return (
                       <View key={op.num_empleado || i} style={s.opRow}>
@@ -380,7 +396,8 @@ export default function LiderDashboardScreen() {
                     </View>
                   )}
                 </>
-              )}
+                );
+              })()}
             </View>
           )}
 
