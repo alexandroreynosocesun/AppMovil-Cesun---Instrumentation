@@ -175,8 +175,8 @@ def _ensure_admin_or_jefa(current_user: Tecnico):
 
 
 def _ensure_admin_only(current_user: Tecnico):
-    """Solo admin/superadmin pueden gestionar operadores."""
-    if current_user.tipo_usuario not in ("admin", "superadmin"):
+    """Solo admin/superadmin/ingeniero pueden gestionar operadores."""
+    if current_user.tipo_usuario not in ("admin", "superadmin", "ingeniero"):
         raise HTTPException(status_code=403, detail="Solo administradores pueden gestionar operadores")
 
 
@@ -297,25 +297,67 @@ def andon_linea(linea: str, db: Session = Depends(get_uph_db)):
 @router.get("/ranking/semanal")
 def ranking_semanal(db: Session = Depends(get_uph_db)):
     """
-    Top operadores por UPH promedio de los últimos 7 días.
+    Ranking por UPH promedio de la semana actual (Lun 06:30 → Vie 18:30).
+    La semana se reinicia cada viernes a las 18:30.
+    UPH promedio = total_eventos / horas_trabajadas_en_la_semana.
     """
-    hace_7_dias = datetime.now(timezone.utc) - timedelta(days=7)
+    ahora_loc = datetime.now()
+    ahora_utc = datetime.now(timezone.utc)
+    utc_offset = ahora_utc.replace(tzinfo=None) - ahora_loc   # ej. timedelta(hours=7) para UTC-7
 
+    wd   = ahora_loc.weekday()   # 0=Lun … 6=Dom
+    mins = ahora_loc.hour * 60 + ahora_loc.minute
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30  # 06:30 / 18:30
+
+    # ── Inicio de semana: el lunes a las 06:30 ──────────────────
+    # Si estamos antes del lunes (dom/sab noche) retrocedemos al lunes anterior
+    dias_desde_lunes = wd if wd <= 4 else (wd - 7)   # Sáb(5)→-2, Dom(6)→-1
+    lunes_local = ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0) \
+                  - timedelta(days=dias_desde_lunes)
+
+    # ── Fin de semana: viernes 18:30 ────────────────────────────
+    viernes_local = lunes_local + timedelta(days=4)   # Lun+4 = Viernes
+    viernes_fin   = viernes_local.replace(hour=18, minute=30, second=0, microsecond=0)
+
+    # La semana ya terminó si pasó el viernes 18:30
+    semana_cerrada = ahora_loc >= viernes_fin
+
+    inicio_semana_utc = (lunes_local + utc_offset).replace(tzinfo=timezone.utc)
+    fin_semana_utc    = (viernes_fin  + utc_offset).replace(tzinfo=timezone.utc)
+    corte_utc         = fin_semana_utc if semana_cerrada else ahora_utc
+
+    # ── Horas efectivas trabajadas esta semana ──────────────────
+    # Cada día Lun-Vie tiene 12h de producción (turno A 06:30-18:30 o B 18:30-06:30)
+    # Contamos días completos + fracción del día en curso
+    horas_semana: float = 0.0
+    for d in range(5):   # Lun(0)…Vie(4)
+        dia_ini_local = lunes_local + timedelta(days=d)
+        dia_fin_local = dia_ini_local.replace(hour=18, minute=30, second=0, microsecond=0)
+        dia_ini_utc   = (dia_ini_local + utc_offset).replace(tzinfo=timezone.utc)
+        dia_fin_utc   = (dia_fin_local + utc_offset).replace(tzinfo=timezone.utc)
+        if corte_utc <= dia_ini_utc:
+            break   # aún no hemos llegado a ese día
+        efectivo_fin = min(corte_utc, dia_fin_utc)
+        horas_semana += max(0.0, (efectivo_fin - dia_ini_utc).total_seconds() / 3600)
+
+    horas_semana = max(horas_semana, 1.0)   # evitar división por cero
+
+    # ── Eventos de la semana por estación ───────────────────────
     resultados = (
         db.query(
             EventoUPH.estacion,
             func.count(EventoUPH.id).label("total_eventos"),
         )
         .filter(
-            EventoUPH.evento == "GOOD",
-            EventoUPH.timestamp >= hace_7_dias,
+            EventoUPH.evento    == "GOOD",
+            EventoUPH.timestamp >= inicio_semana_utc,
+            EventoUPH.timestamp <  corte_utc,
         )
         .group_by(EventoUPH.estacion)
         .all()
     )
 
-    # Buscar operador asignado a cada estación esta semana
-    hoy = datetime.now().strftime("%Y-%m-%d")
+    hoy = ahora_loc.strftime("%Y-%m-%d")
     ranking = []
     for row in resultados:
         asig = (
@@ -325,11 +367,10 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
             .first()
         )
         operador = asig.operador if asig else None
-        # Turno real: perfil del operador si está cargado, si no inferir
-        # de la moda de sus asignaciones en los últimos 7 días
+        # Turno real del perfil; si no está, moda de asignaciones de la semana
         turno_nombre = operador.turno if (operador and operador.turno) else None
         if not turno_nombre and operador:
-            desde_fecha = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+            desde_fecha = lunes_local.strftime("%Y-%m-%d")
             turno_counts: dict = {}
             for a7 in db.query(Asignacion).filter(
                 Asignacion.num_empleado == operador.num_empleado,
@@ -341,20 +382,28 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
                     turno_counts[t7.nombre] = turno_counts.get(t7.nombre, 0) + 1
             if turno_counts:
                 turno_nombre = max(turno_counts, key=turno_counts.get)
-        # UPH promedio = total eventos / 7 días / horas por turno (12h)
-        uph_promedio = round(row.total_eventos / 7 / 12, 2)
+
+        uph_promedio = round(row.total_eventos / horas_semana, 2)
         ranking.append({
-            "estacion": row.estacion,
-            "num_empleado": operador.num_empleado if operador else None,
-            "nombre": operador.nombre if operador else "Sin asignar",
-            "foto_url": operador.foto_url if operador else None,
-            "turno": turno_nombre,
-            "uph_promedio": uph_promedio,
+            "estacion":      row.estacion,
+            "num_empleado":  operador.num_empleado if operador else None,
+            "nombre":        operador.nombre if operador else "Sin asignar",
+            "foto_url":      operador.foto_url if operador else None,
+            "turno":         turno_nombre,
+            "uph_promedio":  uph_promedio,
             "total_eventos": row.total_eventos,
         })
 
     ranking.sort(key=lambda x: x["uph_promedio"], reverse=True)
-    return {"ranking": ranking, "periodo_dias": 7}
+    lunes_str   = lunes_local.strftime("%Y-%m-%d")
+    viernes_str = viernes_fin.strftime("%Y-%m-%d")
+    return {
+        "ranking":        ranking,
+        "periodo_inicio": lunes_str,
+        "periodo_fin":    viernes_str,
+        "horas_semana":   round(horas_semana, 1),
+        "semana_cerrada": semana_cerrada,
+    }
 
 
 @router.post("/asignacion", status_code=201)
