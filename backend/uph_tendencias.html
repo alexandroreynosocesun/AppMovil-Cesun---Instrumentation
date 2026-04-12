@@ -383,58 +383,6 @@
     document.getElementById('live-dot').className = 'h-live-dot';
   }
 
-  // Genera puntos mock con variación realista
-  // Mock: genera puntos desde inicio del turno hasta ahora, hora por hora
-  // base = tasa horaria (pzs/hr), meta = meta horaria
-  // Genera piezas REALES por slot (proporcional a duración)
-  function mockPuntos(base, inicio, meta) {
-    const ahora  = new Date();
-    const puntos = [];
-    let tasa     = base; // tasa horaria que varía
-    const cur    = new Date(inicio);
-
-    let first = true;
-    while (cur <= ahora) {
-      let fin;
-      if (first) {
-        fin = new Date(cur);
-        fin.setMinutes(0, 0, 0);
-        fin.setHours(fin.getHours() + 1);
-        first = false;
-      } else {
-        fin = new Date(cur);
-        fin.setHours(fin.getHours() + 1);
-      }
-      if (fin > ahora) fin = new Date(ahora);
-
-      const minutos  = Math.max(1, (fin - cur) / 60000);
-      tasa = Math.max(0, Math.round(tasa + (Math.random() - 0.48) * 16));
-      // piezas reales del slot (proporcional al tiempo, no normalizado)
-      const piezas   = Math.round(tasa * minutos / 60);
-      const metaSlot = Math.round(meta * minutos / 60);
-      const horaStr  = `${String(cur.getHours()).padStart(2,'0')}:${String(cur.getMinutes()).padStart(2,'0')}`;
-      puntos.push({ hora: horaStr, uph: piezas, meta_slot: metaSlot, minutos: Math.round(minutos) });
-
-      const next = new Date(cur);
-      next.setMinutes(0, 0, 0);
-      next.setHours(next.getHours() + 1);
-      cur.setTime(next.getTime());
-    }
-    return puntos;
-  }
-
-  function mockData(inicio) {
-    return {
-      lineas: [
-        { linea:'HI-1', uph_meta:100, puntos: mockPuntos(112, inicio, 100) },
-        { linea:'HI-2', uph_meta:100, puntos: mockPuntos(94,  inicio, 100) },
-        { linea:'HI-3', uph_meta:100, puntos: mockPuntos(78,  inicio, 100) },
-        { linea:'HI-4', uph_meta:100, puntos: mockPuntos(103, inicio, 100) },
-        { linea:'HI-5', uph_meta:100, puntos: mockPuntos(88,  inicio, 100) },
-        { linea:'HI-6', uph_meta:100, puntos: mockPuntos(100, inicio, 100) },
-      ]
-    };
-  }
 
   async function fetchData() {
     const { nombre, inicio } = turnoActivo();
@@ -456,11 +404,12 @@
       const res  = await fetch(`${API}/api/uph/tendencias?desde=${encodeURIComponent(desdeISO)}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const sinDatos = data.lineas.every(l => l.puntos.every(p => p.uph === 0));
-      renderGrid(sinDatos ? mockData(inicio) : data);
+      renderGrid(data);
     } catch(e) {
-      renderGrid(mockData(inicio));
+      console.error('[Tendencias] Error:', e);
       document.getElementById('live-dot').className = 'h-live-dot err';
+      document.getElementById('grid').innerHTML =
+        `<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;color:#0a3530;font-size:0.9rem;font-weight:700;letter-spacing:2px;">Sin conexión · ${e.message}</div>`;
     }
   }
 

@@ -296,7 +296,7 @@ def andon_linea(linea: str, db: Session = Depends(get_uph_db)):
 @router.get("/ranking/semanal")
 def ranking_semanal(db: Session = Depends(get_uph_db)):
     """
-    Top 3 operadores por UPH promedio de los últimos 7 días.
+    Top operadores por UPH promedio de los últimos 7 días.
     """
     hace_7_dias = datetime.now(timezone.utc) - timedelta(days=7)
 
@@ -324,6 +324,7 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
             .first()
         )
         operador = asig.operador if asig else None
+        turno_nombre = asig.turno.nombre if (asig and asig.turno) else None
         # UPH promedio = total eventos / 7 días / horas por turno (12h)
         uph_promedio = round(row.total_eventos / 7 / 12, 2)
         ranking.append({
@@ -331,12 +332,13 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
             "num_empleado": operador.num_empleado if operador else None,
             "nombre": operador.nombre if operador else "Sin asignar",
             "foto_url": operador.foto_url if operador else None,
+            "turno": turno_nombre,
             "uph_promedio": uph_promedio,
             "total_eventos": row.total_eventos,
         })
 
     ranking.sort(key=lambda x: x["uph_promedio"], reverse=True)
-    return {"ranking": ranking[:3], "periodo_dias": 7}
+    return {"ranking": ranking, "periodo_dias": 7}
 
 
 @router.post("/asignacion", status_code=201)

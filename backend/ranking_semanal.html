@@ -519,19 +519,10 @@
 
   // ── Datos ──
   async function cargar() {
-    // DATOS DE PRUEBA — borrar después
-    const ranking = [
-      { nombre: "María López García",   estacion: "E1", turno: "A", uph_promedio: 98.5, total_eventos: 8278, foto_url: "https://randomuser.me/api/portraits/women/44.jpg" },
-      { nombre: "Carlos Ramírez Soto",  estacion: "E3", turno: "B", uph_promedio: 91.2, total_eventos: 7661, foto_url: "https://randomuser.me/api/portraits/men/32.jpg" },
-      { nombre: "Ana Torres Jiménez",   estacion: "E2", turno: "A", uph_promedio: 87.4, total_eventos: 7342, foto_url: "https://randomuser.me/api/portraits/women/68.jpg" },
-      { nombre: "Luis Mendoza Pérez",   estacion: "E5", turno: "C", uph_promedio: 83.1, total_eventos: 6980, foto_url: "https://randomuser.me/api/portraits/men/75.jpg" },
-      { nombre: "Sofía Vega Morales",   estacion: "E4", turno: "B", uph_promedio: 79.8, total_eventos: 6703, foto_url: "https://randomuser.me/api/portraits/women/12.jpg" },
-      { nombre: "Jorge Castillo Ruiz",  estacion: "E6", turno: "A", uph_promedio: 74.3, total_eventos: 6241, foto_url: "https://randomuser.me/api/portraits/men/55.jpg" },
-      { nombre: "Laura Díaz Hernández", estacion: "E7", turno: "C", uph_promedio: 70.1, total_eventos: 5888, foto_url: "https://randomuser.me/api/portraits/women/90.jpg" },
-      { nombre: "Pedro Flores Cruz",    estacion: "E8", turno: "B", uph_promedio: 66.5, total_eventos: 5586, foto_url: "https://randomuser.me/api/portraits/men/21.jpg" },
-      { nombre: "Daniela Reyes Luna",   estacion: "E2", turno: "A", uph_promedio: 61.9, total_eventos: 5200, foto_url: "https://randomuser.me/api/portraits/women/33.jpg" },
-      { nombre: "Roberto Navarro Gil",  estacion: "E9", turno: "C", uph_promedio: 57.2, total_eventos: 4804, foto_url: "https://randomuser.me/api/portraits/men/88.jpg" },
-    ];
+    const res = await fetch('/api/uph/ranking/semanal');
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const ranking = json.ranking || [];
 
     _rankingData = ranking;
     const top = ranking[0];
@@ -889,7 +880,7 @@
     });
   }
 
-  cargar();
+  cargar().catch(e => console.error('[Ranking] Error cargando datos:', e));
 </script>
 </body>
 </html>
