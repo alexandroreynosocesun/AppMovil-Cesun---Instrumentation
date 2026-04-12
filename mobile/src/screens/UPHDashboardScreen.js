@@ -13,6 +13,7 @@ import { uphService } from '../services/UPHService';
 import { API_BASE_URL } from '../utils/apiClient';
 
 const REFRESH_INTERVAL = 15000;
+const n2 = (s) => { const p = (s||'').trim().split(' '); return p.length >= 3 ? p[0]+' '+p[2] : p.slice(0,2).join(' '); };
 const BAR_H = 160; // altura máxima de la barra
 
 // ── Color según KPI ────────────────────────────────────────
@@ -97,7 +98,7 @@ function FilaMedalla({ op, rank, valor, label }) {
       <AvatarMin op={op} size={30} />
       <View style={{ flex: 1, marginLeft: 8 }}>
         <Text style={s.medallaNombre} numberOfLines={1}>
-          {(op?.nombre || '').split(' ').slice(0, 2).join(' ')}
+          {n2(op?.nombre)}
         </Text>
       </View>
       <Text style={s.medallaVal}>{valor} <Text style={s.medallaValLabel}>{label}</Text></Text>

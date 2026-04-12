@@ -594,6 +594,11 @@
   function ini(nombre) {
     return (nombre||'?').trim().split(' ').slice(0,2).map(p=>p[0]||'').join('').toUpperCase();
   }
+  // Apellido1 + Nombre (palabras 0 y 2); fallback a 2 palabras si hay menos de 3
+  function n2(nombre) {
+    const p = (nombre||'').trim().split(/\s+/);
+    return p.length >= 3 ? p[0] + ' ' + p[2] : p.slice(0,2).join(' ');
+  }
 
   // ── Avatars ──────────────────────────────────────────────────
   function avatarHTML(op, kpiClass) {
@@ -654,7 +659,7 @@
 
   // ── Operador ─────────────────────────────────────────────────
   function opColHTML(op) {
-    const nombre2 = (op.nombre||'').split(' ').slice(0,2).join(' ');
+    const nombre2 = n2(op.nombre);
     const ests    = op.estaciones||[];
     const best    = ests.reduce((b,s)=>s.uph_hora>b?s.uph_hora:b, 0);
     const meta    = ests[0]?.uph_meta||0;
@@ -684,7 +689,7 @@
       <div class="card-scoreboard">
         <div class="csb-title">⚡ Top operadores</div>
         ${ranked.map((op, i) => {
-          const nombre2 = (op.nombre||'').split(' ').slice(0,2).join(' ');
+          const nombre2 = n2(op.nombre);
           const pct = op.meta > 0 ? Math.round(op.uph/op.meta*100) : null;
           const c = col(pct);
           const src = op.foto_url ? (op.foto_url.startsWith('http') ? op.foto_url : `${API}${op.foto_url}`) : '';
@@ -772,7 +777,7 @@
     document.getElementById('sb-ranking').innerHTML = ops.slice(0,12).map((op,i) => {
       const rank=i+1, medal=rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':null;
       const c=col(op.kpi), bordCls=rank<=3?`rk-${rank}`:`rk-${c}`;
-      const nombre2=(op.nombre||'').split(' ').slice(0,2).join(' ');
+      const nombre2=n2(op.nombre);
       return `
         <div class="rk-card ${bordCls}">
           <div class="rk-top">

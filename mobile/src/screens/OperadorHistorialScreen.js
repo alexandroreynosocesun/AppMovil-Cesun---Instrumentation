@@ -11,6 +11,7 @@ import { webStyles } from '../utils/webStyles';
 import { uphService } from '../services/UPHService';
 
 const DIAS_OPCIONES = [7, 14, 30];
+const n2 = (s) => { const p = (s||'').trim().split(' '); return p.length >= 3 ? p[0]+' '+p[2] : p.slice(0,2).join(' '); };
 
 function colorKPI(kpi) {
   if (kpi >= 90) return '#4CAF50';
@@ -102,7 +103,7 @@ export default function OperadorHistorialScreen({ route }) {
         >
           {/* Info del operador */}
           <View style={styles.opCard}>
-            <Text style={styles.opNombre}>{(operador?.nombre||'Operador').split(' ').slice(0,2).join(' ')}</Text>
+            <Text style={styles.opNombre}>{n2(operador?.nombre||'Operador')}</Text>
             <Text style={styles.opNum}>#{operador?.num_empleado}</Text>
           </View>
 

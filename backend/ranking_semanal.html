@@ -461,6 +461,7 @@
   const confColors = ['#ffd700','#00c8b8','#ff4040','#ff8800','#c0c0c0','#69f0ae'];
 
   function ini(n) { return (n||'?').trim().split(' ').slice(0,2).map(p=>p[0]||'').join('').toUpperCase(); }
+  function n2(n) { const p=(n||'').trim().split(/\s+/); return p.length>=3 ? p[0]+' '+p[2] : p.slice(0,2).join(' '); }
 
   // ── Fuegos artificiales ──
   function fuego(x, y) {
@@ -553,7 +554,7 @@
     }
     const top = ranking[0];
     const maxUph = top.uph_promedio;
-    const nombreCorto = (top.nombre||'').split(' ').slice(0,2).join(' ');
+    const nombreCorto = n2(top.nombre);
 
     // ── FASE 1: trofeo solo (2.5s) ──
     setTimeout(() => {
@@ -601,7 +602,7 @@
       const medal = pos===1?'🥇':pos===2?'🥈':pos===3?'🥉':pos;
       const cls = pos===1?'top-1':pos===2?'top-2':pos===3?'top-3':'resto';
       const pct = Math.round(op.uph_promedio / maxUph * 100);
-      const nombre2 = (op.nombre||'Sin asignar').split(' ').slice(0,2).join(' ');
+      const nombre2 = n2(op.nombre||'Sin asignar');
       const src2 = op.foto_url || '';
       const avatarHTML = src2
         ? `<img class="sb-avatar ${cls}" src="${src2}" alt="${ini(op.nombre)}" onerror="this.outerHTML='<div class=&quot;sb-avatar-ini&quot;>${ini(op.nombre)}</div>'">`
@@ -787,7 +788,7 @@
   }
 
   function renderCharts() {
-    const nombres   = _rankingData.map(o => (o.nombre||'').split(' ').slice(0,2).join(' '));
+    const nombres   = _rankingData.map(o => n2(o.nombre));
     const uphs      = _rankingData.map(o => parseFloat(o.uph_promedio.toFixed(1)));
     const meta      = 100;
     const efics     = uphs.map(u => parseFloat((u / meta * 100).toFixed(1)));

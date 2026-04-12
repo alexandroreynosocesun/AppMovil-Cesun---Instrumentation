@@ -11,6 +11,7 @@ import { webStyles } from '../utils/webStyles';
 import { showAlert } from '../utils/alertUtils';
 import { uphService } from '../services/UPHService';
 
+const n2 = (s) => { const p = (s||'').trim().split(' '); return p.length >= 3 ? p[0]+' '+p[2] : p.slice(0,2).join(' '); };
 const TURNOS = ['A', 'B', 'C'];
 const TURNO_COLORS = { A: '#1565C0', B: '#6A1B9A', C: '#1B5E20' };
 const TURNO_BORDER = { A: '#42A5F5', B: '#AB47BC', C: '#66BB6A' };
@@ -235,7 +236,7 @@ export default function OperadoresAdminScreen() {
                 <Text style={styles.avatarText}>{item.nombre.charAt(0).toUpperCase()}</Text>
               </View>
               <View style={styles.info}>
-                <Text style={styles.nombre}>{(item.nombre||'').split(' ').slice(0,2).join(' ')}</Text>
+                <Text style={styles.nombre}>{n2(item.nombre)}</Text>
                 <Text style={styles.numEmpleado}>#{item.num_empleado}</Text>
               </View>
               {/* Badge turno — tap para editar */}
