@@ -682,7 +682,8 @@ def resumen_todas_lineas(
         _attr = f"uph_hi{_num}" if _num else None
         _val = getattr(modelo, _attr, None) if (modelo and _attr) else None
         uph_meta = _val if _val else (modelo.uph_total or 0) if modelo else 0
-        uph_real = _uph_ultima_hora(db, linea.nombre)
+        nombre_ev = _linea_evento(linea.nombre)   # "HI-6" → "L6"
+        uph_real = _uph_ultima_hora(db, nombre_ev)
         total_estaciones = (
             db.query(func.count(func.distinct(Asignacion.estacion)))
             .filter(Asignacion.linea_id == linea.id, Asignacion.fecha == hoy)
@@ -692,7 +693,7 @@ def resumen_todas_lineas(
         ahora = datetime.now(timezone.utc)
         inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
         piezas_hora = db.query(func.count(EventoUPH.id)).filter(
-            EventoUPH.linea == linea.nombre,
+            EventoUPH.linea == nombre_ev,
             EventoUPH.evento == "GOOD",
             EventoUPH.timestamp >= inicio_hora,
             EventoUPH.timestamp <= ahora,
@@ -1171,13 +1172,14 @@ def scoreboard_hoy(
         uph_meta_linea = _uph_linea_val if _uph_linea_val else (asig.modelo.uph_total if asig.modelo else 0)
         uph_meta_est = round(uph_meta_linea / num_est, 1)
 
-        uph_hora = _uph_ultima_hora(db, linea_nombre, asig.estacion)
+        nombre_ev_sb = _linea_evento(linea_nombre)   # "HI-6" → "L6"
+        uph_hora = _uph_ultima_hora(db, nombre_ev_sb, asig.estacion)
 
         total_hoy = (
             db.query(func.count(EventoUPH.id))
             .filter(
                 EventoUPH.estacion == asig.estacion,
-                EventoUPH.linea == linea_nombre,
+                EventoUPH.linea == nombre_ev_sb,
                 EventoUPH.evento == "GOOD",
                 EventoUPH.timestamp >= inicio_dia,
                 EventoUPH.timestamp <= ahora,
