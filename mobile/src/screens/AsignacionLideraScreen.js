@@ -384,6 +384,22 @@ export default function AsignacionLideraScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
 
+                {/* Modelo actual */}
+                {modeloSeleccionado && (
+                  <View style={{ backgroundColor: '#0A1F2E', borderRadius: 8, padding: 10, marginBottom: 10,
+                                 borderLeftWidth: 3, borderLeftColor: '#1565C0' }}>
+                    <Text style={{ color: '#546E7A', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>
+                      Modelo actual
+                    </Text>
+                    <Text style={{ color: '#42A5F5', fontSize: 14, fontWeight: '700' }}>
+                      {modeloSeleccionado.nombre}
+                    </Text>
+                    {modeloSeleccionado.modelo_interno && (
+                      <Text style={{ color: '#37474F', fontSize: 11 }}>{modeloSeleccionado.modelo_interno}</Text>
+                    )}
+                  </View>
+                )}
+
                 {/* Buscador */}
                 <TextInput
                   style={s.searchInput}
