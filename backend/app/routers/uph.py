@@ -91,6 +91,7 @@ class OperadorIn(BaseModel):
     num_empleado: str
     nombre: str
     foto_url: Optional[str] = None
+    turno: Optional[str] = None   # "A", "B", "C"
     activo: bool = True
 
 
@@ -324,7 +325,22 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
             .first()
         )
         operador = asig.operador if asig else None
-        turno_nombre = asig.turno.nombre if (asig and asig.turno) else None
+        # Turno real: perfil del operador si está cargado, si no inferir
+        # de la moda de sus asignaciones en los últimos 7 días
+        turno_nombre = operador.turno if (operador and operador.turno) else None
+        if not turno_nombre and operador:
+            desde_fecha = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
+            turno_counts: dict = {}
+            for a7 in db.query(Asignacion).filter(
+                Asignacion.num_empleado == operador.num_empleado,
+                Asignacion.fecha >= desde_fecha,
+                Asignacion.turno_id != None,
+            ).all():
+                t7 = db.query(Turno).filter(Turno.id == a7.turno_id).first()
+                if t7:
+                    turno_counts[t7.nombre] = turno_counts.get(t7.nombre, 0) + 1
+            if turno_counts:
+                turno_nombre = max(turno_counts, key=turno_counts.get)
         # UPH promedio = total eventos / 7 días / horas por turno (12h)
         uph_promedio = round(row.total_eventos / 7 / 12, 2)
         ranking.append({
@@ -399,6 +415,24 @@ def crear_operador(
     db.add(op)
     db.commit()
     return {"num_empleado": op.num_empleado, "ok": True, "actualizado": False}
+
+
+@router.patch("/operadores/{num_empleado}/turno", status_code=200)
+def actualizar_turno_operador(
+    num_empleado: str,
+    turno: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    _ensure_admin_only(current_user)
+    op = db.query(Operador).filter(Operador.num_empleado == num_empleado).first()
+    if not op:
+        raise HTTPException(status_code=404, detail="Operador no encontrado")
+    if turno not in ("A", "B", "C", ""):
+        raise HTTPException(status_code=400, detail="Turno debe ser A, B o C")
+    op.turno = turno or None
+    db.commit()
+    return {"ok": True, "num_empleado": num_empleado, "turno": op.turno}
 
 
 def _modelo_to_dict(m):

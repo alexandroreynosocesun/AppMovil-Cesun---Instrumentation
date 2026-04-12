@@ -195,6 +195,15 @@ class UPHService {
       return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
     }
   }
+
+  async actualizarTurnoOperador(num_empleado, turno) {
+    try {
+      const response = await apiClient.patch(`/uph/operadores/${num_empleado}/turno?turno=${turno}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
 }
 
 export const uphService = new UPHService();
