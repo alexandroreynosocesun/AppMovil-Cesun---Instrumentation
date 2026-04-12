@@ -102,7 +102,7 @@ export default function OperadorHistorialScreen({ route }) {
         >
           {/* Info del operador */}
           <View style={styles.opCard}>
-            <Text style={styles.opNombre}>{operador?.nombre || 'Operador'}</Text>
+            <Text style={styles.opNombre}>{(operador?.nombre||'Operador').split(' ').slice(0,2).join(' ')}</Text>
             <Text style={styles.opNum}>#{operador?.num_empleado}</Text>
           </View>
 

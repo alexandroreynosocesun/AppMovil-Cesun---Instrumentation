@@ -235,7 +235,7 @@ export default function OperadoresAdminScreen() {
                 <Text style={styles.avatarText}>{item.nombre.charAt(0).toUpperCase()}</Text>
               </View>
               <View style={styles.info}>
-                <Text style={styles.nombre}>{item.nombre}</Text>
+                <Text style={styles.nombre}>{(item.nombre||'').split(' ').slice(0,2).join(' ')}</Text>
                 <Text style={styles.numEmpleado}>#{item.num_empleado}</Text>
               </View>
               {/* Badge turno — tap para editar */}

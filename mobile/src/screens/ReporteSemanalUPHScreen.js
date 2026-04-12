@@ -94,7 +94,7 @@ export default function ReporteSemanalUPHScreen({ navigation }) {
                     onPress={() => navigation.navigate('OperadorHistorial', { operador: top3[1] })}
                   >
                     <Text style={styles.medalla}>{MEDALLAS[1]}</Text>
-                    <Text style={styles.podioNombre} numberOfLines={2}>{top3[1].nombre}</Text>
+                    <Text style={styles.podioNombre} numberOfLines={2}>{(top3[1].nombre||'').split(' ').slice(0,2).join(' ')}</Text>
                     <Text style={styles.podioUPH}>{top3[1].uph_promedio} UPH</Text>
                     <Text style={[styles.podioKPI, { color: colorKPI(top3[1].kpi_pct) }]}>
                       {top3[1].kpi_pct}%
@@ -108,7 +108,7 @@ export default function ReporteSemanalUPHScreen({ navigation }) {
                     onPress={() => navigation.navigate('OperadorHistorial', { operador: top3[0] })}
                   >
                     <Text style={styles.medalla}>{MEDALLAS[0]}</Text>
-                    <Text style={styles.podioNombre} numberOfLines={2}>{top3[0].nombre}</Text>
+                    <Text style={styles.podioNombre} numberOfLines={2}>{(top3[0].nombre||'').split(' ').slice(0,2).join(' ')}</Text>
                     <Text style={styles.podioUPH}>{top3[0].uph_promedio} UPH</Text>
                     <Text style={[styles.podioKPI, { color: colorKPI(top3[0].kpi_pct) }]}>
                       {top3[0].kpi_pct}%
@@ -122,7 +122,7 @@ export default function ReporteSemanalUPHScreen({ navigation }) {
                     onPress={() => navigation.navigate('OperadorHistorial', { operador: top3[2] })}
                   >
                     <Text style={styles.medalla}>{MEDALLAS[2]}</Text>
-                    <Text style={styles.podioNombre} numberOfLines={2}>{top3[2].nombre}</Text>
+                    <Text style={styles.podioNombre} numberOfLines={2}>{(top3[2].nombre||'').split(' ').slice(0,2).join(' ')}</Text>
                     <Text style={styles.podioUPH}>{top3[2].uph_promedio} UPH</Text>
                     <Text style={[styles.podioKPI, { color: colorKPI(top3[2].kpi_pct) }]}>
                       {top3[2].kpi_pct}%
@@ -151,7 +151,7 @@ export default function ReporteSemanalUPHScreen({ navigation }) {
                   </Text>
                 </View>
                 <View style={styles.filaInfo}>
-                  <Text style={styles.filaNombre}>{op.nombre}</Text>
+                  <Text style={styles.filaNombre}>{(op.nombre||'').split(' ').slice(0,2).join(' ')}</Text>
                   <Text style={styles.filaNum}>#{op.num_empleado} · {op.dias_activos} días activos</Text>
                   <BarraKPI kpi={op.kpi_pct} />
                 </View>
