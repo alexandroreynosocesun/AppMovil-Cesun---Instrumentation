@@ -311,7 +311,7 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
 
     # ── Inicio de semana: el lunes a las 06:30 ──────────────────
     # Si estamos antes del lunes (dom/sab noche) retrocedemos al lunes anterior
-    dias_desde_lunes = wd if wd <= 4 else (wd - 7)   # Sáb(5)→-2, Dom(6)→-1
+    dias_desde_lunes = wd   # 0=Lun … 6=Dom; Sáb(5)→5 días atrás, Dom(6)→6 días atrás
     lunes_local = ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0) \
                   - timedelta(days=dias_desde_lunes)
 

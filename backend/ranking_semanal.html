@@ -530,6 +530,10 @@
     document.getElementById('sb-subtitulo').textContent = sub;
 
     _rankingData = ranking;
+    if (!ranking.length) {
+      document.getElementById('sb-subtitulo').textContent = sub + ' · Sin datos aún';
+      return;
+    }
     const top = ranking[0];
     const maxUph = top.uph_promedio;
     const nombreCorto = (top.nombre||'').split(' ').slice(0,2).join(' ');
