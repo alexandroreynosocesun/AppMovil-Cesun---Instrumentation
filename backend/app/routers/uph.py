@@ -1462,7 +1462,10 @@ def tendencias_uph(desde: Optional[str] = None, horas: int = 12, db: Session = D
     UPH por hora para cada línea desde el inicio del turno activo.
     Acepta `desde` (ISO 8601) o `horas` como fallback.
     """
-    ahora  = datetime.now(timezone.utc)
+    ahora     = datetime.now(timezone.utc)
+    ahora_loc = datetime.now()   # hora local del servidor
+    # Diferencia UTC − local (ej. UTC-7 → timedelta(hours=7))
+    utc_offset = ahora.replace(tzinfo=None) - ahora_loc
 
     if desde:
         try:
@@ -1526,8 +1529,10 @@ def tendencias_uph(desde: Optional[str] = None, horas: int = 12, db: Session = D
             # meta proporcional al slot (ej. 30 min → meta/2)
             meta_slot = round(uph_meta * minutos / 60)
 
+            # Convertir slot UTC → hora local para el eje X
+            slot_local = slot.replace(tzinfo=None) - utc_offset
             puntos.append({
-                "hora":      slot.strftime("%H:%M"),
+                "hora":      slot_local.strftime("%H:%M"),
                 "uph":       conteo,        # piezas reales producidas en el slot
                 "meta_slot": meta_slot,     # meta proporcional (no normalizada)
                 "minutos":   round(minutos),

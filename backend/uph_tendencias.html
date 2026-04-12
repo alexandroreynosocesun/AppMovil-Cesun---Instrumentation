@@ -263,7 +263,8 @@
         return pct >= 100 ? '#00c8b8' : pct >= 90 ? '#ff8800' : p.uph === 0 ? '#0a2e2a' : '#ff4040';
       });
 
-      // Plugin: dibuja flecha + delta encima de cada punto
+      // Plugin: dibuja flecha + delta + piezas encima de cada punto
+      const piezasSlot = puntos.map(p => p.uph);  // piezas reales del slot
       const labelPlugin = {
         id: `labels-${lbl}`,
         afterDatasetDraw(chart) {
@@ -274,21 +275,27 @@
           ds.data.forEach((u, i) => {
             if (u === 0) return;
             const pt      = meta_.data[i];
-            // u ya es tasa horaria normalizada (display); comparar contra uhMeta
             const pct_    = uhMeta > 0 ? u / uhMeta * 100 : 0;
             const delta   = u - uhMeta;
             let flc, clr;
             if (pct_ >= 100)      { flc = '▲'; clr = '#00e5cc'; }
             else if (pct_ >= 90)  { flc = '▶'; clr = '#ff8800'; }
             else                  { flc = '▼'; clr = '#ff4040'; }
-            const txt = delta >= 0 ? `+${delta}` : `${delta}`;
+            const deltaTxt  = delta >= 0 ? `+${delta}` : `${delta}`;
+            const piezasTxt = `${piezasSlot[i]} pzs`;
             ctx2.save();
+            ctx2.textAlign = 'center';
+            // flecha
             ctx2.font = 'bold 9px Segoe UI';
             ctx2.fillStyle = clr;
-            ctx2.textAlign = 'center';
-            ctx2.fillText(flc,  pt.x, pt.y - 16);
+            ctx2.fillText(flc,       pt.x, pt.y - 24);
+            // delta
             ctx2.font = '8px Segoe UI';
-            ctx2.fillText(txt, pt.x, pt.y - 7);
+            ctx2.fillText(deltaTxt,  pt.x, pt.y - 15);
+            // piezas reales
+            ctx2.font = 'bold 8px Segoe UI';
+            ctx2.fillStyle = 'rgba(224,247,245,0.75)';
+            ctx2.fillText(piezasTxt, pt.x, pt.y - 6);
             ctx2.restore();
           });
         }
@@ -334,7 +341,7 @@
             responsive: true,
             maintainAspectRatio: false,
             animation: { duration: 600 },
-            layout: { padding: { top: 26 } },
+            layout: { padding: { top: 36 } },
             plugins: {
               legend: { display: false },
               tooltip: {
@@ -345,10 +352,11 @@
                 bodyColor: '#e0f7f5',
                 callbacks: {
                   label: ctx => {
-                    const u = ctx.parsed.y;  // ya normalizado
-                    const p = meta > 0 ? Math.round(u / meta * 100) : 0;
-                    const d = u - meta;
-                    return ` UPH: ${u}  (${p}%)  ${d>=0?'+'+d:d}`;
+                    const u  = ctx.parsed.y;  // tasa horaria normalizada
+                    const p  = meta > 0 ? Math.round(u / meta * 100) : 0;
+                    const d  = u - meta;
+                    const pz = piezasSlot[ctx.dataIndex] ?? '—';
+                    return ` UPH: ${u}  (${p}%)  ${d>=0?'+'+d:d}  |  ${pz} pzs slot`;
                   }
                 }
               }
