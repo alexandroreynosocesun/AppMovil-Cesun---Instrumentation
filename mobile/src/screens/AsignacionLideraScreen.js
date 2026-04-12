@@ -129,6 +129,7 @@ export default function AsignacionLideraScreen({ navigation }) {
   const [planInterno,    setPlanInterno]    = useState('');
   const [modalModelo,    setModalModelo]    = useState(false);
   const [busquedaModalModelo, setBusquedaModalModelo] = useState('');
+  const [planActivo,     setPlanActivo]     = useState(null);  // plan multi-turno activo
 
   const hoy = new Date().toISOString().split('T')[0];
 
@@ -169,11 +170,16 @@ export default function AsignacionLideraScreen({ navigation }) {
     async function cargar() {
       setLoadingModelos(true);
       setExpandedSlot(null);
-      const [rMod, rEst, rAsig] = await Promise.all([
+      const [rMod, rEst, rAsig, rPlan] = await Promise.all([
         uphService.getModelosPorLinea(lineaSeleccionada.nombre),
         uphService.getEstacionesPorLinea(lineaSeleccionada.nombre),
         uphService.getAsignacionHoy(lineaSeleccionada.nombre),
+        uphService.getPlanLinea(lineaSeleccionada.nombre),
       ]);
+
+      // Plan multi-turno activo
+      const plan = rPlan.success ? rPlan.data.plan : null;
+      setPlanActivo(plan);
 
       let modeloActual = null;
       if (rMod.success) {
@@ -192,17 +198,29 @@ export default function AsignacionLideraScreen({ navigation }) {
         });
         setAsignacion(nuevaAsig);
         setNumSlots(ops.length);
-        // Restaurar modelo guardado
-        if (rAsig.data.modelo_id && rMod.success) {
+        // Modelo: plan activo tiene prioridad sobre asignación del día
+        if (plan && rMod.success) {
+          const m = rMod.data.find(x => x.id === plan.modelo_id);
+          if (m) modeloActual = m;
+        } else if (rAsig.data.modelo_id && rMod.success) {
           const m = rMod.data.find(x => x.id === rAsig.data.modelo_id);
           if (m) modeloActual = m;
         }
-        if (rAsig.data.plan_interno) {
+        // Cantidad: plan activo > plan_interno de asignación
+        if (plan) {
+          setPlanInterno(String(plan.plan_total));
+        } else if (rAsig.data.plan_interno) {
           setPlanInterno(String(rAsig.data.plan_interno));
         }
       } else {
         setAsignacion({});
         setNumSlots(2);
+        // Aunque no haya operadores, pre-llenar desde plan activo
+        if (plan && rMod.success) {
+          const m = rMod.data.find(x => x.id === plan.modelo_id);
+          if (m) modeloActual = m;
+          setPlanInterno(String(plan.plan_total));
+        }
       }
 
       setModeloSeleccionado(modeloActual);
@@ -313,9 +331,26 @@ export default function AsignacionLideraScreen({ navigation }) {
     setGuardando(true);
     const turnoId = turnoSeleccionado && typeof turnoSeleccionado.id === 'number'
       ? turnoSeleccionado.id : null;
+    const cantidadPlan = planInterno ? parseInt(planInterno) : null;
+
+    // ── Gestión del plan multi-turno ──────────────────────
+    if (modeloSeleccionado?.id && cantidadPlan) {
+      const modeloCambio = planActivo && planActivo.modelo_id !== modeloSeleccionado.id;
+      const sinPlan      = !planActivo;
+      if (sinPlan || modeloCambio) {
+        // Crear nuevo plan (cierra el anterior automáticamente en el backend)
+        await uphService.crearPlanLinea(
+          lineaSeleccionada.nombre,
+          modeloSeleccionado.id,
+          cantidadPlan,
+        );
+      }
+      // Si mismo modelo → plan sigue activo, no se toca
+    }
+
     const result = await uphService.asignarBulk(
       lineaSeleccionada.nombre, hoy, turnoId, modeloSeleccionado?.id || null, items,
-      planInterno ? parseInt(planInterno) : null,
+      cantidadPlan,
     );
     setGuardando(false);
     if (result.success) {
@@ -384,8 +419,38 @@ export default function AsignacionLideraScreen({ navigation }) {
                   </TouchableOpacity>
                 </View>
 
-                {/* Modelo actual */}
-                {modeloSeleccionado && (
+                {/* Plan activo / modelo actual */}
+                {planActivo ? (
+                  <View style={{ backgroundColor: '#0A2010', borderRadius: 8, padding: 10, marginBottom: 10,
+                                 borderLeftWidth: 3, borderLeftColor: '#00877a' }}>
+                    <Text style={{ color: '#546E7A', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>
+                      Plan activo — cambia solo si cambias modelo
+                    </Text>
+                    <Text style={{ color: '#00c8b8', fontSize: 14, fontWeight: '700' }}>
+                      {planActivo.modelo_nombre}
+                    </Text>
+                    {planActivo.modelo_interno && (
+                      <Text style={{ color: '#37474F', fontSize: 11, marginBottom: 4 }}>{planActivo.modelo_interno}</Text>
+                    )}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <Text style={{ color: '#00c8b8', fontSize: 13, fontWeight: '700' }}>
+                        {(planActivo.piezas_actual || 0).toLocaleString()}
+                      </Text>
+                      <Text style={{ color: '#546E7A', fontSize: 12 }}>
+                        / {planActivo.plan_total.toLocaleString()} pzs
+                      </Text>
+                      <Text style={{ color: planActivo.piezas_actual >= planActivo.plan_total ? '#00c8b8' : '#ff8c00',
+                                     fontSize: 12, fontWeight: '600' }}>
+                        ({Math.round((planActivo.piezas_actual || 0) / planActivo.plan_total * 100)}%)
+                      </Text>
+                    </View>
+                    {/* Barra de progreso */}
+                    <View style={{ height: 4, backgroundColor: '#0a2e2a', borderRadius: 2, marginTop: 6 }}>
+                      <View style={{ height: 4, borderRadius: 2, backgroundColor: '#00c8b8',
+                                     width: `${Math.min(Math.round((planActivo.piezas_actual || 0) / planActivo.plan_total * 100), 100)}%` }} />
+                    </View>
+                  </View>
+                ) : modeloSeleccionado ? (
                   <View style={{ backgroundColor: '#0A1F2E', borderRadius: 8, padding: 10, marginBottom: 10,
                                  borderLeftWidth: 3, borderLeftColor: '#1565C0' }}>
                     <Text style={{ color: '#546E7A', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>
@@ -398,7 +463,7 @@ export default function AsignacionLideraScreen({ navigation }) {
                       <Text style={{ color: '#37474F', fontSize: 11 }}>{modeloSeleccionado.modelo_interno}</Text>
                     )}
                   </View>
-                )}
+                ) : null}
 
                 {/* Buscador */}
                 <TextInput

@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 from ..database_uph import get_uph_db
-from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH
+from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH, PlanLinea
 from ..auth import get_current_user
 from ..models.models import Tecnico
 
@@ -120,6 +120,12 @@ class AsignacionBulkIn(BaseModel):
     modelo_id: Optional[int] = None
     plan_interno: Optional[int] = None   # cantidad objetivo del modelo interno
     asignaciones: List[AsignacionItemIn]
+
+
+class PlanLineaIn(BaseModel):
+    linea: str
+    modelo_id: int
+    plan_total: int
 
 
 # ─────────────────────────────────────────────
@@ -1300,6 +1306,93 @@ def limpiar_eventos(data: LimpiarIn, db: Session = Depends(get_uph_db)):
     return {"ok": True, "eliminados": eliminados}
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Plan multi-turno por línea
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/plan-linea", status_code=201)
+def crear_plan_linea(
+    data: PlanLineaIn,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Activa un plan de producción para una línea.
+    Cierra cualquier plan activo anterior de esa línea."""
+    _ensure_admin_or_jefa(current_user)
+    linea = db.query(Linea).filter(Linea.nombre == data.linea).first()
+    if not linea:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    # Cerrar planes anteriores
+    db.query(PlanLinea).filter(
+        PlanLinea.linea_id == linea.id,
+        PlanLinea.activo   == True,
+    ).update({"activo": False})
+    plan = PlanLinea(
+        linea_id   = linea.id,
+        modelo_id  = data.modelo_id,
+        plan_total = data.plan_total,
+        creado_en  = datetime.now(timezone.utc),
+    )
+    db.add(plan)
+    db.commit()
+    db.refresh(plan)
+    return {"id": plan.id, "ok": True}
+
+
+@router.get("/plan-linea/{linea}")
+def get_plan_linea(
+    linea: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Devuelve el plan activo de una línea (None si no hay)."""
+    l = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    plan = db.query(PlanLinea).filter(
+        PlanLinea.linea_id == l.id,
+        PlanLinea.activo   == True,
+    ).first()
+    if not plan:
+        return {"plan": None}
+    nombre_evento = _linea_evento(linea)
+    piezas_actual = db.query(func.count(EventoUPH.id)).filter(
+        EventoUPH.linea    == nombre_evento,
+        EventoUPH.evento   == "GOOD",
+        EventoUPH.timestamp >= plan.creado_en,
+    ).scalar() or 0
+    return {
+        "plan": {
+            "id":            plan.id,
+            "modelo_id":     plan.modelo_id,
+            "modelo_nombre": plan.modelo.nombre if plan.modelo else None,
+            "modelo_interno": plan.modelo.modelo_interno if plan.modelo else None,
+            "plan_total":    plan.plan_total,
+            "piezas_actual": piezas_actual,
+            "creado_en":     plan.creado_en.isoformat(),
+        }
+    }
+
+
+@router.delete("/plan-linea/{linea}")
+def cerrar_plan_linea(
+    linea: str,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Cierra manualmente el plan activo de una línea."""
+    _ensure_admin_or_jefa(current_user)
+    l = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+    db.query(PlanLinea).filter(
+        PlanLinea.linea_id == l.id,
+        PlanLinea.activo   == True,
+    ).update({"activo": False})
+    db.commit()
+    return {"ok": True}
+
+
 @router.get("/dashboard/operadores", response_class=HTMLResponse)
 def dashboard_operadores():
     """Dashboard de pared — muestra operadores asignados hoy con fotos."""
@@ -1512,17 +1605,30 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
             EventoUPH.timestamp <= ahora,
         ).scalar() or 0
 
-        # Piezas acumuladas desde inicio del turno activo
+        # Plan activo multi-turno para esta línea
+        plan_activo = db.query(PlanLinea).filter(
+            PlanLinea.linea_id == linea.id,
+            PlanLinea.activo   == True,
+        ).first()
+
+        # Piezas: desde inicio del plan activo (cruza turnos) o desde inicio del turno
+        inicio_conteo = plan_activo.creado_en if plan_activo else inicio_turno_utc
         piezas_modelo = db.query(func.count(EventoUPH.id)).filter(
             EventoUPH.linea == nombre_evento,
             EventoUPH.evento == "GOOD",
-            EventoUPH.timestamp >= inicio_turno_utc,
+            EventoUPH.timestamp >= inicio_conteo,
             EventoUPH.timestamp <= ahora,
         ).scalar() or 0
 
-        # Plan del modelo: usa plan_interno si la líder lo configuró, sino meta × 12h turno
-        plan_interno = asignaciones[0].plan_interno if asignaciones else None
-        plan_modelo  = plan_interno if plan_interno else round(uph_meta * 12)
+        # Plan total: plan activo > plan_interno de asignación > meta × 12h
+        plan_modelo = (
+            plan_activo.plan_total
+            if plan_activo else (
+                asignaciones[0].plan_interno
+                if asignaciones and asignaciones[0].plan_interno
+                else round(uph_meta * 12)
+            )
+        )
 
         # Número de estaciones únicas en esta línea hoy
         estaciones_unicas = list({a.estacion for a in asignaciones})

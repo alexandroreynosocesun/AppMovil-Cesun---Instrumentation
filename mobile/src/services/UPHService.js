@@ -157,6 +157,33 @@ class UPHService {
     }
   }
 
+  async getPlanLinea(linea) {
+    try {
+      const response = await apiClient.get(`/uph/plan-linea/${encodeURIComponent(linea)}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async crearPlanLinea(linea, modelo_id, plan_total) {
+    try {
+      const response = await apiClient.post('/uph/plan-linea', { linea, modelo_id, plan_total });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async cerrarPlanLinea(linea) {
+    try {
+      const response = await apiClient.delete(`/uph/plan-linea/${encodeURIComponent(linea)}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
   async asignarBulk(linea, fecha, turno_id, modelo_id, asignaciones, plan_interno = null) {
     try {
       const response = await apiClient.post('/uph/asignacion/bulk', {
