@@ -72,6 +72,8 @@ class Asignacion(UphBase):
     turno_id = Column(Integer, ForeignKey("turnos.id"), nullable=False)
     modelo_id    = Column(Integer, ForeignKey("modelos_uph.id"), nullable=True)
     plan_interno = Column(Integer, nullable=True)   # cantidad objetivo del modelo interno (puesto por la líder)
+    hora_inicio  = Column(DateTime(timezone=True), nullable=True)  # None = desde inicio de turno
+    hora_fin     = Column(DateTime(timezone=True), nullable=True)  # None = sigue activa
 
     operador = relationship("Operador", back_populates="asignaciones")
     linea = relationship("Linea", back_populates="asignaciones")

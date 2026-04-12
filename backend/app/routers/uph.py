@@ -412,8 +412,7 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
 
     horas_semana = max(horas_semana, 1.0)   # evitar división por cero
 
-    # ── Construir mapa estacion→operador por día de la semana ────
-    # Para cada asignación de la semana, saber qué operador trabajó en qué estación
+    # ── Obtener todas las asignaciones de la semana ─────────────
     desde_fecha_str = lunes_local.strftime("%Y-%m-%d")
     hasta_fecha_str = viernes_fin.strftime("%Y-%m-%d")
 
@@ -426,51 +425,30 @@ def ranking_semanal(db: Session = Depends(get_uph_db)):
         .all()
     )
 
-    # mapa: (fecha, estacion) → num_empleado
-    mapa_est: dict = {}
+    # ── Acumular piezas por operador usando ventana exacta ───────
+    # Cada asignación tiene hora_inicio / hora_fin que delimita su ventana real.
+    # hora_inicio=None → desde inicio del turno de ese día (inicio_semana o día 00:00 UTC)
+    op_totales: dict = {}   # num_empleado → total_piezas
     for a in asignaciones_semana:
-        mapa_est[(a.fecha, a.estacion)] = a.num_empleado
-
-    # ── Eventos de la semana por estación+fecha ──────────────────
-    eventos_raw = (
-        db.query(
-            EventoUPH.estacion,
-            EventoUPH.linea,
-            func.date_trunc('day', EventoUPH.timestamp).label("dia"),
-            func.count(EventoUPH.id).label("cnt"),
-        )
-        .filter(
-            EventoUPH.evento    == "GOOD",
-            EventoUPH.timestamp >= inicio_semana_utc,
-            EventoUPH.timestamp <  corte_utc,
-        )
-        .group_by(EventoUPH.estacion, EventoUPH.linea,
-                  func.date_trunc('day', EventoUPH.timestamp))
-        .all()
-    )
-
-    # ── Acumular eventos por operador ────────────────────────────
-    # Necesitamos convertir el día UTC del evento a fecha local para buscar en mapa_est
-    op_totales: dict = {}   # num_empleado → total_eventos
-    for ev in eventos_raw:
-        # dia es UTC; convertir a fecha local
-        dia_local = (ev.dia.replace(tzinfo=timezone.utc) - utc_offset).strftime("%Y-%m-%d")
-        emp = mapa_est.get((dia_local, ev.estacion))
-        if not emp:
-            # Fallback: buscar la asignación más reciente para esa estación
-            asig_fb = (
-                db.query(Asignacion)
-                .filter(
-                    Asignacion.estacion == ev.estacion,
-                    Asignacion.fecha    <= hasta_fecha_str,
-                    Asignacion.fecha    >= desde_fecha_str,
-                )
-                .order_by(Asignacion.fecha.desc())
-                .first()
+        desde_asig = a.hora_inicio if a.hora_inicio else \
+            (datetime.strptime(a.fecha, "%Y-%m-%d") + utc_offset).replace(tzinfo=timezone.utc)
+        hasta_asig = a.hora_fin if a.hora_fin else corte_utc
+        # Limitar a la ventana de la semana
+        desde_asig = max(desde_asig, inicio_semana_utc)
+        hasta_asig = min(hasta_asig, corte_utc)
+        if desde_asig >= hasta_asig:
+            continue
+        cnt = (
+            db.query(func.count(EventoUPH.id))
+            .filter(
+                EventoUPH.estacion  == a.estacion,
+                EventoUPH.evento    == "GOOD",
+                EventoUPH.timestamp >= desde_asig,
+                EventoUPH.timestamp <  hasta_asig,
             )
-            emp = asig_fb.num_empleado if asig_fb else None
-        if emp:
-            op_totales[emp] = op_totales.get(emp, 0) + ev.cnt
+            .scalar() or 0
+        )
+        op_totales[a.num_empleado] = op_totales.get(a.num_empleado, 0) + cnt
 
     # ── Construir ranking uno por operador ───────────────────────
     hoy = ahora_loc.strftime("%Y-%m-%d")
@@ -938,19 +916,26 @@ def reporte_semanal_completo(
         if not asignaciones:
             continue
 
-        estaciones = list(set(a.estacion for a in asignaciones))
-        total_eventos = (
-            db.query(func.count(EventoUPH.id))
-            .filter(
-                EventoUPH.estacion.in_(estaciones),
-                EventoUPH.evento == "GOOD",
-                EventoUPH.timestamp >= hace_7_dias,
+        # Contar piezas en cada ventana de asignación (respeta reasignaciones mid-turno)
+        total_eventos = 0
+        for a in asignaciones:
+            desde_a = a.hora_inicio if a.hora_inicio else \
+                datetime.strptime(a.fecha, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            hasta_a = a.hora_fin if a.hora_fin else datetime.now(timezone.utc)
+            cnt = (
+                db.query(func.count(EventoUPH.id))
+                .filter(
+                    EventoUPH.estacion  == a.estacion,
+                    EventoUPH.evento    == "GOOD",
+                    EventoUPH.timestamp >= desde_a,
+                    EventoUPH.timestamp <  hasta_a,
+                )
+                .scalar() or 0
             )
-            .scalar() or 0
-        )
+            total_eventos += cnt
 
         dias_activos = len(set(a.fecha for a in asignaciones))
-        horas_trabajadas = dias_activos * 12
+        horas_trabajadas = dias_activos * 11   # 12h turno − 1h descansos = 11h efectivas
         uph_promedio = round(total_eventos / horas_trabajadas, 2) if horas_trabajadas > 0 else 0
 
         ultimo_modelo = next(
@@ -1166,12 +1151,26 @@ async def crear_asignacion_bulk(
     if not turno:
         raise HTTPException(status_code=404, detail="Turno no encontrado")
 
-    # Eliminar TODAS las asignaciones previas del día para esa línea
-    # (sin importar turno) para evitar duplicados al re-guardar
-    db.query(Asignacion).filter(
+    ahora_utc = datetime.now(timezone.utc)
+
+    # ¿Ya hay asignaciones activas para este día/línea?
+    ya_hay = db.query(Asignacion).filter(
         Asignacion.linea_id == linea.id,
-        Asignacion.fecha == data.fecha,
-    ).delete()
+        Asignacion.fecha    == data.fecha,
+        Asignacion.hora_fin == None,   # activas
+    ).first()
+
+    if ya_hay:
+        # Reasignación mid-turno: cerrar las activas con hora_fin = ahora
+        db.query(Asignacion).filter(
+            Asignacion.linea_id == linea.id,
+            Asignacion.fecha    == data.fecha,
+            Asignacion.hora_fin == None,
+        ).update({"hora_fin": ahora_utc})
+        hora_inicio_nueva = ahora_utc   # piezas desde este momento
+    else:
+        # Primera asignación del turno: hora_inicio = None → desde inicio de turno
+        hora_inicio_nueva = None
 
     creadas = 0
     for item in data.asignaciones:
@@ -1181,13 +1180,15 @@ async def crear_asignacion_bulk(
         if not op:
             continue
         asig = Asignacion(
-            num_empleado=item.num_empleado,
-            estacion=item.estacion,
-            linea_id=linea.id,
-            fecha=data.fecha,
-            turno_id=turno_id,
-            modelo_id=data.modelo_id,
-            plan_interno=data.plan_interno,
+            num_empleado = item.num_empleado,
+            estacion     = item.estacion,
+            linea_id     = linea.id,
+            fecha        = data.fecha,
+            turno_id     = turno_id,
+            modelo_id    = data.modelo_id,
+            plan_interno = data.plan_interno,
+            hora_inicio  = hora_inicio_nueva,
+            hora_fin     = None,
         )
         db.add(asig)
         creadas += 1
@@ -1239,14 +1240,19 @@ def scoreboard_hoy(
         nombre_ev_sb = _linea_evento(linea_nombre)   # "HI-6" → "L6"
         uph_hora = _uph_ultima_hora(db, nombre_ev_sb, asig.estacion)
 
+        # Contar piezas solo en la ventana de esta asignación
+        # hora_inicio=None → desde inicio del turno (inicio_dia)
+        desde_asig = asig.hora_inicio if asig.hora_inicio else inicio_dia
+        hasta_asig = asig.hora_fin    if asig.hora_fin    else ahora
+
         total_hoy = (
             db.query(func.count(EventoUPH.id))
             .filter(
                 EventoUPH.estacion == asig.estacion,
                 EventoUPH.linea == nombre_ev_sb,
                 EventoUPH.evento == "GOOD",
-                EventoUPH.timestamp >= inicio_dia,
-                EventoUPH.timestamp <= ahora,
+                EventoUPH.timestamp >= desde_asig,
+                EventoUPH.timestamp <= hasta_asig,
             )
             .scalar() or 0
         )
