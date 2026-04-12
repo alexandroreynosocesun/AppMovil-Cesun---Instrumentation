@@ -603,8 +603,13 @@ def top_operadores(
     _ensure_gerencia(current_user)
     hoy = datetime.now().strftime("%Y-%m-%d")
     ahora = datetime.now(timezone.utc)
-    # Truncar al bloque de 30 min actual: :00–:30 o :30–:00
-    if ahora.minute >= 30:
+    ahora_local = datetime.now()  # hora local del servidor
+    # Solo 6:30-7:00 y 18:30-19:00 son ventanas de media hora (inicio de turno)
+    es_media_hora_turno = (
+        (ahora_local.hour == 6  and ahora_local.minute >= 30) or
+        (ahora_local.hour == 18 and ahora_local.minute >= 30)
+    )
+    if es_media_hora_turno:
         inicio_hora = ahora.replace(minute=30, second=0, microsecond=0)
     else:
         inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)

@@ -120,7 +120,10 @@ export default function UPHDashboardLiderScreen() {
       setTopOps(rTop.data);
       if (rTop.data.hora_inicio) {
         const d = new Date(rTop.data.hora_inicio);
-        const dFin = new Date(d.getTime() + 30 * 60 * 1000); // +30 minutos
+        // Solo 6:30 y 18:30 son ventana de 30 min (inicio de turno), resto es 1 hora
+        const esMediaHoraTurno = d.getMinutes() === 30 && (d.getHours() === 6 || d.getHours() === 18);
+        const duracion = esMediaHoraTurno ? 30 : 60; // minutos
+        const dFin = new Date(d.getTime() + duracion * 60 * 1000);
         const fmt = t => t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
         setHoraInicio(`${fmt(d)} – ${fmt(dFin)}`);
       }
