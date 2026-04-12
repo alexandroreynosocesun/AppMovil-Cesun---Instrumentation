@@ -116,6 +116,7 @@ export default function AsignacionLideraScreen({ navigation }) {
   const [lineaSeleccionada,  setLineaSeleccionada]  = useState(null);
   const [turnoSeleccionado,  setTurnoSeleccionado]  = useState(null);
   const [modeloSeleccionado, setModeloSeleccionado] = useState(null);
+  const [modeloGuardado,     setModeloGuardado]     = useState(null); // modelo que ya estaba guardado en BD
 
   // asignacion: { slotIdx: { op: operador, estaciones: ['101','102'] } }
   const [numSlots,     setNumSlots]     = useState(2);
