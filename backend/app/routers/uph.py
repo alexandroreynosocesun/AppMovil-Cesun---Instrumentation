@@ -1781,7 +1781,7 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
             if plan_activo else (
                 asignaciones[0].plan_interno
                 if asignaciones and asignaciones[0].plan_interno
-                else round(uph_meta * 12)
+                else round(uph_meta * 11)   # 12h turno − 1h descansos = 11h efectivas
             )
         )
 
