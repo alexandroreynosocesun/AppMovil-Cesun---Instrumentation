@@ -1,11 +1,12 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Text, Alert } from 'react-native';
 
 import LiderDashboardScreen from '../screens/LiderDashboardScreen';
 import UPHDashboardLiderScreen from '../screens/UPHDashboardLiderScreen';
 import AsignacionLideraScreen from '../screens/AsignacionLideraScreen';
 import SearchHStVtScreen from '../screens/SearchHStVtScreen';
+import { useAuth } from '../contexts/AuthContext';
 
 const Tab = createBottomTabNavigator();
 
@@ -25,6 +26,8 @@ function TabIcon({ name, focused }) {
 }
 
 export default function LiderTabNavigator() {
+  const { user } = useAuth();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -43,7 +46,23 @@ export default function LiderTabNavigator() {
       })}
     >
       <Tab.Screen name="Inicio"     component={LiderDashboardScreen}    options={{ title: 'Inicio' }} />
-      <Tab.Screen name="Asignacion" component={AsignacionLideraScreen}  options={{ title: 'Asignación' }} />
+      <Tab.Screen
+        name="Asignacion"
+        component={AsignacionLideraScreen}
+        options={{ title: 'Asignación' }}
+        listeners={() => ({
+          tabPress: (e) => {
+            if (!user?.linea_uph) {
+              e.preventDefault();
+              Alert.alert(
+                'Selecciona una línea',
+                'Debes configurar tu línea en Inicio antes de acceder a Asignación.',
+                [{ text: 'Entendido' }]
+              );
+            }
+          },
+        })}
+      />
       <Tab.Screen name="Dashboard"  component={UPHDashboardLiderScreen} options={{ title: 'Dashboard' }} />
       <Tab.Screen name="Modelos"    component={SearchHStVtScreen}       options={{ title: 'Modelos' }} />
     </Tab.Navigator>
