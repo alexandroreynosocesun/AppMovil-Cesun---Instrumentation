@@ -114,8 +114,8 @@ class AsignacionItemIn(BaseModel):
 
 class AsignacionBulkIn(BaseModel):
     linea: str
-    fecha: str          # "YYYY-MM-DD"
-    turno_id: int
+    fecha: str                       # "YYYY-MM-DD"
+    turno_id: Optional[int] = None   # None → se detecta automáticamente
     modelo_id: Optional[int] = None
     plan_interno: Optional[int] = None   # cantidad objetivo del modelo interno
     asignaciones: List[AsignacionItemIn]
@@ -806,21 +806,32 @@ def reporte_semanal_completo(
 
 @router.get("/turno/actual")
 def turno_actual(db: Session = Depends(get_uph_db), current_user: Tecnico = Depends(get_current_user)):
-    """Detecta el turno actual basado en la hora del servidor."""
-    hora_ahora = datetime.now().strftime("%H:%M")
-    turnos = db.query(Turno).all()
-    for t in turnos:
-        inicio = t.hora_inicio  # "06:30"
-        fin = t.hora_fin        # "18:30"
-        if inicio <= fin:
-            if inicio <= hora_ahora <= fin:
-                return {"turno": t, "detectado": True}
-        else:  # turno nocturno que cruza medianoche
-            if hora_ahora >= inicio or hora_ahora <= fin:
-                return {"turno": t, "detectado": True}
-    # Si no coincide con ninguno, devolver el primero
-    primer_turno = db.query(Turno).first()
-    return {"turno": primer_turno, "detectado": False}
+    """Detecta el turno actual con la misma lógica día-consciente del dashboard."""
+    ahora_loc = datetime.now()
+    wd   = ahora_loc.weekday()   # 0=Lun … 6=Dom
+    mins = ahora_loc.hour * 60 + ahora_loc.minute
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30   # 06:30 / 18:30
+
+    turno_id_act = None
+    if wd in (0, 1, 2, 3):      # Lun–Jue
+        if T_INI <= mins < T_FIN:   turno_id_act = 1   # A diurno
+        elif mins >= T_FIN:          turno_id_act = 2   # B nocturno empieza hoy
+        else:                        turno_id_act = 2   # B nocturno del día anterior
+    elif wd == 4:                # Viernes
+        if mins < T_INI:             turno_id_act = 2   # B noche del jueves
+        elif T_INI <= mins < T_FIN:  turno_id_act = 3   # C viernes día
+        else:                        turno_id_act = 2   # B extra noche viernes
+    elif wd == 5:                # Sábado
+        if mins < T_INI:             turno_id_act = 2   # B extra noche viernes→sábado
+        elif T_INI <= mins < T_FIN:  turno_id_act = 3   # C sábado día
+    elif wd == 6:                # Domingo
+        if T_INI <= mins < T_FIN:    turno_id_act = 3   # C domingo día
+
+    if turno_id_act:
+        t = db.query(Turno).filter(Turno.id == turno_id_act).first()
+        if t:
+            return {"turno": t, "detectado": True}
+    return {"turno": None, "detectado": False}
 
 
 @router.get("/lineas/{linea_nombre}/estaciones")
@@ -951,7 +962,25 @@ async def crear_asignacion_bulk(
     if not linea:
         raise HTTPException(status_code=404, detail=f"Línea '{data.linea}' no encontrada")
 
-    turno = db.query(Turno).filter(Turno.id == data.turno_id).first()
+    # Auto-detectar turno si no se envió
+    turno_id = data.turno_id
+    if not turno_id:
+        ahora_loc = datetime.now()
+        wd   = ahora_loc.weekday()
+        mins = ahora_loc.hour * 60 + ahora_loc.minute
+        T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30
+        if wd in (0, 1, 2, 3):
+            turno_id = 1 if T_INI <= mins < T_FIN else 2
+        elif wd == 4:
+            turno_id = 2 if mins < T_INI else (3 if T_INI <= mins < T_FIN else 2)
+        elif wd == 5:
+            turno_id = 2 if mins < T_INI else (3 if T_INI <= mins < T_FIN else None)
+        elif wd == 6:
+            turno_id = 3 if T_INI <= mins < T_FIN else None
+        if not turno_id:
+            raise HTTPException(status_code=400, detail="Fuera de horario de producción — no se puede asignar")
+
+    turno = db.query(Turno).filter(Turno.id == turno_id).first()
     if not turno:
         raise HTTPException(status_code=404, detail="Turno no encontrado")
 
@@ -974,7 +1003,7 @@ async def crear_asignacion_bulk(
             estacion=item.estacion,
             linea_id=linea.id,
             fecha=data.fecha,
-            turno_id=data.turno_id,
+            turno_id=turno_id,
             modelo_id=data.modelo_id,
             plan_interno=data.plan_interno,
         )

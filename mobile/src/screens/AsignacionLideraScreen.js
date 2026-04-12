@@ -155,7 +155,7 @@ export default function AsignacionLideraScreen({ navigation }) {
     let elegido = turnoUsuario ? turnosData.find(t => t.nombre === turnoUsuario) || null : null;
     if (!elegido) {
       const rActual = await uphService.getTurnoActual();
-      elegido = rActual.success ? rActual.data : turnosData[0];
+      elegido = rActual.success ? (rActual.data.turno ?? rActual.data) : turnosData[0];
     }
     setTurnoSeleccionado(elegido);
     if (rOps.success) setOperadores(rOps.data);
