@@ -120,7 +120,9 @@ export default function UPHDashboardLiderScreen() {
       setTopOps(rTop.data);
       if (rTop.data.hora_inicio) {
         const d = new Date(rTop.data.hora_inicio);
-        setHoraInicio(d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }));
+        const dFin = new Date(d.getTime() + 30 * 60 * 1000); // +30 minutos
+        const fmt = t => t.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+        setHoraInicio(`${fmt(d)} – ${fmt(dFin)}`);
       }
     }
     setLoading(false);

@@ -603,7 +603,11 @@ def top_operadores(
     _ensure_gerencia(current_user)
     hoy = datetime.now().strftime("%Y-%m-%d")
     ahora = datetime.now(timezone.utc)
-    inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
+    # Truncar al bloque de 30 min actual: :00–:30 o :30–:00
+    if ahora.minute >= 30:
+        inicio_hora = ahora.replace(minute=30, second=0, microsecond=0)
+    else:
+        inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
     inicio_dia  = datetime.strptime(hoy, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
     query = db.query(Asignacion).filter(Asignacion.fecha == hoy)
