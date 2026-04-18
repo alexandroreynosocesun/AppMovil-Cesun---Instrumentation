@@ -298,46 +298,83 @@ export default function LiderDashboardScreen() {
               ) : (
                 <>
                   {/* ── Card modelo activo del plan ── */}
-                  {planActivo ? (
-                    <View style={s.planCard}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={s.planModeloNombre}>{planActivo.modelo_nombre}</Text>
-                        {planActivo.modelo_interno ? (
-                          <Text style={s.planModeloInterno}>{planActivo.modelo_interno}</Text>
-                        ) : null}
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        {planActivo.plan_total ? (
-                          <>
-                            <Text style={s.planPiezas}>{planActivo.plan_total.toLocaleString()}</Text>
-                            <Text style={s.planPiezasLabel}>pzs meta</Text>
-                          </>
-                        ) : null}
-                        <View style={s.planBadge}>
-                          <Text style={s.planBadgeText}>Plan asignado</Text>
+                  {planActivo ? (() => {
+                    const producido   = planActivo.piezas_actual || 0;
+                    const meta        = planActivo.plan_total || 0;
+                    const pctPlan     = meta > 0 ? Math.min(Math.round((producido / meta) * 100), 100) : 0;
+                    const uphLinea    = resumenLinea?.uph_real ?? null;
+                    const colorPct    = pctPlan >= 100 ? '#4CAF50' : pctPlan >= 70 ? '#FF9800' : '#42A5F5';
+                    return (
+                      <View style={s.planCard}>
+                        {/* Fila superior: badge + modelo interno */}
+                        <View style={s.planCardTop}>
+                          <View style={s.planBadge}>
+                            <Text style={s.planBadgeText}>EN PRODUCCIÓN</Text>
+                          </View>
+                          {planActivo.modelo_interno ? (
+                            <Text style={s.planModeloInterno} numberOfLines={1}>
+                              {planActivo.modelo_interno}
+                            </Text>
+                          ) : null}
                         </View>
+
+                        {/* Nombre del modelo */}
+                        <Text style={s.planModeloNombre}>{planActivo.modelo_nombre}</Text>
+
+                        {/* Métricas */}
+                        <View style={s.planMetricasRow}>
+                          <View style={s.planMetrica}>
+                            <Text style={s.planMetricaVal}>{uphLinea ?? '—'}</Text>
+                            <Text style={s.planMetricaLabel}>UPH línea</Text>
+                          </View>
+                          <View style={s.planMetricaSep} />
+                          <View style={s.planMetrica}>
+                            <Text style={s.planMetricaVal}>{meta > 0 ? meta.toLocaleString() : '—'}</Text>
+                            <Text style={s.planMetricaLabel}>Meta día</Text>
+                          </View>
+                          <View style={s.planMetricaSep} />
+                          <View style={s.planMetrica}>
+                            <Text style={[s.planMetricaVal, { color: colorPct }]}>{producido.toLocaleString()}</Text>
+                            <Text style={s.planMetricaLabel}>Producidas</Text>
+                          </View>
+                          <View style={s.planMetricaSep} />
+                          <View style={s.planMetrica}>
+                            <Text style={[s.planMetricaVal, { color: colorPct }]}>{pctPlan}%</Text>
+                            <Text style={s.planMetricaLabel}>Avance</Text>
+                          </View>
+                        </View>
+
+                        {/* Barra de progreso */}
+                        {meta > 0 && (
+                          <View style={s.planBarBg}>
+                            <View style={[s.planBarFill, { width: `${pctPlan}%`, backgroundColor: colorPct }]} />
+                          </View>
+                        )}
                       </View>
-                    </View>
-                  ) : (
-                    <View style={[s.planCard, { borderColor: '#37474F' }]}>
+                    );
+                  })() : (
+                    <View style={[s.planCard, { borderColor: '#263238', justifyContent: 'center', alignItems: 'center', paddingVertical: 20 }]}>
                       <Text style={{ color: '#37474F', fontSize: 13 }}>Sin modelo asignado por el planner</Text>
                     </View>
                   )}
 
                   {/* ── Próximos cambios (desplegable) ── */}
-                  {planDia.length > 1 && (
+                  {planDia.filter(m => !m.es_activo).length > 0 && (
                     <TouchableOpacity
                       style={s.proximosBtn}
                       onPress={() => setProximosExpanded(v => !v)}
                       activeOpacity={0.8}
                     >
-                      <Text style={s.proximosBtnText}>
-                        Próximos cambios del día ({planDia.length - 1})
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={s.proximosBtnText}>Próximos modelos del día</Text>
+                        <View style={s.proximosBadge}>
+                          <Text style={s.proximosBadgeText}>{planDia.filter(m => !m.es_activo).length}</Text>
+                        </View>
+                      </View>
                       <Text style={s.proximosArrow}>{proximosExpanded ? '▲' : '▼'}</Text>
                     </TouchableOpacity>
                   )}
-                  {proximosExpanded && planDia.filter(m => !m.es_activo).map((m, i) => (
+                  {proximosExpanded && planDia.filter(m => !m.es_activo).map((m) => (
                     <View key={m.modelo_id} style={s.proximoRow}>
                       <View style={s.proximoOrden}>
                         <Text style={s.proximoOrdenText}>{m.orden + 1}</Text>
@@ -349,7 +386,10 @@ export default function LiderDashboardScreen() {
                         ) : null}
                       </View>
                       {m.plan_piezas ? (
-                        <Text style={s.proximoPiezas}>{m.plan_piezas.toLocaleString()} pzs</Text>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={s.proximoPiezas}>{m.plan_piezas.toLocaleString()}</Text>
+                          <Text style={{ color: '#37474F', fontSize: 9 }}>pzs meta</Text>
+                        </View>
                       ) : null}
                     </View>
                   ))}
@@ -524,20 +564,25 @@ const s = StyleSheet.create({
 
   // Plan del día
   planCard: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#071A0A', borderRadius: 12,
+    backgroundColor: '#071A0A', borderRadius: 14,
     borderWidth: 1.5, borderColor: '#2E7D32',
-    padding: 14, marginBottom: 8,
+    padding: 16, marginBottom: 8,
   },
-  planModeloNombre:  { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
-  planModeloInterno: { color: '#37474F', fontSize: 11, marginTop: 2 },
-  planPiezas:        { color: '#66BB6A', fontSize: 18, fontWeight: 'bold' },
-  planPiezasLabel:   { color: '#37474F', fontSize: 10 },
+  planCardTop:       { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
+  planModeloNombre:  { color: '#FFFFFF', fontSize: 20, fontWeight: '800', marginBottom: 12 },
+  planModeloInterno: { color: '#546E7A', fontSize: 11, flex: 1 },
   planBadge: {
     backgroundColor: '#1B5E20', borderRadius: 6, borderWidth: 1, borderColor: '#4CAF50',
-    paddingHorizontal: 8, paddingVertical: 3, marginTop: 4,
+    paddingHorizontal: 8, paddingVertical: 3,
   },
-  planBadgeText: { color: '#A5D6A7', fontSize: 10, fontWeight: 'bold' },
+  planBadgeText: { color: '#A5D6A7', fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  planMetricasRow:  { flexDirection: 'row', marginBottom: 12 },
+  planMetrica:      { flex: 1, alignItems: 'center' },
+  planMetricaVal:   { color: '#FFFFFF', fontSize: 18, fontWeight: 'bold' },
+  planMetricaLabel: { color: '#546E7A', fontSize: 9, marginTop: 2, textAlign: 'center' },
+  planMetricaSep:   { width: 1, height: 36, backgroundColor: '#1B5E20', marginHorizontal: 4, alignSelf: 'center' },
+  planBarBg:  { height: 5, backgroundColor: '#0A2E0A', borderRadius: 3, overflow: 'hidden' },
+  planBarFill:{ height: 5, borderRadius: 3 },
 
   // Próximos cambios
   proximosBtn: {
@@ -546,8 +591,10 @@ const s = StyleSheet.create({
     borderWidth: 1, borderColor: '#1A3A5F',
     paddingHorizontal: 14, paddingVertical: 10, marginBottom: 4,
   },
-  proximosBtnText: { color: '#42A5F5', fontSize: 12, fontWeight: '700' },
-  proximosArrow:   { color: '#42A5F5', fontSize: 11 },
+  proximosBtnText:  { color: '#42A5F5', fontSize: 12, fontWeight: '700' },
+  proximosBadge:    { backgroundColor: '#1A3A5F', borderRadius: 10, paddingHorizontal: 7, paddingVertical: 2 },
+  proximosBadgeText:{ color: '#42A5F5', fontSize: 11, fontWeight: 'bold' },
+  proximosArrow:    { color: '#42A5F5', fontSize: 11 },
   proximoRow: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: '#090F18', borderRadius: 10,
@@ -555,13 +602,13 @@ const s = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10, marginBottom: 4, gap: 10,
   },
   proximoOrden: {
-    width: 24, height: 24, borderRadius: 12,
+    width: 26, height: 26, borderRadius: 13,
     backgroundColor: '#1A2A3A', justifyContent: 'center', alignItems: 'center',
   },
   proximoOrdenText: { color: '#546E7A', fontSize: 11, fontWeight: 'bold' },
   proximoNombre:    { color: '#CFD8E3', fontSize: 13, fontWeight: '600' },
-  proximoInterno:   { color: '#37474F', fontSize: 10 },
-  proximoPiezas:    { color: '#42A5F5', fontSize: 12, fontWeight: 'bold' },
+  proximoInterno:   { color: '#37474F', fontSize: 10, marginTop: 2 },
+  proximoPiezas:    { color: '#42A5F5', fontSize: 14, fontWeight: 'bold' },
 
   lineaCard:    { borderRadius: 14, padding: 16, borderWidth: 1.5, marginBottom: 16 },
   lineaCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
