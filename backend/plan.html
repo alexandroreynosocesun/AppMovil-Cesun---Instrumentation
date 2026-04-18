@@ -424,16 +424,25 @@
       if (!internalModel && !boardModel) continue;
       if (cantTotal <= 0) continue;
 
-      resultados[linea].push({
-        internal_model: internalModel || '',
-        board_model:    String(boardModel || ''),
-        size:           size || '',
-        market:         market || '',
-        uph:            typeof uph === 'number' ? Math.round(uph * 10) / 10 : null,
-        cantidad:       Math.round(cantTotal),   // total día completo
-        cantidad_dia:   Math.round(cantDia),
-        cantidad_noche: Math.round(cantNoche),
-      });
+      // Si el mismo modelo ya existe en esta línea → acumular cantidades
+      const clave = (internalModel || boardModel || '').trim();
+      const existe = resultados[linea].find(r => r.internal_model === clave || r.board_model === String(boardModel || '').trim());
+      if (existe) {
+        existe.cantidad       += Math.round(cantTotal);
+        existe.cantidad_dia   += Math.round(cantDia);
+        existe.cantidad_noche += Math.round(cantNoche);
+      } else {
+        resultados[linea].push({
+          internal_model: internalModel || '',
+          board_model:    String(boardModel || ''),
+          size:           size || '',
+          market:         market || '',
+          uph:            typeof uph === 'number' ? Math.round(uph * 10) / 10 : null,
+          cantidad:       Math.round(cantTotal),
+          cantidad_dia:   Math.round(cantDia),
+          cantidad_noche: Math.round(cantNoche),
+        });
+      }
     }
 
     fetch('/api/uph/plan/modelos')

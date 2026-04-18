@@ -2529,15 +2529,16 @@ def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                 orden = orden_por_linea.get(linea_key, 0)
                 orden_por_linea[linea_key] = orden + 1
 
-                # Upsert por linea+modelo+fecha
+                # Upsert por linea+modelo+fecha — reemplaza con el valor del nuevo Excel
                 entrada = db.query(PlanDiaLinea).filter(
                     PlanDiaLinea.linea_id  == linea_obj.id,
                     PlanDiaLinea.modelo_id == modelo.id,
                     PlanDiaLinea.fecha     == hoy,
                 ).first()
                 if entrada:
+                    # El parser ya acumuló duplicados → reemplazar con el total correcto
                     entrada.plan_piezas = piezas
-                    entrada.orden = orden
+                    entrada.orden       = orden
                 else:
                     db.add(PlanDiaLinea(
                         linea_id=linea_obj.id,
