@@ -741,16 +741,34 @@ def resumen_todas_lineas(
             EventoUPH.timestamp <= ahora,
         ).scalar() or 0
 
+        # Plan del día (del planner via plan.html)
+        plan_hoy = db.query(PlanLinea).filter(
+            PlanLinea.linea_id == linea.id,
+            PlanLinea.fecha    == hoy,
+            PlanLinea.activo   == True,
+        ).first()
+        plan_modelo_nombre = plan_hoy.modelo.nombre if plan_hoy and plan_hoy.modelo else (modelo.nombre if modelo else None)
+        plan_total         = plan_hoy.plan_total if plan_hoy else None
+        piezas_modelo      = None
+        if plan_hoy:
+            piezas_modelo = db.query(func.count(EventoUPH.id)).filter(
+                EventoUPH.linea    == nombre_ev,
+                EventoUPH.evento   == "GOOD",
+                EventoUPH.timestamp >= plan_hoy.creado_en,
+            ).scalar() or 0
+
         resultado.append({
-            "linea": linea.nombre,
-            "linea_id": linea.id,
-            "modelo": modelo.nombre if modelo else None,
-            "uph_real": round(uph_real, 1),
-            "uph_meta": round(uph_meta, 1),
-            "piezas_hora": piezas_hora,
-            "color": _color_semaforo(uph_real, uph_meta),
+            "linea":           linea.nombre,
+            "linea_id":        linea.id,
+            "modelo":          plan_modelo_nombre,
+            "uph_real":        round(uph_real, 1),
+            "uph_meta":        round(uph_meta, 1),
+            "piezas_hora":     piezas_hora,
+            "piezas_modelo":   piezas_modelo,   # producidas desde inicio del plan
+            "plan_modelo":     plan_total,       # meta total del día (Day+Night)
+            "color":           _color_semaforo(uph_real, uph_meta),
             "total_estaciones": total_estaciones,
-            "actualizado": datetime.now(timezone.utc).isoformat(),
+            "actualizado":     datetime.now(timezone.utc).isoformat(),
         })
     return {"lineas": resultado, "actualizado": datetime.now(timezone.utc).isoformat()}
 
