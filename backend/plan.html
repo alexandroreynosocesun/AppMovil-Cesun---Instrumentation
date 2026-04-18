@@ -369,15 +369,21 @@
     return null;
   }
 
-  function procesarAMIPlan(wb) {
+  function procesarAMIPlan(wb, sheetName) {
     try {
-    // Buscar hoja AMI PLAN (tolerante a espacios/mayúsculas)
-    const sheetName = wb.SheetNames.find(n => n.trim().toUpperCase() === 'AMI PLAN');
-    if (!sheetName) {
-      alert('No se encontró la hoja "AMI PLAN" en el Excel.\nHojas encontradas: ' + wb.SheetNames.join(', '));
+    const ws = wb.Sheets[sheetName];
+    if (!ws) {
+      document.getElementById('ami-results').innerHTML =
+        '<div style="color:#ff5555;font-size:0.85rem;">❌ No se pudo acceder a la hoja AMI PLAN.</div>';
       return;
     }
-    const ws = wb.Sheets[sheetName];
+
+    // Limitar rango para no leer columnas vacías (mejora rendimiento)
+    const fullRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+    fullRange.e.c = Math.min(fullRange.e.c, 159); // máx columna 160
+    fullRange.e.r = Math.min(fullRange.e.r, 699); // máx 700 filas
+    ws['!ref'] = XLSX.utils.encode_range(fullRange);
+
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
 
     const colDay   = encontrarColumnaHoy(data);
@@ -528,30 +534,36 @@
 
     const reader = new FileReader();
     reader.onload = e => {
-      // Diferir para que el DOM actualice el loading antes de bloquear
+      const raw = e.target.result;
+      // Paso 1: leer solo nombres de hojas (muy rápido, sin parsear datos)
       setTimeout(() => {
-      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+        try {
+          const wbMeta = XLSX.read(raw, { type: 'array', bookSheets: true });
+          const amiSheet = wbMeta.SheetNames.find(n => n.trim().toUpperCase() === 'AMI PLAN');
 
-      // Detectar formato AMI
-      if (wb.SheetNames.find(n => n.trim().toUpperCase() === 'AMI PLAN')) {
-        procesarAMIPlan(wb);
-        return;
-      }
-
-      document.getElementById('ami-section').style.display = 'none';
-
-      // Flujo genérico
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
-      if (data.length < 2) { alert('El archivo parece estar vacío'); return; }
-
-      rawHeaders = data[0].map(h => String(h).trim());
-      rawRows    = data.slice(1).filter(r => r.some(c => c !== ''));
-
-      mostrarMapping();
-      mostrarPreview(rawHeaders, rawRows);
-      document.getElementById('acciones-excel').style.display = 'flex';
-      }, 50); // fin setTimeout
+          if (amiSheet) {
+            // Paso 2: parsear SOLO la hoja AMI con fechas
+            const wbAmi = XLSX.read(raw, { type: 'array', sheets: [amiSheet], cellDates: true });
+            procesarAMIPlan(wbAmi, amiSheet);
+          } else {
+            document.getElementById('ami-section').style.display = 'none';
+            // Flujo genérico: parsear solo primera hoja
+            const wb = XLSX.read(raw, { type: 'array', sheets: 0 });
+            const ws = wb.Sheets[wb.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+            if (data.length < 2) { alert('El archivo parece estar vacío'); return; }
+            rawHeaders = data[0].map(h => String(h).trim());
+            rawRows    = data.slice(1).filter(r => r.some(c => c !== ''));
+            mostrarMapping();
+            mostrarPreview(rawHeaders, rawRows);
+            document.getElementById('acciones-excel').style.display = 'flex';
+          }
+        } catch(err) {
+          document.getElementById('ami-results').innerHTML =
+            `<div style="color:#ff5555;font-size:0.85rem;">❌ Error leyendo el archivo: ${err.message}</div>`;
+          console.error('procesarArchivo error:', err);
+        }
+      }, 50);
     };
     reader.readAsArrayBuffer(file);
   }
