@@ -415,25 +415,15 @@
 
     // ── CONSOLE DEBUG ──────────────────────────────────────────
     console.log('=== AMI DEBUG === turno:', turno, 'colDay:', colDay, 'filas:', data.length);
-    // Buscar en TODAS las columnas dónde aparece "HI"
-    let found = 0;
-    outer: for (let i = 5; i < data.length; i++) {
+    // Mostrar filas 200-230 para ver estructura alrededor de las filas PLAN
+    console.log('--- filas 200-230 ---');
+    for (let i = 200; i <= 230 && i < data.length; i++) {
       const row = data[i]; if (!row) continue;
-      for (let c = 0; c < 20; c++) {
-        const v = row[c];
-        if (v && typeof v === 'string' && /^HI[\s\-]?\d/i.test(v.trim())) {
-          console.log(`  "HI" en fila ${i} col ${c}: "${v}" | col139="${row[139]}" | col16="${row[16]}" | col25="${row[25]}"`);
-          if (++found >= 10) break outer;
-        }
-      }
-    }
-    if (found === 0) console.log('⚠️ No se encontró ningún "HI X" en cols 0-19 de ninguna fila');
-    // Buscar filas donde col139 (EJ/Day18) no es null
-    let q = 0;
-    for (let i = 5; i < data.length && q < 5; i++) {
-      const row = data[i]; if (!row || row[139] == null) continue;
-      console.log(`  col139 no-null en fila ${i}: val="${row[139]}" col5="${row[5]}" col2="${row[2]}" col1="${row[1]}"`);
-      q++;
+      const vals = [];
+      for (let c = 0; c <= 8; c++) vals.push(`c${c}="${row[c]}"`);
+      vals.push(`c139="${row[139]}"`);
+      const hasVal = row[139] != null || vals.some(v => v !== `c${vals.indexOf(v)}="null"`);
+      if (hasVal) console.log(`  f${i}: ${vals.join(' | ')}`);
     }
     console.log('=================');
     // ───────────────────────────────────────────────────────────
