@@ -397,9 +397,10 @@
     fullRange.e.r = Math.min(fullRange.e.r, 2999); // máx 3000 filas
     ws['!ref'] = XLSX.utils.encode_range(fullRange);
 
-    const colDay   = encontrarColumnaHoy(ws);
+    // Columnas fijas del AMI: EF=Day (135), EG=Night (136)
+    const colDay   = 135;
+    const colNight = 136;
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-    const colNight = colDay !== null ? colDay + 1 : null;
     const turno    = detectarTurnoActual();
 
     const resultados = {'HI-1':[],'HI-2':[],'HI-3':[],'HI-4':[],'HI-5':[],'HI-6':[]};
@@ -447,8 +448,8 @@
 
     fetch('/api/uph/plan/modelos')
       .then(r => r.json())
-      .then(d => mostrarCambiosAMI(resultados, d.modelos || [], turno, colDay !== null))
-      .catch(()  => mostrarCambiosAMI(resultados, [], turno, colDay !== null));
+      .then(d => mostrarCambiosAMI(resultados, d.modelos || [], turno, true))
+      .catch(()  => mostrarCambiosAMI(resultados, [], turno, true));
 
     } catch(err) {
       document.getElementById('ami-section').style.display = 'block';
