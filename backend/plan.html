@@ -259,7 +259,6 @@
     if (USERS[user] && USERS[user] === pass) {
       sessionStorage.setItem('admin-ok', '1');
       document.getElementById('login-overlay').classList.add('hidden');
-      cargarModelos();
     } else {
       const inp = document.getElementById('login-pass');
       inp.classList.add('err');
@@ -277,29 +276,6 @@
 
   if (sessionStorage.getItem('admin-ok')) {
     document.getElementById('login-overlay').classList.add('hidden');
-    cargarModelos();
-  }
-
-  // ── Modelos en BD ─────────────────────────────────────────────
-  async function cargarModelos() {
-    const grid = document.getElementById('modelos-grid');
-    try {
-      const res  = await fetch('/api/uph/plan/modelos');
-      const data = await res.json();
-      const modelos = data.modelos || data || [];
-      if (!modelos.length) { grid.innerHTML = '<div class="no-data">Sin modelos registrados aún</div>'; return; }
-      grid.innerHTML = modelos.map(m => `
-        <div class="modelo-card">
-          <div class="modelo-nombre">${m.nombre||'—'}</div>
-          <div class="modelo-interno">${m.modelo_interno||''}</div>
-          <div class="modelo-uph-row">
-            ${[1,2,3,4,5,6].map(n => m[`uph_hi${n}`] ? `<span class="uph-chip">HI-${n}: ${m[`uph_hi${n}`]}</span>` : '').join('')}
-            ${m.uph_total ? `<span class="uph-chip" style="border-color:#00c8b844;color:#00c8b8;">Total: ${m.uph_total}</span>` : ''}
-          </div>
-        </div>`).join('');
-    } catch(e) {
-      grid.innerHTML = `<div class="no-data" style="color:#ff5555;">Error al cargar modelos: ${e.message}</div>`;
-    }
   }
 
   // ── Excel upload ──────────────────────────────────────────────
@@ -554,7 +530,6 @@
       status.className = 'status-msg ok';
       status.textContent = `✓ ${d.guardados || amiCambios.length} registros guardados`;
       btn.textContent = '✓ Guardado';
-      cargarModelos();
       // Ocultar botón tras éxito — ya no tiene sentido volver a guardar lo mismo
       setTimeout(() => { document.getElementById('ami-acciones').style.display = 'none'; }, 2000);
     } catch(e) {
@@ -697,7 +672,6 @@
       const data = await res.json();
       status.className = 'status-msg ok';
       status.textContent = `✓ ${data.guardados || filas.length} filas guardadas`;
-      cargarModelos();
     } catch(e) {
       status.className = 'status-msg err';
       status.textContent = `Error: ${e.message}`;
