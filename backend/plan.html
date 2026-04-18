@@ -238,7 +238,7 @@
     <div id="ami-info"></div>
     <div id="ami-results"></div>
     <div class="acciones" id="ami-acciones" style="display:none;margin-top:8px;">
-      <button class="btn-primary" style="width:auto;padding:10px 32px;" onclick="guardarCambiosAMI()">
+      <button id="btn-guardar-ami" class="btn-primary" style="width:auto;padding:10px 32px;" onclick="guardarCambiosAMI()">
         Guardar cambios en BD
       </button>
       <button class="btn-secondary" onclick="limpiarExcel()">Cancelar</button>
@@ -523,8 +523,11 @@
   }
 
   async function guardarCambiosAMI() {
+    const btn    = document.getElementById('btn-guardar-ami');
     const status = document.getElementById('ami-status');
-    status.className = 'status-msg'; status.textContent = 'Guardando…';
+    btn.disabled = true;
+    btn.textContent = 'Guardando…';
+    status.className = 'status-msg'; status.textContent = '';
     try {
       const res = await fetch('/api/uph/plan/subir', {
         method: 'POST',
@@ -535,10 +538,15 @@
       const d = await res.json();
       status.className = 'status-msg ok';
       status.textContent = `✓ ${d.guardados || amiCambios.length} registros guardados`;
+      btn.textContent = '✓ Guardado';
       cargarModelos();
+      // Ocultar botón tras éxito — ya no tiene sentido volver a guardar lo mismo
+      setTimeout(() => { document.getElementById('ami-acciones').style.display = 'none'; }, 2000);
     } catch(e) {
       status.className = 'status-msg err';
       status.textContent = `Error: ${e.message}`;
+      btn.disabled = false;
+      btn.textContent = 'Guardar cambios en BD';
     }
   }
 
