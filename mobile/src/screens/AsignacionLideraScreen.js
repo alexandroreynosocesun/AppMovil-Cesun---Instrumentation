@@ -127,8 +127,6 @@ export default function AsignacionLideraScreen({ navigation }) {
   const [loadingModelos, setLoadingModelos] = useState(false);
   const [guardando,      setGuardando]      = useState(false);
   const [planInterno,    setPlanInterno]    = useState('');
-  const [modalModelo,    setModalModelo]    = useState(false);
-  const [busquedaModalModelo, setBusquedaModalModelo] = useState('');
   const [planActivo,     setPlanActivo]     = useState(null);  // plan multi-turno activo
 
   const hoy = new Date().toISOString().split('T')[0];
@@ -333,21 +331,6 @@ export default function AsignacionLideraScreen({ navigation }) {
       ? turnoSeleccionado.id : null;
     const cantidadPlan = planInterno ? parseInt(planInterno) : null;
 
-    // ── Gestión del plan multi-turno ──────────────────────
-    if (modeloSeleccionado?.id && cantidadPlan) {
-      const modeloCambio = planActivo && planActivo.modelo_id !== modeloSeleccionado.id;
-      const sinPlan      = !planActivo;
-      if (sinPlan || modeloCambio) {
-        // Crear nuevo plan (cierra el anterior automáticamente en el backend)
-        await uphService.crearPlanLinea(
-          lineaSeleccionada.nombre,
-          modeloSeleccionado.id,
-          cantidadPlan,
-        );
-      }
-      // Si mismo modelo → plan sigue activo, no se toca
-    }
-
     const result = await uphService.asignarBulk(
       lineaSeleccionada.nombre, hoy, turnoId, modeloSeleccionado?.id || null, items,
       cantidadPlan,
@@ -407,137 +390,14 @@ export default function AsignacionLideraScreen({ navigation }) {
               tintColor="#2196F3" />
           }
         >
-          {/* ── Modal Cambiar Modelo / Modelo Interno ───── */}
-          <Modal visible={modalModelo} transparent animationType="slide"
-            onRequestClose={() => { setModalModelo(false); setBusquedaModalModelo(''); }}>
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={s.modalOverlay}>
-              <View style={[s.modalCard, { maxHeight: '85%' }]}>
-                <View style={s.modalHeader}>
-                  <Text style={s.modalTitulo}>Cambiar Modelo / Modelo Interno</Text>
-                  <TouchableOpacity onPress={() => { setModalModelo(false); setBusquedaModalModelo(''); }}>
-                    <Text style={s.modalCerrar}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Plan activo / modelo actual */}
-                {planActivo ? (
-                  <View style={{ backgroundColor: '#0A2010', borderRadius: 8, padding: 10, marginBottom: 10,
-                                 borderLeftWidth: 3, borderLeftColor: '#00877a' }}>
-                    <Text style={{ color: '#546E7A', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 4 }}>
-                      Plan activo — cambia solo si cambias modelo
-                    </Text>
-                    <Text style={{ color: '#00c8b8', fontSize: 14, fontWeight: '700' }}>
-                      {planActivo.modelo_nombre}
-                    </Text>
-                    {planActivo.modelo_interno && (
-                      <Text style={{ color: '#37474F', fontSize: 11, marginBottom: 4 }}>{planActivo.modelo_interno}</Text>
-                    )}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                      <Text style={{ color: '#00c8b8', fontSize: 13, fontWeight: '700' }}>
-                        {(planActivo.piezas_actual || 0).toLocaleString()}
-                      </Text>
-                      <Text style={{ color: '#546E7A', fontSize: 12 }}>
-                        / {planActivo.plan_total.toLocaleString()} pzs
-                      </Text>
-                      <Text style={{ color: planActivo.piezas_actual >= planActivo.plan_total ? '#00c8b8' : '#ff8c00',
-                                     fontSize: 12, fontWeight: '600' }}>
-                        ({Math.round((planActivo.piezas_actual || 0) / planActivo.plan_total * 100)}%)
-                      </Text>
-                    </View>
-                    {/* Barra de progreso */}
-                    <View style={{ height: 4, backgroundColor: '#0a2e2a', borderRadius: 2, marginTop: 6 }}>
-                      <View style={{ height: 4, borderRadius: 2, backgroundColor: '#00c8b8',
-                                     width: `${Math.min(Math.round((planActivo.piezas_actual || 0) / planActivo.plan_total * 100), 100)}%` }} />
-                    </View>
-                  </View>
-                ) : modeloSeleccionado ? (
-                  <View style={{ backgroundColor: '#0A1F2E', borderRadius: 8, padding: 10, marginBottom: 10,
-                                 borderLeftWidth: 3, borderLeftColor: '#1565C0' }}>
-                    <Text style={{ color: '#546E7A', fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 2 }}>
-                      Modelo actual
-                    </Text>
-                    <Text style={{ color: '#42A5F5', fontSize: 14, fontWeight: '700' }}>
-                      {modeloSeleccionado.nombre}
-                    </Text>
-                    {modeloSeleccionado.modelo_interno && (
-                      <Text style={{ color: '#37474F', fontSize: 11 }}>{modeloSeleccionado.modelo_interno}</Text>
-                    )}
-                  </View>
-                ) : null}
-
-                {/* Buscador */}
-                <TextInput
-                  style={s.searchInput}
-                  placeholder="Buscar modelo..."
-                  placeholderTextColor="#37474F"
-                  value={busquedaModalModelo}
-                  onChangeText={setBusquedaModalModelo}
-                />
-
-                {/* Lista modelos */}
-                <FlatList
-                  data={modelos.filter(m =>
-                    !busquedaModalModelo ||
-                    m.nombre.toLowerCase().includes(busquedaModalModelo.toLowerCase()) ||
-                    (m.modelo_interno || '').toLowerCase().includes(busquedaModalModelo.toLowerCase())
-                  )}
-                  keyExtractor={item => String(item.id)}
-                  style={{ maxHeight: 240 }}
-                  ListEmptyComponent={<Text style={s.emptyText}>Sin resultados</Text>}
-                  ItemSeparatorComponent={() => <View style={s.itemSep} />}
-                  renderItem={({ item }) => {
-                    const activo = modeloSeleccionado?.id === item.id;
-                    return (
-                      <TouchableOpacity
-                        style={[s.opCard, activo && { backgroundColor: '#0D2137', borderColor: '#1565C0' }]}
-                        onPress={() => { setModeloSeleccionado(item); setBusquedaModalModelo(''); }}
-                      >
-                        <View style={{ flex: 1 }}>
-                          <Text style={[s.opNombre, activo && { color: '#42A5F5' }]}>{item.nombre}</Text>
-                          {item.modelo_interno && <Text style={s.opNum}>{item.modelo_interno}</Text>}
-                        </View>
-                        <Text style={{ color: '#546E7A', fontSize: 11 }}>{getUphLinea(item) ?? '—'} pzs/hr</Text>
-                        {activo && <Text style={{ color: '#42A5F5', marginLeft: 8, fontSize: 16 }}>✓</Text>}
-                      </TouchableOpacity>
-                    );
-                  }}
-                />
-
-                {/* Cantidad modelo interno */}
-                <View style={{ paddingTop: 14, borderTopWidth: 1, borderTopColor: '#1a2a3a', marginTop: 6 }}>
-                  <Text style={[s.secLabel, { marginBottom: 8 }]}>CANTIDAD DEL MODELO INTERNO</Text>
-                  <TextInput
-                    style={[s.searchInput, { fontSize: 20, fontWeight: 'bold', color: '#fff', textAlign: 'center' }]}
-                    placeholder="Ej. 2272"
-                    placeholderTextColor="#37474F"
-                    keyboardType="numeric"
-                    value={planInterno}
-                    onChangeText={v => setPlanInterno(v.replace(/[^0-9]/g, ''))}
-                  />
-                  <Text style={{ color: '#37474F', fontSize: 11, textAlign: 'center', marginTop: 4 }}>
-                    Esta cantidad se mostrará como meta en la barra de Modelo del dashboard
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={[s.guardarBtn, { marginTop: 14 }]}
-                  onPress={() => { setModalModelo(false); setBusquedaModalModelo(''); }}
-                >
-                  <Text style={s.guardarBtnText}>✓ Confirmar</Text>
-                </TouchableOpacity>
-              </View>
-            </KeyboardAvoidingView>
-          </Modal>
-
           {/* ── Modelo ──────────────────────────────────── */}
           <Text style={s.secLabel}>MODELO</Text>
           {loadingModelos ? (
             <ActivityIndicator size="small" color="#2196F3" style={{ marginBottom: 12 }} />
           ) : (
             <>
-              {/* Card modelo activo + botón cambiar */}
-              <TouchableOpacity style={[s.modeloItem, s.modeloItemActivo, { marginBottom: 10 }]}
-                onPress={() => setModalModelo(true)}>
+              {/* Card modelo — solo lectura (plan asignado por planner) */}
+              <View style={[s.modeloItem, s.modeloItemActivo, { marginBottom: 10 }]}>
                 <View style={{ flex: 1 }}>
                   {modeloSeleccionado ? (
                     <>
@@ -547,19 +407,19 @@ export default function AsignacionLideraScreen({ navigation }) {
                       )}
                     </>
                   ) : (
-                    <Text style={[s.modeloItemNombre, { color: '#37474F' }]}>Sin modelo seleccionado</Text>
+                    <Text style={[s.modeloItemNombre, { color: '#37474F' }]}>Sin modelo asignado</Text>
                   )}
                 </View>
                 {planInterno ? (
                   <View style={{ alignItems: 'flex-end', marginRight: 8 }}>
                     <Text style={{ color: '#66BB6A', fontSize: 12, fontWeight: 'bold' }}>{parseInt(planInterno).toLocaleString()} pzs</Text>
-                    <Text style={{ color: '#37474F', fontSize: 10 }}>meta interna</Text>
+                    <Text style={{ color: '#37474F', fontSize: 10 }}>meta del día</Text>
                   </View>
                 ) : null}
-                <View style={{ backgroundColor: '#1565C0', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 }}>
-                  <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>Cambiar Modelo / Modelo Interno</Text>
+                <View style={{ backgroundColor: '#1B3A1B', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1, borderColor: '#2E7D32' }}>
+                  <Text style={{ color: '#66BB6A', fontSize: 11, fontWeight: 'bold' }}>Plan asignado</Text>
                 </View>
-              </TouchableOpacity>
+              </View>
 
               {modeloSeleccionado && (
                 <View style={s.uphCard}>

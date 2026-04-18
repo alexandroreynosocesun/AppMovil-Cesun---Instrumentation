@@ -111,6 +111,21 @@ class PlanLinea(UphBase):
     modelo = relationship("ModeloUPH")
 
 
+class PlanDiaLinea(UphBase):
+    """Todos los modelos planificados para una línea en un día (importados desde AMI plan)."""
+    __tablename__ = "plan_dia_linea"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    linea_id    = Column(Integer, ForeignKey("lineas.id"), nullable=False)
+    modelo_id   = Column(Integer, ForeignKey("modelos_uph.id"), nullable=False)
+    fecha       = Column(String, nullable=False)   # "2026-04-18"
+    plan_piezas = Column(Integer, nullable=True)
+    orden       = Column(Integer, default=0)       # posición en el día
+
+    linea  = relationship("Linea")
+    modelo = relationship("ModeloUPH")
+
+
 class EventoUPH(UphBase):
     __tablename__ = "eventos_uph"
 

@@ -129,6 +129,9 @@ export default function LiderDashboardScreen() {
   const [resumenLinea, setResumenLinea] = useState(null);
   const [operadoresHoy, setOperadoresHoy] = useState([]);
   const [asignacionHoy, setAsignacionHoy] = useState({ operadores: [], modelo_nombre: null });
+  const [planActivo, setPlanActivo] = useState(null);
+  const [planDia, setPlanDia] = useState([]);
+  const [proximosExpanded, setProximosExpanded] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [loadingOps, setLoadingOps] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -170,15 +173,19 @@ export default function LiderDashboardScreen() {
   }, []);
 
   const cargar = useCallback(async () => {
-    const [rResumen, rAsig] = await Promise.all([
+    const [rResumen, rAsig, rPlan, rDia] = await Promise.all([
       uphService.getResumen(),
       lineaLocal ? uphService.getAsignacionHoy(lineaLocal) : Promise.resolve({ success: false }),
+      lineaLocal ? uphService.getPlanLinea(lineaLocal)     : Promise.resolve({ success: false }),
+      lineaLocal ? uphService.getPlanDia(lineaLocal)       : Promise.resolve({ success: false }),
     ]);
     if (rResumen.success && lineaLocal) {
       const lineas = rResumen.data?.lineas || [];
       setResumenLinea(lineas.find(l => l.linea === lineaLocal) || null);
     }
     if (rAsig.success) setAsignacionHoy(rAsig.data);
+    if (rPlan.success) setPlanActivo(rPlan.data.plan || null);
+    if (rDia.success)  setPlanDia(rDia.data.modelos || []);
     setLoading(false);
     setRefreshing(false);
     cargarOperadores(lineaLocal);
@@ -288,48 +295,106 @@ export default function LiderDashboardScreen() {
               <Text style={s.secLabel}>MI LÍNEA HOY — {lineaLocal}</Text>
               {loading ? (
                 <ActivityIndicator color="#2196F3" style={{ marginVertical: 20 }} />
-              ) : resumenLinea ? (
-                <View style={[s.lineaCard, semaforo && { borderColor: semaforo.border, backgroundColor: semaforo.bg }]}>
-                  <View style={s.lineaCardTop}>
-                    <View style={[s.dot, semaforo && { backgroundColor: semaforo.dot }]} />
-                    <Text style={s.modeloNombre}>{resumenLinea.modelo || asignacionHoy.modelo_nombre || 'Sin modelo asignado'}</Text>
-                  </View>
-                  <View style={s.metricasRow}>
-                    <View style={s.metrica}>
-                      <Text style={s.metricaLabel}>UPH actual</Text>
-                      <Text style={[s.metricaValor, semaforo && { color: semaforo.text }]}>
-                        {resumenLinea.uph_real}
-                      </Text>
-                      <Text style={s.metricaUnidad}>pzs/hr</Text>
-                    </View>
-                    <View style={s.metricaSep} />
-                    <View style={s.metrica}>
-                      <Text style={s.metricaLabel}>Meta</Text>
-                      <Text style={s.metricaValor}>{resumenLinea.uph_meta}</Text>
-                      <Text style={s.metricaUnidad}>pzs/hr</Text>
-                    </View>
-                    <View style={s.metricaSep} />
-                    <View style={s.metrica}>
-                      <Text style={s.metricaLabel}>Eficiencia</Text>
-                      <Text style={[s.metricaValor, semaforo && { color: semaforo.text }]}>
-                        {pct != null ? `${pct}%` : '—'}
-                      </Text>
-                      <Text style={s.metricaUnidad}>del objetivo</Text>
-                    </View>
-                    <View style={s.metricaSep} />
-                    <View style={s.metrica}>
-                      <Text style={s.metricaLabel}>Estaciones</Text>
-                      <Text style={s.metricaValor}>{resumenLinea.total_estaciones}</Text>
-                      <Text style={s.metricaUnidad}>asignadas</Text>
-                    </View>
-                  </View>
-                </View>
               ) : (
-                <View style={s.emptyCard}>
-                  <Text style={s.emptyIcon}>📋</Text>
-                  <Text style={s.emptyText}>Sin asignación registrada hoy</Text>
-                  <Text style={s.emptyHint}>Ve a Asignación para configurar el turno</Text>
-                </View>
+                <>
+                  {/* ── Card modelo activo del plan ── */}
+                  {planActivo ? (
+                    <View style={s.planCard}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.planModeloNombre}>{planActivo.modelo_nombre}</Text>
+                        {planActivo.modelo_interno ? (
+                          <Text style={s.planModeloInterno}>{planActivo.modelo_interno}</Text>
+                        ) : null}
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        {planActivo.plan_total ? (
+                          <>
+                            <Text style={s.planPiezas}>{planActivo.plan_total.toLocaleString()}</Text>
+                            <Text style={s.planPiezasLabel}>pzs meta</Text>
+                          </>
+                        ) : null}
+                        <View style={s.planBadge}>
+                          <Text style={s.planBadgeText}>Plan asignado</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={[s.planCard, { borderColor: '#37474F' }]}>
+                      <Text style={{ color: '#37474F', fontSize: 13 }}>Sin modelo asignado por el planner</Text>
+                    </View>
+                  )}
+
+                  {/* ── Próximos cambios (desplegable) ── */}
+                  {planDia.length > 1 && (
+                    <TouchableOpacity
+                      style={s.proximosBtn}
+                      onPress={() => setProximosExpanded(v => !v)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={s.proximosBtnText}>
+                        Próximos cambios del día ({planDia.length - 1})
+                      </Text>
+                      <Text style={s.proximosArrow}>{proximosExpanded ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                  )}
+                  {proximosExpanded && planDia.filter(m => !m.es_activo).map((m, i) => (
+                    <View key={m.modelo_id} style={s.proximoRow}>
+                      <View style={s.proximoOrden}>
+                        <Text style={s.proximoOrdenText}>{m.orden + 1}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.proximoNombre}>{m.modelo_nombre}</Text>
+                        {m.modelo_interno ? (
+                          <Text style={s.proximoInterno}>{m.modelo_interno}</Text>
+                        ) : null}
+                      </View>
+                      {m.plan_piezas ? (
+                        <Text style={s.proximoPiezas}>{m.plan_piezas.toLocaleString()} pzs</Text>
+                      ) : null}
+                    </View>
+                  ))}
+
+                  {/* ── Métricas UPH ── */}
+                  {resumenLinea ? (
+                    <View style={[s.lineaCard, semaforo && { borderColor: semaforo.border, backgroundColor: semaforo.bg }]}>
+                      <View style={s.metricasRow}>
+                        <View style={s.metrica}>
+                          <Text style={s.metricaLabel}>UPH actual</Text>
+                          <Text style={[s.metricaValor, semaforo && { color: semaforo.text }]}>
+                            {resumenLinea.uph_real}
+                          </Text>
+                          <Text style={s.metricaUnidad}>pzs/hr</Text>
+                        </View>
+                        <View style={s.metricaSep} />
+                        <View style={s.metrica}>
+                          <Text style={s.metricaLabel}>Meta</Text>
+                          <Text style={s.metricaValor}>{resumenLinea.uph_meta}</Text>
+                          <Text style={s.metricaUnidad}>pzs/hr</Text>
+                        </View>
+                        <View style={s.metricaSep} />
+                        <View style={s.metrica}>
+                          <Text style={s.metricaLabel}>Eficiencia</Text>
+                          <Text style={[s.metricaValor, semaforo && { color: semaforo.text }]}>
+                            {pct != null ? `${pct}%` : '—'}
+                          </Text>
+                          <Text style={s.metricaUnidad}>del objetivo</Text>
+                        </View>
+                        <View style={s.metricaSep} />
+                        <View style={s.metrica}>
+                          <Text style={s.metricaLabel}>Estaciones</Text>
+                          <Text style={s.metricaValor}>{resumenLinea.total_estaciones}</Text>
+                          <Text style={s.metricaUnidad}>asignadas</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : (
+                    <View style={s.emptyCard}>
+                      <Text style={s.emptyIcon}>📋</Text>
+                      <Text style={s.emptyText}>Sin asignación registrada hoy</Text>
+                      <Text style={s.emptyHint}>Ve a Asignación para configurar el turno</Text>
+                    </View>
+                  )}
+                </>
               )}
             </>
           )}
@@ -456,6 +521,47 @@ const s = StyleSheet.create({
   chipActivo:  { backgroundColor: '#1565C0', borderColor: '#2196F3' },
   chipText:    { color: '#757575', fontSize: 14, fontWeight: 'bold' },
   chipTextActivo: { color: '#FFFFFF' },
+
+  // Plan del día
+  planCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#071A0A', borderRadius: 12,
+    borderWidth: 1.5, borderColor: '#2E7D32',
+    padding: 14, marginBottom: 8,
+  },
+  planModeloNombre:  { color: '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  planModeloInterno: { color: '#37474F', fontSize: 11, marginTop: 2 },
+  planPiezas:        { color: '#66BB6A', fontSize: 18, fontWeight: 'bold' },
+  planPiezasLabel:   { color: '#37474F', fontSize: 10 },
+  planBadge: {
+    backgroundColor: '#1B5E20', borderRadius: 6, borderWidth: 1, borderColor: '#4CAF50',
+    paddingHorizontal: 8, paddingVertical: 3, marginTop: 4,
+  },
+  planBadgeText: { color: '#A5D6A7', fontSize: 10, fontWeight: 'bold' },
+
+  // Próximos cambios
+  proximosBtn: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#0D1B2A', borderRadius: 10,
+    borderWidth: 1, borderColor: '#1A3A5F',
+    paddingHorizontal: 14, paddingVertical: 10, marginBottom: 4,
+  },
+  proximosBtnText: { color: '#42A5F5', fontSize: 12, fontWeight: '700' },
+  proximosArrow:   { color: '#42A5F5', fontSize: 11 },
+  proximoRow: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: '#090F18', borderRadius: 10,
+    borderWidth: 1, borderColor: '#1A2A3A',
+    paddingHorizontal: 12, paddingVertical: 10, marginBottom: 4, gap: 10,
+  },
+  proximoOrden: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: '#1A2A3A', justifyContent: 'center', alignItems: 'center',
+  },
+  proximoOrdenText: { color: '#546E7A', fontSize: 11, fontWeight: 'bold' },
+  proximoNombre:    { color: '#CFD8E3', fontSize: 13, fontWeight: '600' },
+  proximoInterno:   { color: '#37474F', fontSize: 10 },
+  proximoPiezas:    { color: '#42A5F5', fontSize: 12, fontWeight: 'bold' },
 
   lineaCard:    { borderRadius: 14, padding: 16, borderWidth: 1.5, marginBottom: 16 },
   lineaCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },

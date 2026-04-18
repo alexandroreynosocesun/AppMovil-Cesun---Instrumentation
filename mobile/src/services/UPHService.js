@@ -193,6 +193,15 @@ class UPHService {
     }
   }
 
+  async getPlanDia(linea) {
+    try {
+      const response = await apiClient.get(`/uph/plan-dia/${encodeURIComponent(linea)}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
   async crearPlanLinea(linea, modelo_id, plan_total) {
     try {
       const response = await apiClient.post('/uph/plan-linea', { linea, modelo_id, plan_total });

@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 from ..database_uph import get_uph_db
-from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH, PlanLinea, DescansoLinea
+from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH, PlanLinea, DescansoLinea, PlanDiaLinea
 from ..auth import get_current_user
 from ..models.models import Tecnico
 
@@ -2438,3 +2438,159 @@ def guardar_csv_hora(linea: str = "L6", db: Session = Depends(get_uph_db)):
     estaciones = ESTACIONES_POR_LINEA.get(linea, [])
     _guardar_csv_hora(linea, estaciones, db)
     return {"ok": True}
+
+
+# ── Plan de producción (sin JWT — auth manejada en el HTML) ───────────────
+
+class FilaPlan(BaseModel):
+    linea:          Optional[str] = None
+    modelo:         Optional[str] = None
+    modelo_interno: Optional[str] = None
+    uph_meta:       Optional[str] = None
+    plan_piezas:    Optional[str] = None
+    turno:          Optional[str] = None
+    hora_inicio:    Optional[str] = None
+    hora_fin:       Optional[str] = None
+
+class PlanSubirIn(BaseModel):
+    filas: List[FilaPlan]
+
+
+@router.get("/plan/modelos")
+def plan_listar_modelos(db: Session = Depends(get_uph_db)):
+    """Lista modelos para la página de plan (sin JWT)."""
+    modelos = db.query(ModeloUPH).order_by(ModeloUPH.nombre).all()
+    return {"modelos": [_modelo_to_dict(m) for m in modelos]}
+
+
+@router.post("/plan/subir")
+def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
+    """Procesa filas del Excel: upsert modelos, PlanDiaLinea (todos los modelos del día)
+    y PlanLinea activo (primer modelo de cada línea si no hay uno activo)."""
+    guardados = 0
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    # orden por línea para asignar secuencia dentro del día
+    orden_por_linea: dict = {}
+
+    for fila in data.filas:
+        if not fila.modelo:
+            continue
+
+        # Parsear UPH meta
+        try:
+            uph = float(fila.uph_meta) if fila.uph_meta else None
+        except ValueError:
+            uph = None
+
+        # Determinar campo uph_hiN según línea
+        uph_field = None
+        if fila.linea:
+            num = ''.join(filter(str.isdigit, fila.linea))
+            if num:
+                uph_field = f"uph_hi{num}"
+
+        # Upsert modelo
+        modelo = db.query(ModeloUPH).filter(
+            ModeloUPH.nombre == fila.modelo.strip()
+        ).first()
+        if not modelo:
+            modelo = ModeloUPH(nombre=fila.modelo.strip())
+            db.add(modelo)
+
+        if fila.modelo_interno:
+            modelo.modelo_interno = fila.modelo_interno.strip()
+        if uph and uph_field and hasattr(modelo, uph_field):
+            setattr(modelo, uph_field, uph)
+            if not modelo.uph_total:
+                modelo.uph_total = uph
+
+        db.flush()
+
+        # ── PlanDiaLinea: todos los modelos planificados para el día ──
+        if fila.linea and modelo.id:
+            linea_obj = db.query(Linea).filter(
+                Linea.nombre.ilike(fila.linea.strip())
+            ).first()
+            if linea_obj:
+                try:
+                    piezas = int(float(fila.plan_piezas)) if fila.plan_piezas else None
+                except (ValueError, TypeError):
+                    piezas = None
+                linea_key = linea_obj.id
+                orden = orden_por_linea.get(linea_key, 0)
+                orden_por_linea[linea_key] = orden + 1
+
+                # Upsert por linea+modelo+fecha
+                entrada = db.query(PlanDiaLinea).filter(
+                    PlanDiaLinea.linea_id  == linea_obj.id,
+                    PlanDiaLinea.modelo_id == modelo.id,
+                    PlanDiaLinea.fecha     == hoy,
+                ).first()
+                if entrada:
+                    entrada.plan_piezas = piezas
+                    entrada.orden = orden
+                else:
+                    db.add(PlanDiaLinea(
+                        linea_id=linea_obj.id,
+                        modelo_id=modelo.id,
+                        fecha=hoy,
+                        plan_piezas=piezas,
+                        orden=orden,
+                    ))
+
+                # ── PlanLinea activo: primer modelo de cada línea ──
+                # Se actualiza siempre que el planner suba un nuevo Excel
+                if orden == 0 and piezas:
+                    plan_activo = db.query(PlanLinea).filter(
+                        PlanLinea.linea_id == linea_obj.id,
+                        PlanLinea.activo   == True,
+                    ).first()
+                    if plan_activo:
+                        plan_activo.modelo_id  = modelo.id
+                        plan_activo.plan_total = piezas
+                    else:
+                        db.add(PlanLinea(
+                            linea_id=linea_obj.id,
+                            modelo_id=modelo.id,
+                            plan_total=piezas,
+                            activo=True,
+                        ))
+
+        guardados += 1
+
+    db.commit()
+    return {"guardados": guardados, "ok": True}
+
+
+@router.get("/plan-dia/{linea}")
+def get_plan_dia(linea: str, db: Session = Depends(get_uph_db)):
+    """Devuelve todos los modelos planificados para una línea hoy, en orden."""
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    l = db.query(Linea).filter(Linea.nombre == linea).first()
+    if not l:
+        raise HTTPException(status_code=404, detail="Línea no encontrada")
+
+    plan_activo = db.query(PlanLinea).filter(
+        PlanLinea.linea_id == l.id,
+        PlanLinea.activo   == True,
+    ).first()
+    activo_modelo_id = plan_activo.modelo_id if plan_activo else None
+
+    entradas = db.query(PlanDiaLinea).filter(
+        PlanDiaLinea.linea_id == l.id,
+        PlanDiaLinea.fecha    == hoy,
+    ).order_by(PlanDiaLinea.orden).all()
+
+    return {
+        "modelos": [
+            {
+                "modelo_id":      e.modelo_id,
+                "modelo_nombre":  e.modelo.nombre if e.modelo else None,
+                "modelo_interno": e.modelo.modelo_interno if e.modelo else None,
+                "plan_piezas":    e.plan_piezas,
+                "orden":          e.orden,
+                "es_activo":      e.modelo_id == activo_modelo_id,
+            }
+            for e in entradas
+        ]
+    }
