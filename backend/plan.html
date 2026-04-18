@@ -446,6 +446,7 @@
       // Solo incluir si tiene cantidad planeada para hoy en el turno actual
       if (typeof cantidad !== 'number' || cantidad <= 0) continue;
 
+      console.log(`✅ MATCH f${i}: linea=${linea} qty=${cantidad} model=${internalModel} board=${boardModel}`);
       resultados[linea].push({
         internal_model: internalModel || '',
         board_model:    String(boardModel || ''),
