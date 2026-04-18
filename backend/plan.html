@@ -497,6 +497,7 @@
   }
 
   function mostrarCambiosAMI(resultados, modelosDB, turno, fechaOk) {
+    console.log('mostrarCambiosAMI:', Object.entries(resultados).map(([k,v])=>`${k}:${v.length}`).join(', '));
     document.getElementById('ami-section').style.display = 'block';
 
     const turnoLabels = { A:'Turno A — Día', B:'Turno B — Noche', C:'Turno C — Fin de semana' };
