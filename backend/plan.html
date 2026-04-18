@@ -413,26 +413,12 @@
     const turno    = detectarTurnoActual();
     const colCant  = turno === 'B' ? colNight : colDay;
 
-    // ── CONSOLE DEBUG ──────────────────────────────────────────
-    console.log('=== AMI DEBUG === turno:', turno, 'colDay:', colDay, 'filas:', data.length);
-    // Buscar TODAS las filas PLAN con col139 no-null
-    console.log('--- PLAN rows con cantidad hoy (col139) ---');
-    for (let i = 5; i < data.length; i++) {
-      const row = data[i]; if (!row) continue;
-      if (row[1] === 'PLAN' && row[colDay] != null && row[colDay] > 0) {
-        console.log(`  f${i}: col5="${row[5]}" col2="${row[2]}" col139="${row[colDay]}" col16="${row[16]}" col25="${row[25]}"`);
-      }
-    }
-    console.log('=================');
-    // ───────────────────────────────────────────────────────────
-
     const resultados = {'HI-1':[],'HI-2':[],'HI-3':[],'HI-4':[],'HI-5':[],'HI-6':[]};
 
     for (let i = 5; i < data.length; i++) {
       const row = data[i];
       if (!row) continue;
-      const pl = row[5];  // Columna F = índice 5 (Line)
-      const linea = mapearLinea(pl);
+      const linea = mapearLinea(row[5]);
       if (!linea || !resultados[linea]) continue;
 
       const internalModel = row[16];  // Q
@@ -443,10 +429,8 @@
       const cantidad      = colCant !== null ? row[colCant] : null;
 
       if (!internalModel && !boardModel) continue;
-      // Solo incluir si tiene cantidad planeada para hoy en el turno actual
       if (typeof cantidad !== 'number' || cantidad <= 0) continue;
 
-      console.log(`✅ MATCH f${i}: linea=${linea} qty=${cantidad} model=${internalModel} board=${boardModel}`);
       resultados[linea].push({
         internal_model: internalModel || '',
         board_model:    String(boardModel || ''),
@@ -456,32 +440,6 @@
         cantidad:       Math.round(cantidad),
       });
     }
-
-    // ── DEBUG temporal ─────────────────────────────────────────
-    // Celdas de filas 0-5 columnas 130-145 (zona EH-EK donde están las fechas)
-    const dbgCeldas = [];
-    for (let r = 0; r <= 5; r++) {
-      for (let c = 130; c <= 145; c++) {
-        const addr = XLSX.utils.encode_cell({r, c});
-        const cell = ws[addr];
-        if (cell && (cell.v != null || cell.w)) {
-          dbgCeldas.push(`[${addr}] v="${cell.v}" w="${cell.w}" t="${cell.t}"`);
-        }
-      }
-    }
-    // Valores col F filas 5-15
-    const dbgLineas = [];
-    for (let i = 5; i < Math.min(15, data.length); i++) {
-      const r = data[i]; if (!r) continue;
-      const v = r[5]; if (v != null) dbgLineas.push(`f${i}:"${v}"`);
-    }
-    document.getElementById('ami-info').innerHTML +=
-      `<div style="font-size:0.65rem;color:#546E7A;margin-top:8px;word-break:break-all;">
-        🔍 colDay=${colDay} | colCant=${colCant} | turno=${turno}<br>
-        <b>Celdas EH-EK filas 0-5:</b><br>${dbgCeldas.join('<br>') || '(vacías)'}<br>
-        <b>Col F (idx 5) filas 5-15:</b> ${dbgLineas.join(', ') || '(vacío)'}
-      </div>`;
-    // ───────────────────────────────────────────────────────────
 
     fetch('/api/uph/plan/modelos')
       .then(r => r.json())
@@ -497,7 +455,6 @@
   }
 
   function mostrarCambiosAMI(resultados, modelosDB, turno, fechaOk) {
-    console.log('mostrarCambiosAMI:', Object.entries(resultados).map(([k,v])=>`${k}:${v.length}`).join(', '));
     document.getElementById('ami-section').style.display = 'block';
 
     const turnoLabels = { A:'Turno A — Día', B:'Turno B — Noche', C:'Turno C — Fin de semana' };
@@ -560,6 +517,7 @@
       html += `</tbody></table></div>`;
     }
 
+    console.log('html length:', html.length, 'preview:', html.substring(0, 100));
     document.getElementById('ami-results').innerHTML = html || '<div class="no-data">No se encontraron filas para HI-1 a HI-6</div>';
     document.getElementById('ami-acciones').style.display = amiCambios.length ? 'flex' : 'none';
   }
