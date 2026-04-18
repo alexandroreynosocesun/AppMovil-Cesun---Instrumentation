@@ -404,7 +404,7 @@
     // Limitar rango para no leer columnas vacías (mejora rendimiento)
     const fullRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
     fullRange.e.c = Math.min(fullRange.e.c, 199); // máx columna EH~EK (índice ~140)
-    fullRange.e.r = Math.min(fullRange.e.r, 699); // máx 700 filas
+    fullRange.e.r = Math.min(fullRange.e.r, 1499); // máx 1500 filas
     ws['!ref'] = XLSX.utils.encode_range(fullRange);
 
     const colDay   = encontrarColumnaHoy(ws);  // busca en celdas directamente
@@ -414,26 +414,26 @@
     const colCant  = turno === 'B' ? colNight : colDay;
 
     // ── CONSOLE DEBUG ──────────────────────────────────────────
-    console.log('=== AMI DEBUG ===');
-    console.log('turno:', turno, '| colDay:', colDay, '| colCant:', colCant, '| filas:', data.length);
-    // Buscar primeras filas con "HI" en col5
-    let hiCount = 0;
-    for (let i = 5; i < data.length && hiCount < 10; i++) {
+    console.log('=== AMI DEBUG === turno:', turno, 'colDay:', colDay, 'filas:', data.length);
+    // Buscar en TODAS las columnas dónde aparece "HI"
+    let found = 0;
+    outer: for (let i = 5; i < data.length; i++) {
       const row = data[i]; if (!row) continue;
-      const v5 = row[5];
-      if (v5 && typeof v5 === 'string' && /HI/i.test(v5)) {
-        console.log(`  HI fila ${i}: col5="${v5}" col16="${row[16]}" col25="${row[25]}" col${colCant}="${row[colCant]}"`);
-        hiCount++;
+      for (let c = 0; c < 20; c++) {
+        const v = row[c];
+        if (v && typeof v === 'string' && /^HI[\s\-]?\d/i.test(v.trim())) {
+          console.log(`  "HI" en fila ${i} col ${c}: "${v}" | col139="${row[139]}" | col16="${row[16]}" | col25="${row[25]}"`);
+          if (++found >= 10) break outer;
+        }
       }
     }
-    if (hiCount === 0) {
-      console.log('⚠️ Ningún "HI" en col5. Primeros 20 valores col5:');
-      let n = 0;
-      for (let i = 5; i < data.length && n < 20; i++) {
-        const row = data[i]; if (!row || row[5] == null) continue;
-        console.log(`  f${i} col5="${row[5]}" col2="${row[2]}" col1="${row[1]}"`);
-        n++;
-      }
+    if (found === 0) console.log('⚠️ No se encontró ningún "HI X" en cols 0-19 de ninguna fila');
+    // Buscar filas donde col139 (EJ/Day18) no es null
+    let q = 0;
+    for (let i = 5; i < data.length && q < 5; i++) {
+      const row = data[i]; if (!row || row[139] == null) continue;
+      console.log(`  col139 no-null en fila ${i}: val="${row[139]}" col5="${row[5]}" col2="${row[2]}" col1="${row[1]}"`);
+      q++;
     }
     console.log('=================');
     // ───────────────────────────────────────────────────────────
