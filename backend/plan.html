@@ -360,15 +360,32 @@
   function encontrarColumnaHoy(data) {
     const hoy = new Date();
     const d = hoy.getDate(), m = hoy.getMonth(), y = hoy.getFullYear();
-    for (let r = 0; r <= 6; r++) {  // buscar en más filas por si acaso
+    const MESES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mesStr = MESES[m];
+
+    function esHoy(val) {
+      if (val instanceof Date) {
+        // cellDates:true → Date UTC midnight
+        return val.getUTCDate() === d && val.getUTCMonth() === m && val.getUTCFullYear() === y;
+      }
+      if (typeof val === 'number' && val > 40000 && val < 55000) {
+        // Serial numérico de Excel → convertir
+        const dt = new Date(Math.round((val - 25569) * 86400 * 1000));
+        return dt.getUTCDate() === d && dt.getUTCMonth() === m && dt.getUTCFullYear() === y;
+      }
+      if (typeof val === 'string') {
+        const v = val.trim();
+        // Formatos: "18-Apr", "18-Apr-2026", "Apr-18", "18/4", "4/18/2026"
+        return v.startsWith(`${d}-${mesStr}`) || v.startsWith(`${mesStr}-${d}`) ||
+               v.startsWith(`${d}/${m+1}`) || v.startsWith(`${m+1}/${d}/`);
+      }
+      return false;
+    }
+
+    for (let r = 0; r <= 6; r++) {
       if (!data[r]) continue;
       for (let c = 0; c < data[r].length; c++) {
-        const val = data[r][c];
-        if (!(val instanceof Date)) continue;
-        // Comparar UTC (SheetJS crea fechas como UTC midnight) con fecha local de hoy
-        if (val.getUTCDate() === d && val.getUTCMonth() === m && val.getUTCFullYear() === y) {
-          return c;
-        }
+        if (esHoy(data[r][c])) return c;
       }
     }
     return null;
@@ -385,7 +402,7 @@
 
     // Limitar rango para no leer columnas vacías (mejora rendimiento)
     const fullRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
-    fullRange.e.c = Math.min(fullRange.e.c, 159); // máx columna 160
+    fullRange.e.c = Math.min(fullRange.e.c, 199); // máx columna EH~EK (índice ~140)
     fullRange.e.r = Math.min(fullRange.e.r, 699); // máx 700 filas
     ws['!ref'] = XLSX.utils.encode_range(fullRange);
 
