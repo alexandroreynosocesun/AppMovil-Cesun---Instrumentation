@@ -426,6 +426,19 @@
       });
     }
 
+    // ── DEBUG temporal ─────────────────────────────────────────
+    const dbgLineas = [];
+    for (let i = 5; i < Math.min(20, data.length); i++) {
+      const r = data[i]; if (!r) continue;
+      const v = r[5]; if (v != null) dbgLineas.push(`fila${i}→"${v}"`);
+    }
+    document.getElementById('ami-info').innerHTML +=
+      `<div style="font-size:0.7rem;color:#546E7A;margin-top:6px;">
+        🔍 colDay=${colDay} | colCant=${colCant} | turno=${turno}<br>
+        Col F (índice 5) primeros valores: ${dbgLineas.join(', ') || '(vacío)'}
+      </div>`;
+    // ───────────────────────────────────────────────────────────
+
     fetch('/api/uph/plan/modelos')
       .then(r => r.json())
       .then(d => mostrarCambiosAMI(resultados, d.modelos || [], turno, colDay !== null))
