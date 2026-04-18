@@ -370,7 +370,14 @@
   }
 
   function procesarAMIPlan(wb) {
-    const ws = wb.Sheets['AMI PLAN'];
+    try {
+    // Buscar hoja AMI PLAN (tolerante a espacios/mayúsculas)
+    const sheetName = wb.SheetNames.find(n => n.trim().toUpperCase() === 'AMI PLAN');
+    if (!sheetName) {
+      alert('No se encontró la hoja "AMI PLAN" en el Excel.\nHojas encontradas: ' + wb.SheetNames.join(', '));
+      return;
+    }
+    const ws = wb.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
 
     const colDay   = encontrarColumnaHoy(data);
@@ -414,6 +421,13 @@
       .then(r => r.json())
       .then(d => mostrarCambiosAMI(resultados, d.modelos || [], turno, colDay !== null))
       .catch(()  => mostrarCambiosAMI(resultados, [], turno, colDay !== null));
+
+    } catch(err) {
+      document.getElementById('ami-section').style.display = 'block';
+      document.getElementById('ami-results').innerHTML =
+        `<div style="color:#ff5555;font-size:0.85rem;">❌ Error al procesar el Excel: ${err.message}</div>`;
+      console.error('procesarAMIPlan error:', err);
+    }
   }
 
   function mostrarCambiosAMI(resultados, modelosDB, turno, fechaOk) {
@@ -505,15 +519,26 @@
 
   // ── Excel upload (genérico) ───────────────────────────────────
   function procesarArchivo(file) {
+    // Mostrar loading inmediatamente
+    document.getElementById('ami-section').style.display = 'block';
+    document.getElementById('ami-info').innerHTML = '';
+    document.getElementById('ami-results').innerHTML =
+      '<div style="color:#00856e;font-size:0.85rem;">⏳ Procesando Excel, un momento…</div>';
+    document.getElementById('ami-acciones').style.display = 'none';
+
     const reader = new FileReader();
     reader.onload = e => {
+      // Diferir para que el DOM actualice el loading antes de bloquear
+      setTimeout(() => {
       const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
 
       // Detectar formato AMI
-      if (wb.SheetNames.includes('AMI PLAN')) {
+      if (wb.SheetNames.find(n => n.trim().toUpperCase() === 'AMI PLAN')) {
         procesarAMIPlan(wb);
         return;
       }
+
+      document.getElementById('ami-section').style.display = 'none';
 
       // Flujo genérico
       const ws = wb.Sheets[wb.SheetNames[0]];
@@ -526,6 +551,7 @@
       mostrarMapping();
       mostrarPreview(rawHeaders, rawRows);
       document.getElementById('acciones-excel').style.display = 'flex';
+      }, 50); // fin setTimeout
     };
     reader.readAsArrayBuffer(file);
   }
