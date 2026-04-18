@@ -413,6 +413,29 @@
     const turno    = detectarTurnoActual();
     const colCant  = turno === 'B' ? colNight : colDay;
 
+    // ── CONSOLE DEBUG ──────────────────────────────────────────
+    console.log('=== AMI DEBUG ===');
+    console.log('turno:', turno, '| colDay:', colDay, '| colCant:', colCant);
+    console.log('Total filas data:', data.length);
+    // Mostrar celdas en zona EH-EK (cols 130-145) filas 0-5
+    for (let r = 0; r <= 5; r++) {
+      for (let c = 130; c <= 145; c++) {
+        const addr = XLSX.utils.encode_cell({r, c});
+        const cell = ws[addr];
+        if (cell && (cell.v != null || cell.w)) {
+          console.log(`  celda ${addr}: v=${JSON.stringify(cell.v)} w=${JSON.stringify(cell.w)} t=${cell.t}`);
+        }
+      }
+    }
+    // Mostrar col F (idx 5) filas 5-12
+    console.log('Col F (Line) filas 5-12:');
+    for (let i = 5; i < Math.min(13, data.length); i++) {
+      const row = data[i];
+      if (row) console.log(`  fila ${i}: col5="${row[5]}" col16="${row[16]}" col25="${row[25]}" col${colCant}="${colCant!=null?row[colCant]:'N/A'}"`);
+    }
+    console.log('=================');
+    // ───────────────────────────────────────────────────────────
+
     const resultados = {'HI-1':[],'HI-2':[],'HI-3':[],'HI-4':[],'HI-5':[],'HI-6':[]};
 
     for (let i = 5; i < data.length; i++) {
