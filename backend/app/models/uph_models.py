@@ -96,14 +96,15 @@ class DescansoLinea(UphBase):
 
 
 class PlanLinea(UphBase):
-    """Plan de producción multi-turno por línea.
-    Persiste entre turnos; se cierra solo cuando el líder cambia de modelo."""
+    """Plan de producción diario por línea.
+    Un registro por línea por día; se reemplaza si el planner sube un Excel nuevo."""
     __tablename__ = "planes_linea"
 
     id         = Column(Integer, primary_key=True, index=True)
     linea_id   = Column(Integer, ForeignKey("lineas.id"), nullable=False)
     modelo_id  = Column(Integer, ForeignKey("modelos_uph.id"), nullable=False)
-    plan_total = Column(Integer, nullable=False)          # piezas totales comprometidas
+    plan_total = Column(Integer, nullable=False)
+    fecha      = Column(String, nullable=False, index=True)   # "2026-04-18"
     creado_en  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
     activo     = Column(Boolean, default=True)
 

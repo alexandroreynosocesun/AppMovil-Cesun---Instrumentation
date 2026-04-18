@@ -1483,15 +1483,18 @@ def crear_plan_linea(
     linea = db.query(Linea).filter(Linea.nombre == data.linea).first()
     if not linea:
         raise HTTPException(status_code=404, detail="Línea no encontrada")
-    # Cerrar planes anteriores
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    # Cerrar planes anteriores del mismo día
     db.query(PlanLinea).filter(
         PlanLinea.linea_id == linea.id,
+        PlanLinea.fecha    == hoy,
         PlanLinea.activo   == True,
     ).update({"activo": False})
     plan = PlanLinea(
         linea_id   = linea.id,
         modelo_id  = data.modelo_id,
         plan_total = data.plan_total,
+        fecha      = hoy,
         creado_en  = datetime.now(timezone.utc),
     )
     db.add(plan)
@@ -1506,12 +1509,14 @@ def get_plan_linea(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    """Devuelve el plan activo de una línea (None si no hay)."""
+    """Devuelve el plan activo de una línea para hoy (None si no hay)."""
+    hoy = datetime.now().strftime("%Y-%m-%d")
     l = db.query(Linea).filter(Linea.nombre == linea).first()
     if not l:
         raise HTTPException(status_code=404, detail="Línea no encontrada")
     plan = db.query(PlanLinea).filter(
         PlanLinea.linea_id == l.id,
+        PlanLinea.fecha    == hoy,
         PlanLinea.activo   == True,
     ).first()
     if not plan:
@@ -1541,13 +1546,15 @@ def cerrar_plan_linea(
     db: Session = Depends(get_uph_db),
     current_user: Tecnico = Depends(get_current_user),
 ):
-    """Cierra manualmente el plan activo de una línea."""
+    """Cierra manualmente el plan activo de una línea (solo el de hoy)."""
+    hoy = datetime.now().strftime("%Y-%m-%d")
     _ensure_admin_or_jefa(current_user)
     l = db.query(Linea).filter(Linea.nombre == linea).first()
     if not l:
         raise HTTPException(status_code=404, detail="Línea no encontrada")
     db.query(PlanLinea).filter(
         PlanLinea.linea_id == l.id,
+        PlanLinea.fecha    == hoy,
         PlanLinea.activo   == True,
     ).update({"activo": False})
     db.commit()
@@ -1766,9 +1773,11 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
             EventoUPH.timestamp <= ahora,
         ).scalar() or 0
 
-        # Plan activo multi-turno para esta línea
+        # Plan activo de hoy para esta línea
+        hoy_str = ahora.strftime("%Y-%m-%d")
         plan_activo = db.query(PlanLinea).filter(
             PlanLinea.linea_id == linea.id,
+            PlanLinea.fecha    == hoy_str,
             PlanLinea.activo   == True,
         ).first()
 
@@ -2543,19 +2552,19 @@ def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                 if orden == 0 and piezas:
                     plan_activo = db.query(PlanLinea).filter(
                         PlanLinea.linea_id == linea_obj.id,
+                        PlanLinea.fecha    == hoy,
                         PlanLinea.activo   == True,
                     ).first()
                     if plan_activo:
-                        # Si cambió el modelo → actualizar todo
-                        # Si es el mismo modelo → solo actualizar plan_total (puede haber corregido cantidades)
                         plan_activo.modelo_id  = modelo.id
                         plan_activo.plan_total = piezas
-                        # No tocar creado_en para que el conteo de piezas acumuladas siga corriendo
+                        # No tocar creado_en — el conteo de piezas sigue desde el inicio del día
                     else:
                         db.add(PlanLinea(
                             linea_id=linea_obj.id,
                             modelo_id=modelo.id,
                             plan_total=piezas,
+                            fecha=hoy,
                             activo=True,
                         ))
 
@@ -2575,6 +2584,7 @@ def get_plan_dia(linea: str, db: Session = Depends(get_uph_db)):
 
     plan_activo = db.query(PlanLinea).filter(
         PlanLinea.linea_id == l.id,
+        PlanLinea.fecha    == hoy,
         PlanLinea.activo   == True,
     ).first()
     activo_modelo_id = plan_activo.modelo_id if plan_activo else None
