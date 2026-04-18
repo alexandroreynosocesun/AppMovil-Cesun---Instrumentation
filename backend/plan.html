@@ -425,9 +425,12 @@
       if (!internalModel && !boardModel) continue;
       if (cantTotal <= 0) continue;
 
-      // Si el mismo modelo ya existe en esta línea → acumular cantidades
-      const clave = (internalModel || boardModel || '').trim();
-      const existe = resultados[linea].find(r => r.internal_model === clave || r.board_model === String(boardModel || '').trim());
+      // Deduplicar solo por internalModel (clave confiable — boardModel puede estar vacío)
+      const claveInterna = (internalModel || '').trim();
+      const existe = claveInterna
+        ? resultados[linea].find(r => r.internal_model === claveInterna)
+        : null;
+
       if (existe) {
         existe.cantidad       += Math.round(cantTotal);
         existe.cantidad_dia   += Math.round(cantDia);
@@ -438,7 +441,7 @@
           board_model:    String(boardModel || ''),
           size:           size || '',
           market:         market || '',
-          uph:            typeof uph === 'number' ? Math.round(uph * 10) / 10 : null,
+          uph:            typeof uph === 'number' ? Math.round(uph) : null,  // entero
           cantidad:       Math.round(cantTotal),
           cantidad_dia:   Math.round(cantDia),
           cantidad_noche: Math.round(cantNoche),
