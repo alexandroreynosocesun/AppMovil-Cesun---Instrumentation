@@ -2556,9 +2556,22 @@ def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                         PlanLinea.activo   == True,
                     ).first()
                     if plan_activo:
-                        plan_activo.modelo_id  = modelo.id
-                        plan_activo.plan_total = piezas
-                        # No tocar creado_en — el conteo de piezas sigue desde el inicio del día
+                        if plan_activo.modelo_id == modelo.id:
+                            # Mismo modelo → solo actualizar cantidad (corrección del planner)
+                            # Mantener creado_en para que el conteo de piezas no se resetee
+                            plan_activo.plan_total = piezas
+                        else:
+                            # Modelo diferente → cerrar plan anterior y abrir uno nuevo
+                            # El conteo de piezas arranca desde ahora para el nuevo modelo
+                            plan_activo.activo = False
+                            db.add(PlanLinea(
+                                linea_id=linea_obj.id,
+                                modelo_id=modelo.id,
+                                plan_total=piezas,
+                                fecha=hoy,
+                                activo=True,
+                                creado_en=datetime.now(timezone.utc),
+                            ))
                     else:
                         db.add(PlanLinea(
                             linea_id=linea_obj.id,
