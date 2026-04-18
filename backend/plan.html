@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Admin · Plan de Producción</title>
+  <script src="/xlsx.min.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100vh; background: #040f0e; color: #e0f7f5;
+      font-family: 'Segoe UI', system-ui, sans-serif; }
+
+    /* ── LOGIN ── */
+    #login-overlay {
+      position: fixed; inset: 0; background: #040f0e;
+      display: flex; align-items: center; justify-content: center; z-index: 100;
+    }
+    #login-overlay.hidden { display: none; }
+    .login-box {
+      background: #061412; border: 1px solid #0a2e2a; border-radius: 18px;
+      padding: 40px 48px; display: flex; flex-direction: column; gap: 20px;
+      align-items: center; min-width: 320px;
+      box-shadow: 0 0 60px #00c8b811;
+    }
+    .login-logo { font-size: 2.2rem; font-weight: 900; color: #00c8b8;
+                  letter-spacing: 3px; text-shadow: 0 0 28px #00c8b888; }
+    .login-title { font-size: 0.85rem; color: #00856e; letter-spacing: 2px;
+                   text-transform: uppercase; }
+    .login-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+    .login-field label { font-size: 0.7rem; color: #00856e; letter-spacing: 1px; text-transform: uppercase; }
+    .login-field input {
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 8px;
+      color: #e0f7f5; padding: 10px 14px; font-size: 0.9rem; outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-field input:focus { border-color: #00c8b8; }
+    .login-field input.err { border-color: #ff4040; animation: shake 0.3s; }
+    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+    .login-err { font-size: 0.72rem; color: #ff5555; min-height: 16px; }
+    .btn-primary {
+      background: linear-gradient(90deg, #005a50, #00877a);
+      color: #fff; border: none; border-radius: 10px;
+      padding: 11px 32px; font-size: 0.88rem; font-weight: 700;
+      cursor: pointer; letter-spacing: 1px; width: 100%;
+      transition: opacity 0.2s; box-shadow: 0 0 20px #00877a44;
+    }
+    .btn-primary:hover { opacity: 0.85; }
+
+    /* ── HEADER ── */
+    header {
+      height: 54px; display: flex; align-items: center; padding: 0 24px;
+      background: #061412; border-bottom: 1px solid #0a2e2a;
+      justify-content: space-between;
+    }
+    .h-logo { font-size: 1.5rem; font-weight: 900; color: #00c8b8;
+               letter-spacing: 3px; text-shadow: 0 0 20px #00c8b866; }
+    .h-title { font-size: 0.8rem; color: #00856e; letter-spacing: 2px; text-transform: uppercase; }
+    .btn-logout { background: none; border: 1px solid #0a2e2a; border-radius: 8px;
+                  color: #00856e; padding: 6px 16px; cursor: pointer; font-size: 0.75rem;
+                  letter-spacing: 1px; transition: all 0.2s; }
+    .btn-logout:hover { border-color: #ff4040; color: #ff5555; }
+
+    /* ── MAIN ── */
+    main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 28px; }
+
+    /* ── SECCIÓN ── */
+    .section {
+      background: #061412; border: 1px solid #0a2e2a; border-radius: 14px;
+      padding: 24px 28px; display: flex; flex-direction: column; gap: 16px;
+    }
+    .section-title {
+      font-size: 0.72rem; font-weight: 700; color: #00c8b8;
+      letter-spacing: 2px; text-transform: uppercase;
+      border-bottom: 1px solid #0a2e2a; padding-bottom: 12px;
+    }
+
+    /* ── UPLOAD ZONE ── */
+    .upload-zone {
+      border: 2px dashed #0a2e2a; border-radius: 12px;
+      padding: 40px; text-align: center; cursor: pointer;
+      transition: all 0.3s; position: relative;
+    }
+    .upload-zone:hover, .upload-zone.drag { border-color: #00c8b8; background: #00c8b808; }
+    .upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+    .upload-icon { font-size: 2.5rem; margin-bottom: 10px; }
+    .upload-text { font-size: 0.88rem; color: #00856e; }
+    .upload-sub  { font-size: 0.7rem; color: #0a3530; margin-top: 4px; }
+
+    /* ── PREVIEW TABLE ── */
+    .preview-wrap { overflow-x: auto; max-height: 420px; overflow-y: auto;
+                    border-radius: 10px; border: 1px solid #0a2e2a; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    thead th {
+      background: #071a17; color: #00c8b8; font-weight: 700; letter-spacing: 1px;
+      text-transform: uppercase; padding: 10px 14px; position: sticky; top: 0; z-index: 1;
+      border-bottom: 1px solid #0a2e2a; white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid #071a17; transition: background 0.15s; }
+    tbody tr:hover { background: #071a17; }
+    tbody td { padding: 9px 14px; color: #b2dfdb; white-space: nowrap; }
+    tbody td.num { font-variant-numeric: tabular-nums; color: #00c8b8; font-weight: 700; }
+    .badge-turno { padding: 2px 10px; border-radius: 8px; font-size: 0.68rem; font-weight: 700;
+                   background: #071a17; border: 1px solid #0a2e2a; color: #00856e; }
+
+    /* ── COLUMN MAPPING ── */
+    .mapping-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+    .map-field { display: flex; flex-direction: column; gap: 5px; }
+    .map-field label { font-size: 0.68rem; color: #00856e; letter-spacing: 1px; text-transform: uppercase; }
+    .map-field select {
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 8px;
+      color: #e0f7f5; padding: 8px 10px; font-size: 0.82rem; outline: none;
+      transition: border-color 0.2s; cursor: pointer;
+    }
+    .map-field select:focus { border-color: #00c8b8; }
+
+    /* ── ACCIONES ── */
+    .acciones { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+    .btn-secondary {
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 10px;
+      color: #00856e; padding: 10px 24px; font-size: 0.82rem; font-weight: 700;
+      cursor: pointer; letter-spacing: 1px; transition: all 0.2s;
+    }
+    .btn-secondary:hover { border-color: #00c8b8; color: #00c8b8; }
+    .btn-danger {
+      background: #1a0505; border: 1px solid #ff404044; border-radius: 10px;
+      color: #ff5555; padding: 10px 24px; font-size: 0.82rem; font-weight: 700;
+      cursor: pointer; letter-spacing: 1px; transition: all 0.2s;
+    }
+    .btn-danger:hover { border-color: #ff4040; }
+    .status-msg { font-size: 0.8rem; color: #00856e; }
+    .status-msg.ok  { color: #00c8b8; }
+    .status-msg.err { color: #ff5555; }
+
+    /* ── MODELOS ACTUALES ── */
+    .modelos-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+    .modelo-card {
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 10px;
+      padding: 14px 16px; display: flex; flex-direction: column; gap: 6px;
+    }
+    .modelo-nombre { font-size: 0.95rem; font-weight: 700; color: #00c8b8; }
+    .modelo-interno { font-size: 0.68rem; color: #00856e; letter-spacing: 1px; }
+    .modelo-uph-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+    .uph-chip { font-size: 0.65rem; background: #061412; border: 1px solid #0a2e2a;
+                border-radius: 6px; padding: 2px 8px; color: #7ecdc4; }
+    .no-data { color: #0a3530; font-size: 0.85rem; text-align: center; padding: 20px; }
+
+    /* ── AMI PLAN ── */
+    .ami-turno-badge { display:inline-block; padding:3px 12px; border-radius:8px; font-size:0.72rem;
+                       font-weight:700; letter-spacing:1px; margin-left:8px; }
+    .ami-turno-a { background:#1565C022; color:#42A5F5; border:1px solid #1565C0; }
+    .ami-turno-b { background:#4A148C22; color:#CE93D8; border:1px solid #4A148C; }
+    .ami-turno-c { background:#1B5E2022; color:#A5D6A7; border:1px solid #1B5E20; }
+    .ami-linea-header { font-size:0.68rem; font-weight:700; color:#00c8b8; letter-spacing:2px;
+                        text-transform:uppercase; margin:16px 0 8px; padding:6px 12px;
+                        background:#071a17; border-left:3px solid #00c8b8; border-radius:0 6px 6px 0; }
+    .ami-wrap { overflow-x:auto; border-radius:10px; border:1px solid #0a2e2a; margin-bottom:4px; }
+    .badge-nuevo  { color:#42A5F5; font-size:0.72rem; }
+    .badge-cambio { color:#FFA726; font-size:0.72rem; }
+    .badge-ok     { color:#66BB6A; font-size:0.72rem; }
+    .ami-fecha-warn { font-size:0.75rem; color:#FFA726; margin-top:4px; }
+  </style>
+</head>
+<body>
+
+<!-- ── LOGIN ── -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">Hisense</div>
+    <div class="login-title">Admin · Plan de Producción</div>
+    <div class="login-field">
+      <label>Usuario</label>
+      <input type="text" id="login-user" placeholder="usuario" autocomplete="username"/>
+    </div>
+    <div class="login-field">
+      <label>Contraseña</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <div class="login-err" id="login-err"></div>
+    <button class="btn-primary" onclick="doLogin()">Entrar</button>
+  </div>
+</div>
+
+<!-- ── HEADER ── -->
+<header>
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="h-logo">Hisense</div>
+    <div class="h-title">Admin · Plan de Producción</div>
+  </div>
+  <button class="btn-logout" onclick="doLogout()">Cerrar sesión</button>
+</header>
+
+<main>
+
+  <!-- ── SUBIR EXCEL ── -->
+  <div class="section">
+    <div class="section-title">Subir Plan de Producción (Excel)</div>
+
+    <div class="upload-zone" id="drop-zone">
+      <input type="file" id="file-input" accept=".xlsx,.xls,.csv"/>
+      <div class="upload-icon">📊</div>
+      <div class="upload-text">Arrastra tu archivo Excel aquí o haz clic para seleccionar</div>
+      <div class="upload-sub">.xlsx · .xls · .csv</div>
+    </div>
+
+    <!-- Mapeo de columnas (aparece tras cargar) -->
+    <div id="mapping-section" style="display:none;">
+      <div style="font-size:0.72rem;color:#00856e;letter-spacing:1px;text-transform:uppercase;margin-bottom:12px;">
+        Mapear columnas del Excel
+      </div>
+      <div class="mapping-grid" id="mapping-grid"></div>
+    </div>
+
+    <!-- Preview -->
+    <div id="preview-section" style="display:none;">
+      <div style="font-size:0.72rem;color:#00856e;letter-spacing:1px;text-transform:uppercase;margin-bottom:10px;">
+        Vista previa — <span id="preview-count">0</span> filas detectadas
+      </div>
+      <div class="preview-wrap">
+        <table id="preview-table">
+          <thead id="preview-head"></thead>
+          <tbody id="preview-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="acciones" id="acciones-excel" style="display:none;">
+      <button class="btn-primary" style="width:auto;padding:10px 32px;" onclick="guardarPlan()">
+        Guardar plan en BD
+      </button>
+      <button class="btn-secondary" onclick="limpiarExcel()">Cancelar</button>
+      <span class="status-msg" id="save-status"></span>
+    </div>
+  </div>
+
+  <!-- ── CAMBIOS AMI PLAN ── -->
+  <div class="section" id="ami-section" style="display:none;">
+    <div class="section-title">📋 Cambios detectados — Plan AMI por Línea</div>
+    <div id="ami-info"></div>
+    <div id="ami-results"></div>
+    <div class="acciones" id="ami-acciones" style="display:none;margin-top:8px;">
+      <button class="btn-primary" style="width:auto;padding:10px 32px;" onclick="guardarCambiosAMI()">
+        Guardar cambios en BD
+      </button>
+      <button class="btn-secondary" onclick="limpiarExcel()">Cancelar</button>
+      <span class="status-msg" id="ami-status"></span>
+    </div>
+  </div>
+
+  <!-- ── MODELOS EN BD ── -->
+  <div class="section">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="section-title" style="border:none;padding:0;">Modelos registrados en BD</div>
+      <button class="btn-secondary" onclick="cargarModelos()">↻ Actualizar</button>
+    </div>
+    <div class="modelos-grid" id="modelos-grid">
+      <div class="no-data">Cargando…</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+  // ── Auth ──────────────────────────────────────────────────────
+  const USERS = { 'admin': 'hisense2026', 'plan': 'plan2026' };
+
+  function doLogin() {
+    const user = document.getElementById('login-user').value.trim();
+    const pass = document.getElementById('login-pass').value;
+    if (USERS[user] && USERS[user] === pass) {
+      sessionStorage.setItem('admin-ok', '1');
+      document.getElementById('login-overlay').classList.add('hidden');
+      cargarModelos();
+    } else {
+      const inp = document.getElementById('login-pass');
+      inp.classList.add('err');
+      document.getElementById('login-err').textContent = 'Usuario o contraseña incorrectos';
+      inp.value = '';
+      setTimeout(() => inp.classList.remove('err'), 400);
+    }
+  }
+  function doLogout() {
+    sessionStorage.removeItem('admin-ok');
+    location.reload();
+  }
+  document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+  document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-pass').focus(); });
+
+  if (sessionStorage.getItem('admin-ok')) {
+    document.getElementById('login-overlay').classList.add('hidden');
+    cargarModelos();
+  }
+
+  // ── Modelos en BD ─────────────────────────────────────────────
+  async function cargarModelos() {
+    const grid = document.getElementById('modelos-grid');
+    try {
+      const res  = await fetch('/api/uph/plan/modelos');
+      const data = await res.json();
+      const modelos = data.modelos || data || [];
+      if (!modelos.length) { grid.innerHTML = '<div class="no-data">Sin modelos registrados aún</div>'; return; }
+      grid.innerHTML = modelos.map(m => `
+        <div class="modelo-card">
+          <div class="modelo-nombre">${m.nombre||'—'}</div>
+          <div class="modelo-interno">${m.modelo_interno||''}</div>
+          <div class="modelo-uph-row">
+            ${[1,2,3,4,5,6].map(n => m[`uph_hi${n}`] ? `<span class="uph-chip">HI-${n}: ${m[`uph_hi${n}`]}</span>` : '').join('')}
+            ${m.uph_total ? `<span class="uph-chip" style="border-color:#00c8b844;color:#00c8b8;">Total: ${m.uph_total}</span>` : ''}
+          </div>
+        </div>`).join('');
+    } catch(e) {
+      grid.innerHTML = `<div class="no-data" style="color:#ff5555;">Error al cargar modelos: ${e.message}</div>`;
+    }
+  }
+
+  // ── Excel upload ──────────────────────────────────────────────
+  let rawRows = [], rawHeaders = [];
+
+  const CAMPOS = [
+    { key: 'linea',          label: 'Línea (HI-1…)',    required: true  },
+    { key: 'modelo',         label: 'Modelo comercial', required: true  },
+    { key: 'modelo_interno', label: 'Modelo interno',   required: false },
+    { key: 'uph_meta',       label: 'UPH meta',         required: false },
+    { key: 'plan_piezas',    label: 'Plan piezas',      required: false },
+    { key: 'turno',          label: 'Turno (A/B/C)',    required: false },
+    { key: 'hora_inicio',    label: 'Hora inicio',      required: false },
+    { key: 'hora_fin',       label: 'Hora fin',         required: false },
+  ];
+
+  const dropZone = document.getElementById('drop-zone');
+  const fileInput = document.getElementById('file-input');
+
+  dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('drag'); });
+  dropZone.addEventListener('dragleave', () => dropZone.classList.remove('drag'));
+  dropZone.addEventListener('drop', e => {
+    e.preventDefault(); dropZone.classList.remove('drag');
+    const file = e.dataTransfer.files[0];
+    if (file) procesarArchivo(file);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files[0]) procesarArchivo(fileInput.files[0]); });
+
+  // ── AMI PLAN ─────────────────────────────────────────────────
+  const LINEA_MAP = {'L1':'HI-1','L2':'HI-2','L3':'HI-3','L4':'HI-4','L5':'HI-5','L6':'HI-6'};
+  let amiCambios = [];
+
+  function detectarTurnoActual() {
+    const now = new Date();
+    const day = now.getDay();
+    const mins = now.getHours() * 60 + now.getMinutes();
+    const manana = 6 * 60 + 30, tarde = 18 * 60 + 30;
+    if (day >= 1 && day <= 4) return mins >= manana && mins < tarde ? 'A' : 'B';
+    if (day === 5) return mins < manana ? 'B' : 'C';
+    return 'C'; // Sab, Dom
+  }
+
+  function encontrarColumnaHoy(data) {
+    const hoy = new Date();
+    for (let r = 1; r <= 4; r++) {
+      if (!data[r]) continue;
+      for (let c = 0; c < data[r].length; c++) {
+        const val = data[r][c];
+        if (val instanceof Date &&
+            val.getDate() === hoy.getDate() &&
+            val.getMonth() === hoy.getMonth() &&
+            val.getFullYear() === hoy.getFullYear()) {
+          return c;
+        }
+      }
+    }
+    return null;
+  }
+
+  function procesarAMIPlan(wb) {
+    const ws = wb.Sheets['AMI PLAN'];
+    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+
+    const colDay   = encontrarColumnaHoy(data);
+    const colNight = colDay !== null ? colDay + 1 : null;
+    const turno    = detectarTurnoActual();
+    const colCant  = turno === 'B' ? colNight : colDay;
+
+    const resultados = {'HI-1':[],'HI-2':[],'HI-3':[],'HI-4':[],'HI-5':[],'HI-6':[]};
+
+    for (let i = 5; i < data.length; i++) {
+      const row = data[i];
+      if (!row) continue;
+      const pl = row[2];
+      if (!pl || typeof pl !== 'string') continue;
+
+      const internalModel = row[16];  // Q
+      const boardModel    = row[25];  // Z
+      const size          = row[18];  // S
+      const market        = row[19];  // T
+      const uph           = row[35];  // AJ
+      const cantidad      = colCant !== null ? row[colCant] : null;
+
+      if (!internalModel && !boardModel) continue;
+
+      const lines = pl.split(',').map(l => l.trim());
+      for (const l of lines) {
+        const linea = LINEA_MAP[l];
+        if (!linea) continue;
+        resultados[linea].push({
+          internal_model: internalModel || '',
+          board_model:    String(boardModel || ''),
+          size:           size || '',
+          market:         market || '',
+          uph:            typeof uph === 'number' ? Math.round(uph * 10) / 10 : null,
+          cantidad:       typeof cantidad === 'number' ? Math.round(cantidad) : null,
+        });
+      }
+    }
+
+    fetch('/api/uph/plan/modelos')
+      .then(r => r.json())
+      .then(d => mostrarCambiosAMI(resultados, d.modelos || [], turno, colDay !== null))
+      .catch(()  => mostrarCambiosAMI(resultados, [], turno, colDay !== null));
+  }
+
+  function mostrarCambiosAMI(resultados, modelosDB, turno, fechaOk) {
+    document.getElementById('ami-section').style.display = 'block';
+
+    const turnoLabels = { A:'Turno A — Día', B:'Turno B — Noche', C:'Turno C — Fin de semana' };
+    const turnoClass  = { A:'ami-turno-a', B:'ami-turno-b', C:'ami-turno-c' };
+
+    document.getElementById('ami-info').innerHTML = `
+      <div style="font-size:0.8rem;color:#00856e;">
+        Turno detectado: <span class="ami-turno-badge ${turnoClass[turno]}">${turnoLabels[turno]}</span>
+        ${!fechaOk ? '<div class="ami-fecha-warn">⚠ Fecha de hoy no encontrada en el Excel — cantidades no disponibles</div>' : ''}
+      </div>`;
+
+    // Lookup DB por modelo_interno
+    const dbMap = {};
+    for (const m of modelosDB) if (m.modelo_interno) dbMap[m.modelo_interno] = m;
+
+    amiCambios = [];
+    let html = '';
+
+    for (const linea of ['HI-1','HI-2','HI-3','HI-4','HI-5','HI-6']) {
+      const mods = resultados[linea];
+      if (!mods.length) continue;
+      const num = linea.split('-')[1];
+      const uphField = `uph_hi${num}`;
+
+      html += `<div class="ami-linea-header">${linea}</div>
+      <div class="ami-wrap"><table><thead><tr>
+        <th>Internal Model</th><th>Board/Model</th><th>Size</th><th>Market</th>
+        <th>UPH</th><th>Cantidad</th><th>Estado</th>
+      </tr></thead><tbody>`;
+
+      for (const m of mods) {
+        const db    = dbMap[m.internal_model];
+        const uphDB = db ? db[uphField] : null;
+        let badge;
+        if (!db)
+          badge = '<span class="badge-nuevo">🔵 Nuevo</span>';
+        else if (uphDB && m.uph !== null && Math.abs(uphDB - m.uph) > 0.5)
+          badge = `<span class="badge-cambio">🟡 UPH: ${uphDB} → ${m.uph}</span>`;
+        else
+          badge = '<span class="badge-ok">🟢 Sin cambio</span>';
+
+        html += `<tr>
+          <td>${m.internal_model || '—'}</td>
+          <td class="num">${m.board_model || '—'}</td>
+          <td class="num">${m.size ? m.size + '"' : '—'}</td>
+          <td>${m.market || '—'}</td>
+          <td class="num">${m.uph ?? '—'}</td>
+          <td class="num">${m.cantidad ?? '—'}</td>
+          <td>${badge}</td>
+        </tr>`;
+
+        amiCambios.push({
+          linea,
+          modelo:         m.board_model || m.internal_model,
+          modelo_interno: m.internal_model,
+          uph_meta:       m.uph !== null ? String(m.uph) : '',
+          plan_piezas:    m.cantidad !== null ? String(m.cantidad) : '',
+        });
+      }
+      html += `</tbody></table></div>`;
+    }
+
+    document.getElementById('ami-results').innerHTML = html || '<div class="no-data">No se encontraron filas para HI-1 a HI-6</div>';
+    document.getElementById('ami-acciones').style.display = amiCambios.length ? 'flex' : 'none';
+  }
+
+  async function guardarCambiosAMI() {
+    const status = document.getElementById('ami-status');
+    status.className = 'status-msg'; status.textContent = 'Guardando…';
+    try {
+      const res = await fetch('/api/uph/plan/subir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filas: amiCambios }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const d = await res.json();
+      status.className = 'status-msg ok';
+      status.textContent = `✓ ${d.guardados || amiCambios.length} registros guardados`;
+      cargarModelos();
+    } catch(e) {
+      status.className = 'status-msg err';
+      status.textContent = `Error: ${e.message}`;
+    }
+  }
+
+  // ── Excel upload (genérico) ───────────────────────────────────
+  function procesarArchivo(file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
+
+      // Detectar formato AMI
+      if (wb.SheetNames.includes('AMI PLAN')) {
+        procesarAMIPlan(wb);
+        return;
+      }
+
+      // Flujo genérico
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+      if (data.length < 2) { alert('El archivo parece estar vacío'); return; }
+
+      rawHeaders = data[0].map(h => String(h).trim());
+      rawRows    = data.slice(1).filter(r => r.some(c => c !== ''));
+
+      mostrarMapping();
+      mostrarPreview(rawHeaders, rawRows);
+      document.getElementById('acciones-excel').style.display = 'flex';
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  function mostrarMapping() {
+    const grid = document.getElementById('mapping-grid');
+    grid.innerHTML = CAMPOS.map(campo => `
+      <div class="map-field">
+        <label>${campo.label}${campo.required ? ' *' : ''}</label>
+        <select id="map-${campo.key}">
+          <option value="">— no mapear —</option>
+          ${rawHeaders.map((h,i) => {
+            const auto = h.toLowerCase().includes(campo.key.split('_')[0]) ||
+                         h.toLowerCase().includes(campo.label.split(' ')[0].toLowerCase());
+            return `<option value="${i}" ${auto?'selected':''}>${h}</option>`;
+          }).join('')}
+        </select>
+      </div>`).join('');
+    document.getElementById('mapping-section').style.display = 'block';
+    document.getElementById('mapping-section').addEventListener('change', () => mostrarPreview(rawHeaders, rawRows));
+  }
+
+  function getMapping() {
+    const map = {};
+    CAMPOS.forEach(c => {
+      const sel = document.getElementById(`map-${c.key}`);
+      if (sel && sel.value !== '') map[c.key] = parseInt(sel.value);
+    });
+    return map;
+  }
+
+  function mostrarPreview(headers, rows) {
+    const map = getMapping();
+    const keys = Object.keys(map);
+    if (!keys.length) return;
+
+    const head = document.getElementById('preview-head');
+    const body = document.getElementById('preview-body');
+    head.innerHTML = `<tr>${keys.map(k => `<th>${CAMPOS.find(c=>c.key===k)?.label||k}</th>`).join('')}</tr>`;
+    body.innerHTML = rows.slice(0, 50).map(row => `
+      <tr>${keys.map(k => {
+        const val = row[map[k]] ?? '';
+        const isNum = ['uph_meta','plan_piezas'].includes(k);
+        return `<td class="${isNum?'num':''}">${val}</td>`;
+      }).join('')}</tr>`).join('');
+
+    document.getElementById('preview-count').textContent = rows.length;
+    document.getElementById('preview-section').style.display = 'block';
+  }
+
+  function limpiarExcel() {
+    rawRows = []; rawHeaders = []; amiCambios = [];
+    fileInput.value = '';
+    document.getElementById('ami-section').style.display = 'none';
+    document.getElementById('ami-results').innerHTML = '';
+    document.getElementById('ami-info').innerHTML = '';
+    document.getElementById('ami-acciones').style.display = 'none';
+    document.getElementById('ami-status').textContent = '';
+    document.getElementById('mapping-section').style.display = 'none';
+    document.getElementById('preview-section').style.display = 'none';
+    document.getElementById('acciones-excel').style.display = 'none';
+    document.getElementById('save-status').textContent = '';
+  }
+
+  async function guardarPlan() {
+    const map  = getMapping();
+    const status = document.getElementById('save-status');
+    if (!map.linea || !map.modelo) {
+      status.className = 'status-msg err';
+      status.textContent = 'Debes mapear al menos Línea y Modelo';
+      return;
+    }
+    const filas = rawRows.map(row => {
+      const obj = {};
+      Object.entries(map).forEach(([k, i]) => { obj[k] = String(row[i]??'').trim(); });
+      return obj;
+    }).filter(f => f.linea && f.modelo);
+
+    status.className = 'status-msg';
+    status.textContent = 'Guardando…';
+
+    try {
+      const res = await fetch('/api/uph/plan/subir', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filas })
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      status.className = 'status-msg ok';
+      status.textContent = `✓ ${data.guardados || filas.length} filas guardadas`;
+      cargarModelos();
+    } catch(e) {
+      status.className = 'status-msg err';
+      status.textContent = `Error: ${e.message}`;
+    }
+  }
+
+  // ── Drag-and-drop global ──────────────────────────────────────
+  document.addEventListener('dragover', e => e.preventDefault());
+  document.addEventListener('drop',     e => { e.preventDefault();
+    const file = e.dataTransfer.files[0];
+    if (file && (file.name.endsWith('.xlsx')||file.name.endsWith('.xls')||file.name.endsWith('.csv')))
+      procesarArchivo(file);
+  });
+</script>
+</body>
+</html>
