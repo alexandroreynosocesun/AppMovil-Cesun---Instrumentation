@@ -339,7 +339,12 @@
   fileInput.addEventListener('change', () => { if (fileInput.files[0]) procesarArchivo(fileInput.files[0]); });
 
   // ── AMI PLAN ─────────────────────────────────────────────────
-  const LINEA_MAP = {'L1':'HI-1','L2':'HI-2','L3':'HI-3','L4':'HI-4','L5':'HI-5','L6':'HI-6'};
+  // Mapeo flexible: acepta "L1", "HI 1", "HI-1", "HI1" → "HI-1"
+  function mapearLinea(val) {
+    if (!val) return null;
+    const m = String(val).trim().match(/(?:HI[\s\-]?|L)(\d)/i);
+    return m ? `HI-${m[1]}` : null;
+  }
   let amiCambios = [];
 
   function detectarTurnoActual() {
@@ -354,14 +359,14 @@
 
   function encontrarColumnaHoy(data) {
     const hoy = new Date();
-    for (let r = 1; r <= 4; r++) {
+    const d = hoy.getDate(), m = hoy.getMonth(), y = hoy.getFullYear();
+    for (let r = 0; r <= 6; r++) {  // buscar en más filas por si acaso
       if (!data[r]) continue;
       for (let c = 0; c < data[r].length; c++) {
         const val = data[r][c];
-        if (val instanceof Date &&
-            val.getDate() === hoy.getDate() &&
-            val.getMonth() === hoy.getMonth() &&
-            val.getFullYear() === hoy.getFullYear()) {
+        if (!(val instanceof Date)) continue;
+        // Comparar UTC (SheetJS crea fechas como UTC midnight) con fecha local de hoy
+        if (val.getUTCDate() === d && val.getUTCMonth() === m && val.getUTCFullYear() === y) {
           return c;
         }
       }
@@ -396,8 +401,9 @@
     for (let i = 5; i < data.length; i++) {
       const row = data[i];
       if (!row) continue;
-      const pl = row[2];
-      if (!pl || typeof pl !== 'string') continue;
+      const pl = row[5];  // Columna F = índice 5 (Line)
+      const linea = mapearLinea(pl);
+      if (!linea || !resultados[linea]) continue;
 
       const internalModel = row[16];  // Q
       const boardModel    = row[25];  // Z
@@ -407,20 +413,17 @@
       const cantidad      = colCant !== null ? row[colCant] : null;
 
       if (!internalModel && !boardModel) continue;
+      // Solo incluir si tiene cantidad planeada para hoy en el turno actual
+      if (typeof cantidad !== 'number' || cantidad <= 0) continue;
 
-      const lines = pl.split(',').map(l => l.trim());
-      for (const l of lines) {
-        const linea = LINEA_MAP[l];
-        if (!linea) continue;
-        resultados[linea].push({
-          internal_model: internalModel || '',
-          board_model:    String(boardModel || ''),
-          size:           size || '',
-          market:         market || '',
-          uph:            typeof uph === 'number' ? Math.round(uph * 10) / 10 : null,
-          cantidad:       typeof cantidad === 'number' ? Math.round(cantidad) : null,
-        });
-      }
+      resultados[linea].push({
+        internal_model: internalModel || '',
+        board_model:    String(boardModel || ''),
+        size:           size || '',
+        market:         market || '',
+        uph:            typeof uph === 'number' ? Math.round(uph * 10) / 10 : null,
+        cantidad:       Math.round(cantidad),
+      });
     }
 
     fetch('/api/uph/plan/modelos')
