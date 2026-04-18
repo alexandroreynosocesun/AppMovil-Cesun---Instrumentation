@@ -441,7 +441,7 @@
           board_model:    String(boardModel || ''),
           size:           size || '',
           market:         market || '',
-          uph:            typeof uph === 'number' ? uph : null,
+          uph:            typeof uph === 'number' ? Math.round(uph) : null,
           cantidad:       Math.round(cantTotal),
           cantidad_dia:   Math.round(cantDia),
           cantidad_noche: Math.round(cantNoche),
