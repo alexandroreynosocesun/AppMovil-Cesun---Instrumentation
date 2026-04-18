@@ -397,11 +397,10 @@
     fullRange.e.r = Math.min(fullRange.e.r, 2999); // máx 3000 filas
     ws['!ref'] = XLSX.utils.encode_range(fullRange);
 
-    const colDay   = encontrarColumnaHoy(ws);  // busca en celdas directamente
+    const colDay   = encontrarColumnaHoy(ws);
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
     const colNight = colDay !== null ? colDay + 1 : null;
     const turno    = detectarTurnoActual();
-    const colCant  = turno === 'B' ? colNight : colDay;
 
     const resultados = {'HI-1':[],'HI-2':[],'HI-3':[],'HI-4':[],'HI-5':[],'HI-6':[]};
 
@@ -416,10 +415,14 @@
       const size          = row[18];  // S
       const market        = row[19];  // T
       const uph           = row[35];  // AJ
-      const cantidad      = colCant !== null ? row[colCant] : null;
+
+      // Leer Day y Night por separado — el total del modelo es la suma de ambos
+      const cantDia   = colDay   !== null && typeof row[colDay]   === 'number' ? row[colDay]   : 0;
+      const cantNoche = colNight !== null && typeof row[colNight] === 'number' ? row[colNight] : 0;
+      const cantTotal = cantDia + cantNoche;
 
       if (!internalModel && !boardModel) continue;
-      if (typeof cantidad !== 'number' || cantidad <= 0) continue;
+      if (cantTotal <= 0) continue;
 
       resultados[linea].push({
         internal_model: internalModel || '',
@@ -427,7 +430,9 @@
         size:           size || '',
         market:         market || '',
         uph:            typeof uph === 'number' ? Math.round(uph * 10) / 10 : null,
-        cantidad:       Math.round(cantidad),
+        cantidad:       Math.round(cantTotal),   // total día completo
+        cantidad_dia:   Math.round(cantDia),
+        cantidad_noche: Math.round(cantNoche),
       });
     }
 
@@ -472,7 +477,7 @@
       html += `<div class="ami-linea-header">${linea}</div>
       <div class="ami-wrap"><table><thead><tr>
         <th>Internal Model</th><th>Board/Model</th><th>Size</th><th>Market</th>
-        <th>UPH</th><th>Cantidad</th><th>Estado</th>
+        <th>UPH</th><th>Day</th><th>Night</th><th>Total</th><th>Estado</th>
       </tr></thead><tbody>`;
 
       for (const m of mods) {
@@ -486,22 +491,29 @@
         else
           badge = '<span class="badge-ok">🟢 Sin cambio</span>';
 
+        const diaStr   = m.cantidad_dia   > 0 ? m.cantidad_dia   : '—';
+        const nocheStr = m.cantidad_noche > 0 ? m.cantidad_noche : '—';
+
         html += `<tr>
           <td>${m.internal_model || '—'}</td>
           <td class="num">${m.board_model || '—'}</td>
           <td class="num">${m.size ? m.size + '"' : '—'}</td>
           <td>${m.market || '—'}</td>
           <td class="num">${m.uph ?? '—'}</td>
-          <td class="num">${m.cantidad ?? '—'}</td>
+          <td class="num" style="color:#42A5F5">${diaStr}</td>
+          <td class="num" style="color:#CE93D8">${nocheStr}</td>
+          <td class="num" style="color:#00c8b8;font-weight:700">${m.cantidad}</td>
           <td>${badge}</td>
         </tr>`;
 
         amiCambios.push({
           linea,
-          modelo:         m.board_model || m.internal_model,
-          modelo_interno: m.internal_model,
-          uph_meta:       m.uph !== null ? String(m.uph) : '',
-          plan_piezas:    m.cantidad !== null ? String(m.cantidad) : '',
+          modelo:          m.board_model || m.internal_model,
+          modelo_interno:  m.internal_model,
+          uph_meta:        m.uph !== null ? String(m.uph) : '',
+          plan_piezas:     String(m.cantidad),       // total día + noche
+          plan_piezas_dia: String(m.cantidad_dia),
+          plan_piezas_noche: String(m.cantidad_noche),
         });
       }
       html += `</tbody></table></div>`;

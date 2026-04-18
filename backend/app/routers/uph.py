@@ -2539,15 +2539,18 @@ def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                     ))
 
                 # ── PlanLinea activo: primer modelo de cada línea ──
-                # Se actualiza siempre que el planner suba un nuevo Excel
+                # plan_piezas ya viene como total (día + noche) desde el parser
                 if orden == 0 and piezas:
                     plan_activo = db.query(PlanLinea).filter(
                         PlanLinea.linea_id == linea_obj.id,
                         PlanLinea.activo   == True,
                     ).first()
                     if plan_activo:
+                        # Si cambió el modelo → actualizar todo
+                        # Si es el mismo modelo → solo actualizar plan_total (puede haber corregido cantidades)
                         plan_activo.modelo_id  = modelo.id
                         plan_activo.plan_total = piezas
+                        # No tocar creado_en para que el conteo de piezas acumuladas siga corriendo
                     else:
                         db.add(PlanLinea(
                             linea_id=linea_obj.id,
