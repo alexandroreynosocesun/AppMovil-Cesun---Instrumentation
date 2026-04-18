@@ -357,35 +357,36 @@
     return 'C'; // Sab, Dom
   }
 
-  function encontrarColumnaHoy(data) {
+  // Busca directamente en celdas del worksheet (más confiable que sheet_to_json)
+  function encontrarColumnaHoy(ws) {
     const hoy = new Date();
     const d = hoy.getDate(), m = hoy.getMonth(), y = hoy.getFullYear();
     const MESES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     const mesStr = MESES[m];
 
-    function esHoy(val) {
-      if (val instanceof Date) {
-        // cellDates:true → Date UTC midnight
-        return val.getUTCDate() === d && val.getUTCMonth() === m && val.getUTCFullYear() === y;
+    function esHoy(cell) {
+      if (!cell) return false;
+      // cell.w = texto formateado que muestra Excel (ej. "18-Apr")
+      if (cell.w) {
+        const w = cell.w.trim().toUpperCase();
+        const patron = `${d}-${mesStr}`.toUpperCase();
+        if (w.startsWith(patron) || w.startsWith(`${mesStr}-${d}`.toUpperCase())) return true;
       }
-      if (typeof val === 'number' && val > 40000 && val < 55000) {
-        // Serial numérico de Excel → convertir
-        const dt = new Date(Math.round((val - 25569) * 86400 * 1000));
+      // cell.v = valor real (Date con cellDates:true, o serial numérico)
+      if (cell.v instanceof Date) {
+        return cell.v.getUTCDate() === d && cell.v.getUTCMonth() === m && cell.v.getUTCFullYear() === y;
+      }
+      if (typeof cell.v === 'number' && cell.v > 40000 && cell.v < 55000) {
+        const dt = new Date(Math.round((cell.v - 25569) * 86400 * 1000));
         return dt.getUTCDate() === d && dt.getUTCMonth() === m && dt.getUTCFullYear() === y;
-      }
-      if (typeof val === 'string') {
-        const v = val.trim();
-        // Formatos: "18-Apr", "18-Apr-2026", "Apr-18", "18/4", "4/18/2026"
-        return v.startsWith(`${d}-${mesStr}`) || v.startsWith(`${mesStr}-${d}`) ||
-               v.startsWith(`${d}/${m+1}`) || v.startsWith(`${m+1}/${d}/`);
       }
       return false;
     }
 
-    for (let r = 0; r <= 6; r++) {
-      if (!data[r]) continue;
-      for (let c = 0; c < data[r].length; c++) {
-        if (esHoy(data[r][c])) return c;
+    for (let r = 0; r <= 8; r++) {
+      for (let c = 0; c < 200; c++) {
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (esHoy(ws[addr])) return c;
       }
     }
     return null;
@@ -406,9 +407,8 @@
     fullRange.e.r = Math.min(fullRange.e.r, 699); // máx 700 filas
     ws['!ref'] = XLSX.utils.encode_range(fullRange);
 
+    const colDay   = encontrarColumnaHoy(ws);  // busca en celdas directamente
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-
-    const colDay   = encontrarColumnaHoy(data);
     const colNight = colDay !== null ? colDay + 1 : null;
     const turno    = detectarTurnoActual();
     const colCant  = turno === 'B' ? colNight : colDay;
