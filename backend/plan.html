@@ -404,7 +404,7 @@
     // Limitar rango para no leer columnas vacías (mejora rendimiento)
     const fullRange = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
     fullRange.e.c = Math.min(fullRange.e.c, 199); // máx columna EH~EK (índice ~140)
-    fullRange.e.r = Math.min(fullRange.e.r, 1499); // máx 1500 filas
+    fullRange.e.r = Math.min(fullRange.e.r, 2999); // máx 3000 filas
     ws['!ref'] = XLSX.utils.encode_range(fullRange);
 
     const colDay   = encontrarColumnaHoy(ws);  // busca en celdas directamente
@@ -415,15 +415,13 @@
 
     // ── CONSOLE DEBUG ──────────────────────────────────────────
     console.log('=== AMI DEBUG === turno:', turno, 'colDay:', colDay, 'filas:', data.length);
-    // Ver filas 1395-1415 (zona HI): qué columnas tienen valores
-    console.log('--- filas 1395-1415 (zona HI) ---');
-    for (let i = 1395; i <= 1415 && i < data.length; i++) {
+    // Buscar TODAS las filas PLAN con col139 no-null
+    console.log('--- PLAN rows con cantidad hoy (col139) ---');
+    for (let i = 5; i < data.length; i++) {
       const row = data[i]; if (!row) continue;
-      // Mostrar cols 0-8, 16, 25, 35, y cols 130-145
-      const v = (...cs) => cs.map(c => `c${c}="${row[c]}"`).join(' ');
-      const dateZone = [];
-      for (let c = 130; c <= 145; c++) if (row[c] != null) dateZone.push(`c${c}="${row[c]}"`);
-      console.log(`  f${i}: ${v(0,1,2,3,5,16,25,35)} | fechas:[${dateZone.join(',')}]`);
+      if (row[1] === 'PLAN' && row[colDay] != null && row[colDay] > 0) {
+        console.log(`  f${i}: col5="${row[5]}" col2="${row[2]}" col139="${row[colDay]}" col16="${row[16]}" col25="${row[25]}"`);
+      }
     }
     console.log('=================');
     // ───────────────────────────────────────────────────────────
