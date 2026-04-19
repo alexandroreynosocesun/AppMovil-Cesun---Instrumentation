@@ -989,7 +989,7 @@ def top_operadores(
         inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
     inicio_dia  = datetime.strptime(hoy, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
-    query = db.query(Asignacion).filter(Asignacion.fecha == hoy)
+    query = db.query(Asignacion).filter(Asignacion.fecha == hoy, Asignacion.hora_fin == None)
     if linea:
         linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
         if linea_obj:
@@ -1422,7 +1422,7 @@ def scoreboard_hoy(
     ahora = datetime.now(timezone.utc)
     inicio_dia = datetime.strptime(hoy, "%Y-%m-%d").replace(tzinfo=timezone.utc)
 
-    query = db.query(Asignacion).filter(Asignacion.fecha == hoy)
+    query = db.query(Asignacion).filter(Asignacion.fecha == hoy, Asignacion.hora_fin == None)
     if linea:
         linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
         if linea_obj:
@@ -1951,6 +1951,7 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                 Asignacion.linea_id == linea.id,
                 Asignacion.fecha    == fecha_asig,
                 Asignacion.turno_id == turno_id_act,
+                Asignacion.hora_fin == None,
             )
             .all()
         )
@@ -1960,6 +1961,7 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                 .filter(
                     Asignacion.linea_id == linea.id,
                     Asignacion.fecha    == fecha_asig,
+                    Asignacion.hora_fin == None,
                 )
                 .all()
             )
