@@ -69,6 +69,8 @@ import AsignacionLideraScreen from '../screens/AsignacionLideraScreen';
 import OperadoresAdminScreen from '../screens/OperadoresAdminScreen';
 // Tab Navigator Líder de Línea
 import LiderTabNavigator from '../navigators/LiderTabNavigator';
+// Historial diario operador
+import OperadorHistorialDiaScreen from '../screens/OperadorHistorialDiaScreen';
 // FCT Dashboard
 import MESDashboardScreen from '../screens/MESDashboardScreen';
 
@@ -397,6 +399,11 @@ export default function AuthNavigator() {
             name="MESDashboard"
             component={MESDashboardScreen}
             options={{ title: 'FCT Dashboard' }}
+          />
+          <Stack.Screen
+            name="OperadorHistorialDia"
+            component={OperadorHistorialDiaScreen}
+            options={{ title: 'Historial del día', headerShown: false }}
           />
         </>
       ) : (

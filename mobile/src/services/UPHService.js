@@ -211,6 +211,16 @@ class UPHService {
     }
   }
 
+  async getHistorialOperadorHoy(numEmpleado, linea) {
+    try {
+      const params = linea ? `?linea=${encodeURIComponent(linea)}` : '';
+      const response = await apiClient.get(`/uph/operador/${encodeURIComponent(numEmpleado)}/horas-hoy${params}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
   async avanzarModelo(lineaId) {
     try {
       const response = await apiClient.post(`/uph/plan/avanzar/${lineaId}`);

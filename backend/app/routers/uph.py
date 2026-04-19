@@ -561,6 +561,105 @@ def crear_asignacion(
     return {"id": asig.id, "ok": True}
 
 
+@router.get("/operador/{num_empleado}/horas-hoy")
+def operador_horas_hoy(
+    num_empleado: str,
+    linea: Optional[str] = None,
+    db: Session = Depends(get_uph_db),
+    current_user: Tecnico = Depends(get_current_user),
+):
+    """Producción por hora del turno activo para un operador específico."""
+    ahora     = datetime.now(timezone.utc)
+    ahora_loc = datetime.now()
+    hoy       = ahora_loc.strftime("%Y-%m-%d")
+
+    # Determinar inicio del turno (misma lógica que dashboard/lineas-hoy)
+    wd   = ahora_loc.weekday()
+    mins = ahora_loc.hour * 60 + ahora_loc.minute
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30
+    utc_offset = ahora.replace(tzinfo=None) - ahora_loc
+
+    if wd in (0, 1, 2, 3):
+        if T_INI <= mins < T_FIN:
+            inicio_loc = ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0)
+        elif mins >= T_FIN:
+            inicio_loc = ahora_loc.replace(hour=18, minute=30, second=0, microsecond=0)
+        else:
+            inicio_loc = (ahora_loc - timedelta(days=1)).replace(hour=18, minute=30, second=0, microsecond=0)
+    elif wd == 4:
+        if mins < T_INI:
+            inicio_loc = (ahora_loc - timedelta(days=1)).replace(hour=18, minute=30, second=0, microsecond=0)
+        elif T_INI <= mins < T_FIN:
+            inicio_loc = ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0)
+        else:
+            inicio_loc = ahora_loc.replace(hour=18, minute=30, second=0, microsecond=0)
+    else:
+        inicio_loc = ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0)
+
+    inicio_turno_utc = (inicio_loc + utc_offset).replace(tzinfo=timezone.utc)
+
+    # Estaciones del operador hoy
+    q_asig = db.query(Asignacion).filter(
+        Asignacion.num_empleado == num_empleado,
+        Asignacion.fecha == hoy,
+    )
+    if linea:
+        linea_obj = db.query(Linea).filter(Linea.nombre == linea).first()
+        if linea_obj:
+            q_asig = q_asig.filter(Asignacion.linea_id == linea_obj.id)
+    asigs = q_asig.all()
+
+    op = db.query(Operador).filter(Operador.num_empleado == num_empleado).first()
+    nombre = op.nombre if op else num_empleado
+    estaciones = list({a.estacion for a in asigs})
+
+    # UPH meta de la línea
+    uph_meta = 0
+    if asigs and asigs[0].modelo:
+        modelo = asigs[0].modelo
+        if linea:
+            _num  = ''.join(filter(str.isdigit, linea))
+            _attr = f"uph_hi{_num}" if _num else None
+            _val  = getattr(modelo, _attr, None) if _attr else None
+            uph_meta = _val or modelo.uph_total or 0
+        else:
+            uph_meta = modelo.uph_total or 0
+    # Dividir meta entre estaciones del operador
+    num_est_total = len({a.estacion for a in db.query(Asignacion).filter(
+        Asignacion.linea_id == asigs[0].linea_id,
+        Asignacion.fecha == hoy,
+    ).all()}) if asigs else 1
+    meta_op = round(uph_meta / max(num_est_total, 1) * len(estaciones), 1) if estaciones else 0
+
+    # Generar buckets por hora desde inicio del turno hasta ahora
+    horas = []
+    t = inicio_turno_utc.replace(minute=0, second=0, microsecond=0)
+    while t <= ahora:
+        t_fin = t + timedelta(hours=1)
+        if t_fin > ahora:
+            t_fin = ahora
+        if estaciones:
+            count = db.query(func.count(EventoUPH.id)).filter(
+                EventoUPH.linea.in_([_linea_evento(a.linea.nombre) for a in asigs if a.linea]),
+                EventoUPH.estacion.in_(estaciones),
+                EventoUPH.evento == "GOOD",
+                EventoUPH.timestamp >= t,
+                EventoUPH.timestamp < t_fin,
+            ).scalar() or 0
+        else:
+            count = 0
+        horas.append({"hora": t.astimezone().strftime("%H:%M"), "piezas": count})
+        t += timedelta(hours=1)
+
+    return {
+        "num_empleado": num_empleado,
+        "nombre": nombre,
+        "uph_meta": meta_op,
+        "estaciones": estaciones,
+        "horas": horas,
+    }
+
+
 @router.get("/operadores")
 def listar_operadores(
     db: Session = Depends(get_uph_db),

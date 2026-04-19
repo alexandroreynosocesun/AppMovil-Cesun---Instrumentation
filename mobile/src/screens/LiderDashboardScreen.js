@@ -2,22 +2,17 @@ import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity,
-  RefreshControl, Animated, Dimensions, Image,
+  RefreshControl, Animated, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, ActivityIndicator } from 'react-native-paper';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Polyline, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { useAuth } from '../contexts/AuthContext';
 import { uphService } from '../services/UPHService';
 import { showAlert } from '../utils/alertUtils';
 import { API_BASE_URL } from '../utils/apiClient';
 
 const LINEAS = ['HI-1', 'HI-2', 'HI-3', 'HI-4', 'HI-5', 'HI-6'];
-const { width: SCREEN_W } = Dimensions.get('window');
-const CHART_W = Math.min(SCREEN_W - 32, 500);
-const CHART_H = 120;
-const PAD = { left: 32, right: 12, top: 12, bottom: 24 };
 
 // ── Detectar turno automáticamente ────────────────────────
 function detectarTurno() {
@@ -69,54 +64,9 @@ function AvatarOp({ op, size = 36 }) {
   return <Initials nombre={op?.nombre} size={size} />;
 }
 
-// ── Gráfica de línea SVG ──────────────────────────────────
-function LineChart({ datos, meta }) {
-  if (!datos || datos.length < 2) return null;
-  const w = CHART_W - PAD.left - PAD.right;
-  const h = CHART_H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(meta || 0, ...datos.map(d => d.valor)) * 1.15 || 1;
-
-  const toX = (i) => PAD.left + (i / (datos.length - 1)) * w;
-  const toY = (v) => PAD.top + h - (v / maxVal) * h;
-
-  const puntos = datos.map((d, i) => `${toX(i)},${toY(d.valor)}`).join(' ');
-  const metaY  = toY(meta);
-
-  return (
-    <Svg width={CHART_W} height={CHART_H}>
-      {/* Línea meta */}
-      {meta > 0 && (
-        <>
-          <Line x1={PAD.left} y1={metaY} x2={CHART_W - PAD.right} y2={metaY}
-            stroke="#4CAF5066" strokeWidth={1} strokeDasharray="4,3" />
-          <SvgText x={CHART_W - PAD.right + 2} y={metaY + 4}
-            fontSize="8" fill="#4CAF50">meta</SvgText>
-        </>
-      )}
-      {/* Línea producción */}
-      <Polyline points={puntos} fill="none" stroke="#2196F3" strokeWidth={2} strokeLinejoin="round" />
-      {/* Puntos */}
-      {datos.map((d, i) => (
-        <Circle key={i} cx={toX(i)} cy={toY(d.valor)} r={3}
-          fill={d.valor >= (meta || 0) ? '#4CAF50' : '#F44336'} />
-      ))}
-      {/* Etiquetas eje X */}
-      {datos.map((d, i) => (
-        i % Math.ceil(datos.length / 5) === 0 ? (
-          <SvgText key={i} x={toX(i)} y={CHART_H - 4}
-            fontSize="8" fill="#616161" textAnchor="middle">{d.label}</SvgText>
-        ) : null
-      ))}
-      {/* Eje Y — valor máximo */}
-      <SvgText x={2} y={PAD.top + 6} fontSize="8" fill="#616161">
-        {Math.round(maxVal)}
-      </SvgText>
-    </Svg>
-  );
-}
 
 // ── Pantalla principal ────────────────────────────────────
-export default function LiderDashboardScreen() {
+export default function LiderDashboardScreen({ navigation }) {
   const { user, logout, updateProfile } = useAuth();
 
   const turnoAuto = detectarTurno();
@@ -163,12 +113,19 @@ export default function LiderDashboardScreen() {
     const r = await uphService.getScoreboardHoy(linea);
     if (r.success) {
       const map = {};
+      const mapEsts = {};
       for (const item of (r.data?.scoreboard || [])) {
         if (!item.num_empleado) continue;
         if (!map[item.num_empleado]) map[item.num_empleado] = { ...item };
         else map[item.num_empleado].total_hoy += item.total_hoy;
+        if (!mapEsts[item.num_empleado]) mapEsts[item.num_empleado] = new Set();
+        if (item.estacion) mapEsts[item.num_empleado].add(item.estacion);
       }
-      setOperadoresHoy(Object.values(map).sort((a, b) => b.total_hoy - a.total_hoy));
+      setOperadoresHoy(
+        Object.values(map)
+          .map(op => ({ ...op, total_estaciones: mapEsts[op.num_empleado]?.size || 0 }))
+          .sort((a, b) => b.total_hoy - a.total_hoy)
+      );
     }
     setLoadingOps(false);
   }, []);
@@ -237,13 +194,6 @@ export default function LiderDashboardScreen() {
 
   const nombre = user?.nombre || 'Líder';
   const totalTurno = operadoresHoy.reduce((s, o) => s + (o.total_hoy || 0), 0);
-
-  // Gráfica: un punto por operador ordenado por producción
-  const chartDatos = operadoresHoy.map((op, i) => ({
-    label: (op.nombre || '').split(' ')[0]?.slice(0, 4),
-    valor: op.total_hoy || 0,
-  }));
-  const metaChart = resumenLinea?.uph_meta ? resumenLinea.uph_meta * 11 : 0;
 
   const COLOR_SEMAFORO = {
     verde:   { bg: '#1B5E2033', border: '#4CAF50', text: '#4CAF50', dot: '#4CAF50' },
@@ -513,7 +463,17 @@ export default function LiderDashboardScreen() {
                     const maxPzs = lista[0]?.total_hoy || 1;
                     const pctOp = Math.round(((op.total_hoy || 0) / Math.max(maxPzs, 1)) * 100);
                     return (
-                      <View key={op.num_empleado || i} style={s.opRow}>
+                      <TouchableOpacity
+                        key={op.num_empleado || i}
+                        style={s.opRow}
+                        activeOpacity={0.7}
+                        onPress={() => navigation.navigate('OperadorHistorialDia', {
+                          num_empleado: op.num_empleado,
+                          nombre: op.nombre,
+                          foto_url: op.foto_url,
+                          linea: lineaLocal,
+                        })}
+                      >
                         <View style={s.opRank}>
                           <Text style={s.opRankText}>{i + 1}</Text>
                         </View>
@@ -529,23 +489,15 @@ export default function LiderDashboardScreen() {
                           <Text style={s.opPzsValor}>{op.total_hoy || 0}</Text>
                           <Text style={s.opPzsLabel}>pzs</Text>
                         </View>
-                      </View>
+                      </TouchableOpacity>
                     );
                   })}
 
-                  {/* Total del turno */}
+                  {/* Total línea */}
                   <View style={s.totalRow}>
-                    <Text style={s.totalLabel}>Total turno T-{turnoAuto}</Text>
+                    <Text style={s.totalLabel}>Total {lineaLocal || 'línea'}</Text>
                     <Text style={s.totalValor}>{totalTurno.toLocaleString()} pzs</Text>
                   </View>
-
-                  {/* Gráfica */}
-                  {chartDatos.length >= 2 && (
-                    <View style={s.chartCard}>
-                      <Text style={s.chartTitulo}>Producción por operador</Text>
-                      <LineChart datos={chartDatos} meta={metaChart} />
-                    </View>
-                  )}
                 </>
                 );
               })()}
