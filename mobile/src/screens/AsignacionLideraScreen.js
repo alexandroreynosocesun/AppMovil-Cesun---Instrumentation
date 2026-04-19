@@ -127,6 +127,7 @@ export default function AsignacionLideraScreen({ navigation }) {
   const [refreshing,     setRefreshing]     = useState(false);
   const [loadingModelos, setLoadingModelos] = useState(false);
   const [guardando,      setGuardando]      = useState(false);
+  const [yaGuardadoHoy,  setYaGuardadoHoy]  = useState(false); // solo para confirmar sobreescritura
   const [planInterno,    setPlanInterno]    = useState('');
   const [planActivo,     setPlanActivo]     = useState(null);  // plan multi-turno activo
 
@@ -189,6 +190,7 @@ export default function AsignacionLideraScreen({ navigation }) {
       if (rEst.success) setTodasEstaciones(rEst.data.estaciones || []);
 
       // Restaurar asignación del día si existe
+      setYaGuardadoHoy(rAsig.success && (rAsig.data.operadores?.length > 0));
       if (rAsig.success && rAsig.data.operadores?.length > 0) {
         const ops = rAsig.data.operadores;
         const nuevaAsig = {};
@@ -317,9 +319,7 @@ export default function AsignacionLideraScreen({ navigation }) {
   const opsAsignados = opsConOp;
 
   // ── Guardar ─────────────────────────────────────────────
-  const handleGuardar = async () => {
-    if (!lineaSeleccionada) return showAlert('Falta línea', 'Configura tu línea en Inicio.');
-    if (opsAsignados < 2)    return showAlert('Pocos operadores', 'Asigna al menos 2 operadores antes de guardar.');
+  const ejecutarGuardar = async () => {
     const items = [];
     Object.values(asignacion).forEach(v => {
       if (v?.op && v.estaciones.length > 0) {
@@ -331,18 +331,35 @@ export default function AsignacionLideraScreen({ navigation }) {
     const turnoId = turnoSeleccionado && typeof turnoSeleccionado.id === 'number'
       ? turnoSeleccionado.id : null;
     const cantidadPlan = planInterno ? parseInt(planInterno) : null;
-
     const result = await uphService.asignarBulk(
       lineaSeleccionada.nombre, hoy, turnoId, modeloSeleccionado?.id || null, items,
       cantidadPlan,
     );
     setGuardando(false);
     if (result.success) {
+      setYaGuardadoHoy(true);
       showAlert('✅ Listo', `${opsAsignados} operador(es) asignados en ${lineaSeleccionada.nombre}.`, [
         { text: 'Cerrar', onPress: () => navigation.navigate('Inicio') },
       ]);
     } else {
       showAlert('Error', result.error);
+    }
+  };
+
+  const handleGuardar = () => {
+    if (!lineaSeleccionada) return showAlert('Falta línea', 'Configura tu línea en Inicio.');
+    if (opsAsignados < 2)    return showAlert('Pocos operadores', 'Asigna al menos 2 operadores antes de guardar.');
+    if (yaGuardadoHoy) {
+      showAlert(
+        'Ya hay operadores asignados',
+        '¿Deseas sobreescribir la asignación actual con los cambios?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Sobreescribir', onPress: ejecutarGuardar },
+        ],
+      );
+    } else {
+      ejecutarGuardar();
     }
   };
 

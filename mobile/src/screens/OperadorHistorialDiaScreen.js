@@ -1,16 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, Text, Image,
-  ActivityIndicator, TouchableOpacity,
+  ActivityIndicator, TouchableOpacity, useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { uphService } from '../services/UPHService';
 import { API_BASE_URL } from '../utils/apiClient';
 
-const BAR_W_PER_HOUR = 48;  // ancho fijo por barra (px)
-const BAR_H = 160;
-const PAD = { left: 28, right: 20, top: 12, bottom: 28 };
+const BAR_H = 220;
+const PAD = { left: 32, right: 24, top: 16, bottom: 32 };
 
 function ini(nombre) {
   return (nombre || '?').trim().split(' ').slice(0, 2).map(p => p[0] || '').join('').toUpperCase();
@@ -40,59 +39,60 @@ function Avatar({ op, size = 48 }) {
 }
 
 function GraficaBarras({ horas, meta }) {
+  const { width } = useWindowDimensions();
   if (!horas || horas.length === 0) return null;
 
-  const barW   = 32;
-  const gap    = BAR_W_PER_HOUR - barW;
-  const svgW   = PAD.left + horas.length * BAR_W_PER_HOUR + PAD.right;
+  // Ancho disponible dentro de la card (pantalla - padding horizontal - card padding)
+  const svgW   = width - 32 - 28;  // 16px*2 scroll padding + 14px*2 card padding
+  const slotW  = (svgW - PAD.left - PAD.right) / horas.length;
+  const barW   = Math.max(slotW * 0.65, 12);
   const h      = BAR_H - PAD.top - PAD.bottom;
-  const maxVal = Math.max(meta || 0, ...horas.map(d => d.piezas)) * 1.2 || 1;
+  const maxVal = Math.max(meta || 0, ...horas.map(d => d.piezas)) * 1.15 || 1;
   const metaY  = PAD.top + h - (meta / maxVal) * h;
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <Svg width={svgW} height={BAR_H}>
-        {/* Línea meta */}
-        {meta > 0 && (
-          <>
-            <Line
-              x1={PAD.left} y1={metaY}
-              x2={svgW - PAD.right} y2={metaY}
-              stroke="#4CAF5088" strokeWidth={1} strokeDasharray="5,3"
-            />
-            <SvgText x={svgW - PAD.right + 2} y={metaY + 4} fontSize="8" fill="#4CAF50">
-              {Math.round(meta)}
-            </SvgText>
-          </>
-        )}
+    <Svg width={svgW} height={BAR_H}>
+      {/* Línea meta */}
+      {meta > 0 && (
+        <>
+          <Line
+            x1={PAD.left} y1={metaY}
+            x2={svgW - PAD.right} y2={metaY}
+            stroke="#4CAF5088" strokeWidth={1.5} strokeDasharray="6,4"
+          />
+          <SvgText x={svgW - PAD.right + 2} y={metaY + 4} fontSize="9" fill="#4CAF50">
+            {Math.round(meta)}
+          </SvgText>
+        </>
+      )}
 
-        {/* Barras */}
-        {horas.map((d, i) => {
-          const barH  = Math.max((d.piezas / maxVal) * h, 0);
-          const x     = PAD.left + i * BAR_W_PER_HOUR + gap / 2;
-          const y     = PAD.top + h - barH;
-          const color = d.piezas >= meta ? '#4CAF50' : d.piezas > 0 ? '#F44336' : '#263238';
-          return (
-            <React.Fragment key={i}>
-              <Rect x={x} y={y} width={barW} height={Math.max(barH, 1)} fill={color} rx={3} />
-              {d.piezas > 0 && (
-                <SvgText x={x + barW / 2} y={y - 3} fontSize="8" fill={color} textAnchor="middle">
-                  {d.piezas}
-                </SvgText>
-              )}
-              <SvgText x={x + barW / 2} y={PAD.top + h + 14} fontSize="8" fill="#546E7A" textAnchor="middle">
-                {d.hora}
+      {/* Barras */}
+      {horas.map((d, i) => {
+        const barH  = Math.max((d.piezas / maxVal) * h, 0);
+        const cx    = PAD.left + i * slotW + slotW / 2;
+        const x     = cx - barW / 2;
+        const y     = PAD.top + h - barH;
+        const color = d.piezas >= meta ? '#4CAF50' : d.piezas > 0 ? '#F44336' : '#263238';
+        return (
+          <React.Fragment key={i}>
+            <Rect x={x} y={y} width={barW} height={Math.max(barH, 1)} fill={color} rx={4} />
+            {d.piezas > 0 && (
+              <SvgText x={cx} y={y - 5} fontSize="10" fill={color} textAnchor="middle" fontWeight="bold">
+                {d.piezas}
               </SvgText>
-            </React.Fragment>
-          );
-        })}
+            )}
+            <SvgText x={cx} y={PAD.top + h + 18} fontSize="9" fill="#546E7A" textAnchor="middle">
+              {d.hora}
+            </SvgText>
+          </React.Fragment>
+        );
+      })}
 
-        {/* Eje Y */}
-        <SvgText x={2} y={PAD.top + 6} fontSize="8" fill="#37474F">
-          {Math.round(maxVal)}
-        </SvgText>
-      </Svg>
-    </ScrollView>
+      {/* Eje Y máximo */}
+      <SvgText x={2} y={PAD.top + 8} fontSize="8" fill="#37474F">
+        {Math.round(maxVal)}
+      </SvgText>
+    </Svg>
   );
 }
 
