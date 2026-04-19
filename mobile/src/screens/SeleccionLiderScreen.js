@@ -140,7 +140,6 @@ export default function SeleccionLiderScreen({ navigation }) {
         <Text style={[c.nombre, bloqueado && c.nombreBloqueado]} numberOfLines={2}>
           {n2(item.nombre)}
         </Text>
-        <Text style={[c.linea, bloqueado && { color: '#37474F' }]}>{item.linea}</Text>
         {esPropio && <Text style={c.tuBadge}>✓ Tú</Text>}
       </TouchableOpacity>
     );
