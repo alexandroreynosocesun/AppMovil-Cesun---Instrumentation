@@ -285,7 +285,7 @@ export default function LiderDashboardScreen({ navigation }) {
                     const producido   = planActivo.piezas_actual || 0;
                     const meta        = planActivo.plan_total || 0;
                     const pctPlan     = meta > 0 ? Math.min(Math.round((producido / meta) * 100), 100) : 0;
-                    const uphLinea    = resumenLinea?.uph_real ?? null;
+                    const uphLinea    = resumenLinea?.uph_meta ?? null;
                     const colorPct    = pctPlan >= 100 ? '#4CAF50' : pctPlan >= 70 ? '#FF9800' : '#42A5F5';
                     return (
                       <View style={s.planCard}>

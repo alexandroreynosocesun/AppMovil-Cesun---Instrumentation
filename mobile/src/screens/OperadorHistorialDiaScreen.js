@@ -1,17 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, StyleSheet, ScrollView, Text, Image,
-  ActivityIndicator, TouchableOpacity, Dimensions,
+  ActivityIndicator, TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Rect, Line, Text as SvgText } from 'react-native-svg';
 import { uphService } from '../services/UPHService';
 import { API_BASE_URL } from '../utils/apiClient';
 
-const { width: SCREEN_W } = Dimensions.get('window');
-const BAR_AREA_W = Math.min(SCREEN_W - 32, 500);
+const BAR_W_PER_HOUR = 48;  // ancho fijo por barra (px)
 const BAR_H = 160;
-const PAD = { left: 28, right: 12, top: 12, bottom: 28 };
+const PAD = { left: 28, right: 20, top: 12, bottom: 28 };
 
 function ini(nombre) {
   return (nombre || '?').trim().split(' ').slice(0, 2).map(p => p[0] || '').join('').toUpperCase();
@@ -43,59 +42,57 @@ function Avatar({ op, size = 48 }) {
 function GraficaBarras({ horas, meta }) {
   if (!horas || horas.length === 0) return null;
 
-  const w = BAR_AREA_W - PAD.left - PAD.right;
-  const h = BAR_H - PAD.top - PAD.bottom;
+  const barW   = 32;
+  const gap    = BAR_W_PER_HOUR - barW;
+  const svgW   = PAD.left + horas.length * BAR_W_PER_HOUR + PAD.right;
+  const h      = BAR_H - PAD.top - PAD.bottom;
   const maxVal = Math.max(meta || 0, ...horas.map(d => d.piezas)) * 1.2 || 1;
-  const barW = Math.max(Math.floor(w / horas.length) - 4, 4);
-  const metaY = PAD.top + h - (meta / maxVal) * h;
+  const metaY  = PAD.top + h - (meta / maxVal) * h;
 
   return (
-    <Svg width={BAR_AREA_W} height={BAR_H}>
-      {/* Línea meta */}
-      {meta > 0 && (
-        <>
-          <Line
-            x1={PAD.left} y1={metaY}
-            x2={BAR_AREA_W - PAD.right} y2={metaY}
-            stroke="#4CAF5088" strokeWidth={1} strokeDasharray="5,3"
-          />
-          <SvgText x={BAR_AREA_W - PAD.right + 2} y={metaY + 4} fontSize="8" fill="#4CAF50">
-            {Math.round(meta)}
-          </SvgText>
-        </>
-      )}
-
-      {/* Barras */}
-      {horas.map((d, i) => {
-        const barH = Math.max((d.piezas / maxVal) * h, 0);
-        const x = PAD.left + i * (w / horas.length) + (w / horas.length - barW) / 2;
-        const y = PAD.top + h - barH;
-        const color = d.piezas >= meta ? '#4CAF50' : d.piezas > 0 ? '#F44336' : '#263238';
-        return (
-          <React.Fragment key={i}>
-            <Rect x={x} y={y} width={barW} height={Math.max(barH, 1)}
-              fill={color} rx={3} />
-            {d.piezas > 0 && (
-              <SvgText x={x + barW / 2} y={y - 3} fontSize="7" fill={color} textAnchor="middle">
-                {d.piezas}
-              </SvgText>
-            )}
-            {/* Etiqueta hora */}
-            <SvgText
-              x={x + barW / 2} y={PAD.top + h + 14}
-              fontSize="7" fill="#546E7A" textAnchor="middle"
-            >
-              {d.hora}
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      <Svg width={svgW} height={BAR_H}>
+        {/* Línea meta */}
+        {meta > 0 && (
+          <>
+            <Line
+              x1={PAD.left} y1={metaY}
+              x2={svgW - PAD.right} y2={metaY}
+              stroke="#4CAF5088" strokeWidth={1} strokeDasharray="5,3"
+            />
+            <SvgText x={svgW - PAD.right + 2} y={metaY + 4} fontSize="8" fill="#4CAF50">
+              {Math.round(meta)}
             </SvgText>
-          </React.Fragment>
-        );
-      })}
+          </>
+        )}
 
-      {/* Eje Y */}
-      <SvgText x={2} y={PAD.top + 6} fontSize="8" fill="#37474F">
-        {Math.round(maxVal)}
-      </SvgText>
-    </Svg>
+        {/* Barras */}
+        {horas.map((d, i) => {
+          const barH  = Math.max((d.piezas / maxVal) * h, 0);
+          const x     = PAD.left + i * BAR_W_PER_HOUR + gap / 2;
+          const y     = PAD.top + h - barH;
+          const color = d.piezas >= meta ? '#4CAF50' : d.piezas > 0 ? '#F44336' : '#263238';
+          return (
+            <React.Fragment key={i}>
+              <Rect x={x} y={y} width={barW} height={Math.max(barH, 1)} fill={color} rx={3} />
+              {d.piezas > 0 && (
+                <SvgText x={x + barW / 2} y={y - 3} fontSize="8" fill={color} textAnchor="middle">
+                  {d.piezas}
+                </SvgText>
+              )}
+              <SvgText x={x + barW / 2} y={PAD.top + h + 14} fontSize="8" fill="#546E7A" textAnchor="middle">
+                {d.hora}
+              </SvgText>
+            </React.Fragment>
+          );
+        })}
+
+        {/* Eje Y */}
+        <SvgText x={2} y={PAD.top + 6} fontSize="8" fill="#37474F">
+          {Math.round(maxVal)}
+        </SvgText>
+      </Svg>
+    </ScrollView>
   );
 }
 
