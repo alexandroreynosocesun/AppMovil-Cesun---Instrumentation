@@ -1378,7 +1378,8 @@ async def crear_asignacion_bulk(
             Asignacion.linea_id == linea.id,
             Asignacion.fecha    == data.fecha,
             Asignacion.hora_fin == None,
-        ).update({"hora_fin": ahora_utc})
+        ).update({"hora_fin": ahora_utc}, synchronize_session=False)
+        db.flush()  # garantizar cierre antes de insertar nuevas
         hora_inicio_nueva = ahora_utc   # piezas desde este momento
     else:
         # Primera asignación del turno: hora_inicio = None → desde inicio de turno
