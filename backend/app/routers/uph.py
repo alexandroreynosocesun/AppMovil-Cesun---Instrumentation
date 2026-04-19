@@ -3007,7 +3007,7 @@ def dashboard_lideres(db: Session = Depends(get_uph_db)):
         resultado.append({
             "num_empleado": lider.numero_empleado,
             "nombre":       lider.nombre,
-            "foto_url":     lider.foto_url,
+            "foto_url":     lider.foto_url or _foto_url(lider.numero_empleado),
             "turno":        lider.turno_actual,
             "linea":        linea_nombre,
             "modelo":       modelo_nombre,
@@ -3155,9 +3155,10 @@ def get_lider(numero_empleado: str, db: Session = Depends(get_uph_db)):
 import json
 import threading
 
-_LIDERES_FILE  = Path(__file__).parent.parent.parent / "lider_sessions.json"
-_LIDERES_LOCK  = threading.Lock()
-_FOTOS_LIDERES = Path(__file__).parent.parent.parent / "uploads" / "lideres"
+_LIDERES_FILE    = Path(__file__).parent.parent.parent / "lider_sessions.json"
+_LINEA_LIDER_FILE= Path(__file__).parent.parent.parent / "linea_lider_map.json"
+_LIDERES_LOCK    = threading.Lock()
+_FOTOS_LIDERES   = Path(__file__).parent.parent.parent / "uploads" / "lideres"
 
 # Lista fija de líderes del listado AMI
 LIDERES_AMI = [
@@ -3201,6 +3202,48 @@ def _foto_url(num_empleado: str) -> Optional[str]:
         if (_FOTOS_LIDERES / f"{num_empleado}{ext}").exists():
             return f"/uploads/lideres/{num_empleado}{ext}"
     return None
+
+
+def _read_linea_lider() -> dict:
+    try:
+        if _LINEA_LIDER_FILE.exists():
+            return json.loads(_LINEA_LIDER_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _write_linea_lider(data: dict):
+    _LINEA_LIDER_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+class VincularLineaIn(BaseModel):
+    num_empleado: str
+    linea:        str
+
+
+@router.post("/lideres/vincular-linea")
+def vincular_linea(data: VincularLineaIn):
+    """Registra qué líder está activo en una línea (llamado al guardar asignación)."""
+    lider = next((l for l in LIDERES_AMI if l["num_empleado"] == data.num_empleado), None)
+    if not lider:
+        raise HTTPException(status_code=404, detail="Líder no encontrado")
+    with _LIDERES_LOCK:
+        mapa = _read_linea_lider()
+        mapa[data.linea] = {
+            "num_empleado": data.num_empleado,
+            "nombre":       lider["nombre"],
+            "foto_url":     _foto_url(data.num_empleado),
+        }
+        _write_linea_lider(mapa)
+    return {"ok": True}
+
+
+@router.get("/lideres/lineas")
+def get_lideres_lineas():
+    """Devuelve qué líder está asignado a cada línea."""
+    with _LIDERES_LOCK:
+        return {"lineas": _read_linea_lider()}
 
 
 class LiderClaimIn(BaseModel):

@@ -11,6 +11,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { uphService } from '../services/UPHService';
 import { showAlert } from '../utils/alertUtils';
 import { API_BASE_URL } from '../utils/apiClient';
+import { useLiderPerfil } from '../contexts/LiderPerfilContext';
 
 const LINEAS = ['HI-1', 'HI-2', 'HI-3', 'HI-4', 'HI-5', 'HI-6'];
 
@@ -65,9 +66,36 @@ function AvatarOp({ op, size = 36 }) {
 }
 
 
+// ── Avatar líder (foto o iniciales) ──────────────────────
+function AvatarLider({ perfil, size = 72 }) {
+  const [err, setErr] = useState(false);
+  if (!perfil) return null;
+  const uri = perfil.foto_url
+    ? (perfil.foto_url.startsWith('http') ? perfil.foto_url : `${API_BASE_URL}${perfil.foto_url}`)
+    : null;
+  const partes = (perfil.nombre || '').trim().split(' ');
+  const ini = partes.length >= 2
+    ? (partes[0][0] + partes[1][0]).toUpperCase()
+    : (perfil.nombre || '?').slice(0, 2).toUpperCase();
+  return (
+    <View style={{ width: size, height: size, borderRadius: size / 2,
+                   overflow: 'hidden', borderWidth: 2, borderColor: '#2196F3' }}>
+      {uri && !err ? (
+        <Image source={{ uri }} style={{ width: size, height: size }} onError={() => setErr(true)} />
+      ) : (
+        <View style={{ flex: 1, backgroundColor: '#1565C033', justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: size * 0.32 }}>{ini}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ── Pantalla principal ────────────────────────────────────
 export default function LiderDashboardScreen({ navigation }) {
   const { user, logout, updateProfile } = useAuth();
+  const { perfil: liderPerfil } = useLiderPerfil();
+  const { perfil: liderPerfil } = useLiderPerfil();
 
   const turnoAuto = detectarTurno();
 
@@ -221,7 +249,6 @@ export default function LiderDashboardScreen({ navigation }) {
               <Text style={s.greeting}>Hola, {nombre.split(' ')[0]}</Text>
               <View style={s.headerSub}>
                 <Text style={s.role}>Líder de línea</Text>
-                {/* Turno detectado — solo informativo */}
                 <View style={[s.turnoBadge, { backgroundColor: TURNO_COLOR[turnoAuto] + '33', borderColor: TURNO_COLOR[turnoAuto] }]}>
                   <Text style={[s.turnoBadgeText, { color: TURNO_TEXT[turnoAuto] }]}>
                     T-{turnoAuto}
@@ -229,9 +256,12 @@ export default function LiderDashboardScreen({ navigation }) {
                 </View>
               </View>
             </View>
-            <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
-              <Text style={s.logoutText}>Salir</Text>
-            </TouchableOpacity>
+            <View style={s.headerRight}>
+              <TouchableOpacity style={s.logoutBtn} onPress={handleLogout}>
+                <Text style={s.logoutText}>Salir</Text>
+              </TouchableOpacity>
+              <AvatarLider perfil={liderPerfil} size={72} />
+            </View>
           </View>
 
           {/* ── Mi línea ───────────────────────────────────── */}
@@ -520,6 +550,7 @@ const s = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'flex-start', marginBottom: 20,
   },
+  headerRight:  { alignItems: 'center', gap: 8 },
   headerSub:    { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 },
   greeting:     { color: '#FFF', fontSize: 24, fontWeight: 'bold' },
   role:         { color: '#90CAF9', fontSize: 13 },

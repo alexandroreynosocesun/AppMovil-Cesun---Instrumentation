@@ -12,6 +12,7 @@ import { showAlert } from '../utils/alertUtils';
 import { uphService } from '../services/UPHService';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL } from '../utils/apiClient';
+import { useLiderPerfil } from '../contexts/LiderPerfilContext';
 
 const MAX_SLOTS_POR_LINEA = { 'HI-4': 6 };
 const getMaxSlots = (linea) => MAX_SLOTS_POR_LINEA[linea] || 4;
@@ -108,6 +109,7 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
 export default function AsignacionLideraScreen({ navigation }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user } = useAuth();
+  const { perfil } = useLiderPerfil();
   const lineaUsuario = user?.linea_uph;
   const turnoUsuario = user?.turno_actual;
 
@@ -338,6 +340,9 @@ export default function AsignacionLideraScreen({ navigation }) {
     setGuardando(false);
     if (result.success) {
       setYaGuardadoHoy(true);
+      if (perfil?.num_empleado && lineaSeleccionada?.nombre) {
+        uphService.vincularLiderLinea(perfil.num_empleado, lineaSeleccionada.nombre).catch(() => {});
+      }
       showAlert('✅ Listo', `${opsAsignados} operador(es) asignados en ${lineaSeleccionada.nombre}.`, [
         { text: 'Cerrar', onPress: () => navigation.navigate('Inicio') },
       ]);

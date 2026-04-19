@@ -195,22 +195,16 @@
 
   async function fetchLideres() {
     try {
-      const r = await fetch(`${API}/api/uph/dashboard/lideres`);
+      const r = await fetch(`${API}/api/uph/lideres/lineas`);
       const d = await r.json();
-      const reales = d.lideres || [];
-      // Si el API no regresa líderes, usar mocks
-      const fuente = reales.length > 0 ? reales : MOCK_LIDERES;
+      // d.lineas = { "HI-3": { nombre, foto_url, ... }, ... }
       _lideres = {};
-      fuente.forEach(l => {
-        const key = (l.linea||'').replace(/^HI-?/i,'L');
-        _lideres[key] = l;
+      Object.entries(d.lineas || {}).forEach(([linea, lid]) => {
+        const key = linea.replace(/^HI-?/i,'L');
+        _lideres[key] = { ...lid, linea };
       });
     } catch(e) {
       _lideres = {};
-      MOCK_LIDERES.forEach(l => {
-        const key = l.linea.replace(/^HI-?/i,'L');
-        _lideres[key] = l;
-      });
     }
   }
 
@@ -582,7 +576,7 @@
 
   // Carga inicial + refresco cada 60s
   fetchLideres().then(fetchData);
-  setInterval(fetchData, 60000);
+  setInterval(() => fetchLideres().then(fetchData), 60000);
 
   // WebSocket para refresco en tiempo real
   (function connectWS() {

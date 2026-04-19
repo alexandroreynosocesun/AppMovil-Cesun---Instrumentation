@@ -322,6 +322,15 @@ class UPHService {
       return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
     }
   }
+
+  async vincularLiderLinea(num_empleado, linea) {
+    try {
+      await apiClient.post('/uph/lideres/vincular-linea', { num_empleado, linea });
+      return { success: true };
+    } catch (error) {
+      return { success: false };
+    }
+  }
 }
 
 export const uphService = new UPHService();
