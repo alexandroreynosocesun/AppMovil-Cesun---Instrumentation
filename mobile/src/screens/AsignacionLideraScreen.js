@@ -13,7 +13,8 @@ import { uphService } from '../services/UPHService';
 import { useAuth } from '../contexts/AuthContext';
 import { API_BASE_URL } from '../utils/apiClient';
 
-const MAX_SLOTS = 4;
+const MAX_SLOTS_POR_LINEA = { 'HI-4': 6 };
+const getMaxSlots = (linea) => MAX_SLOTS_POR_LINEA[linea] || 4;
 
 // ── Avatar iniciales ────────────────────────────────────────
 function Iniciales({ nombre, size = 40 }) {
@@ -245,7 +246,7 @@ export default function AsignacionLideraScreen({ navigation }) {
   };
 
   // ── Agregar / quitar slots ──────────────────────────────
-  const addSlot = () => setNumSlots(n => Math.min(n + 1, MAX_SLOTS));
+  const addSlot = () => setNumSlots(n => Math.min(n + 1, getMaxSlots(lineaSeleccionada?.nombre)));
   const removeSlot = (idx) => {
     setNumSlots(n => Math.max(n - 1, 1));
     if (expandedSlot === idx) setExpandedSlot(null);
@@ -572,7 +573,7 @@ export default function AsignacionLideraScreen({ navigation }) {
             );
           })}
 
-          {numSlots < MAX_SLOTS && (
+          {numSlots < getMaxSlots(lineaSeleccionada?.nombre) && (
             <TouchableOpacity style={s.addSlotBtn} onPress={addSlot}>
               <Text style={s.addSlotText}>＋  Agregar operador</Text>
             </TouchableOpacity>

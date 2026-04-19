@@ -91,6 +91,14 @@
       transition: transform 0.2s, filter 0.2s;
     }
     .h-tendencias:hover { transform: scale(1.2); filter: drop-shadow(0 0 16px #00c8b8cc); }
+    .h-lideres {
+      flex-shrink: 0; cursor: pointer; text-decoration: none;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem; line-height: 1;
+      filter: drop-shadow(0 0 8px #ffd70055);
+      transition: transform 0.2s, filter 0.2s;
+    }
+    .h-lideres:hover { transform: scale(1.2); filter: drop-shadow(0 0 16px #ffd700cc); }
 
     /* ─── LAYOUT ─────────────────────────────────────── */
     .main { flex: 1; min-height: 0; padding: 6px; display: flex; gap: 6px; }
@@ -277,6 +285,18 @@
     .csb-row.csb-1 .csb-uph { color: #ffd700; }
     .csb-row.csb-2 .csb-uph { color: #d0d0d0; }
 
+    /* ── Badge de posición dentro de línea ── */
+    .op-avatar-row { display: flex; flex-direction: row; align-items: center; gap: 6px; }
+    .op-rank {
+      font-size: 1.1rem; font-weight: 900; letter-spacing: 1px;
+      line-height: 1; flex-shrink: 0;
+      writing-mode: horizontal-tb;
+    }
+    .op-rank.rank-1 { color: #ffd700; text-shadow: 0 0 14px #ffd700cc, 0 0 28px #ffd70066; }
+    .op-rank.rank-2 { color: #c0c0c0; text-shadow: 0 0 10px #c0c0c066; }
+    .op-rank.rank-3 { color: #cd7f32; text-shadow: 0 0 10px #cd7f3266; }
+    .op-rank.rank-n { color: #2a4a45; }
+
     /* ── Mini-card por operador (Opción B) ── */
     .op-card {
       display: flex; flex-direction: column; align-items: center;
@@ -316,7 +336,7 @@
     .op-card.kpi-verde .op-name { color: #00e5cc; text-shadow: 0 0 8px #00c8b866; }
 
     /* Barras de estaciones dentro de la card */
-    .op-stations { display: flex; flex-direction: row; gap: 6px;
+    .op-stations { display: flex; flex-direction: row; gap: 12px;
                    align-items: stretch; flex: 1; min-height: 0;
                    width: 100%; justify-content: center; }
     .st-col { display: flex; flex-direction: column; align-items: center;
@@ -345,6 +365,7 @@
     .st-pct.rojo     { color: #ff4040; }
     .st-pct.gris     { color: #1a5048; }
     .st-label { font-size: 0.62rem; color: #1a7060; font-weight: 700; letter-spacing: 0.5px; }
+    .st-avg   { font-size: 0.72rem; font-weight: 800; color: #fff; font-variant-numeric: tabular-nums; }
 
     /* ─── SIDEBAR ────────────────────────────────────── */
     .sidebar { width: 220px; flex-shrink: 0; display: flex; flex-direction: column; gap: 8px; overflow: hidden; }
@@ -510,6 +531,9 @@
       <span class="t-pill" id="pill-C">Turno C</span>
     </div>
     <div class="h-clock" id="clock">--:--:--</div>
+    <a href="/dashboard-lideres.html" class="h-lideres" title="Dashboard de Líderes" style="font-size:1.5rem;">
+      🫡
+    </a>
     <a href="/uph-tendencias.html" class="h-tendencias" title="Tendencias UPH por hora">
       <svg width="28" height="28" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect width="28" height="28" rx="7" fill="#00c8b811"/>
@@ -652,7 +676,9 @@
     const tBot    = st.uph_meta > 0 ? (100 / ST_MAX * 100).toFixed(1) : null;
     return `
       <div class="st-col">
-        <span class="st-val">${Math.round(st.uph_hora)}</span>
+        ${st.uph_meta > 0
+          ? `<span class="st-avg">${Math.round(st.uph_hora)}/${Math.round(st.uph_meta)}</span>`
+          : `<span class="st-val">${Math.round(st.uph_hora)}</span>`}
         <span class="st-pct ${c}">${kpi != null ? kpi+'%' : '—'}</span>
         <div class="st-bar-outer">
           <div class="st-bar-wrap" style="width:26px;height:100%;min-height:40px">
@@ -667,15 +693,24 @@
   }
 
   // ── Operador ─────────────────────────────────────────────────
-  function opColHTML(op) {
-    const nombre2 = n2(op.nombre);
-    const ests    = op.estaciones||[];
-    const best    = ests.reduce((s,e)=>s+(e.uph_hora||0), 0);
-    const meta    = ests.reduce((s,e)=>s+(e.uph_meta||0), 0);
-    const c       = col(meta > 0 ? Math.round(best/meta*100) : null);
+  function opColHTML(op, rank, totalOps) {
+    const nombre2  = n2(op.nombre);
+    const ests     = op.estaciones||[];
+    const best     = ests.reduce((s,e)=>s+(e.uph_hora||0), 0);
+    const meta     = ests.reduce((s,e)=>s+(e.uph_meta||0), 0);
+    const c        = col(meta > 0 ? Math.round(best/meta*100) : null);
+    const rankCls  = rank===1?'rank-1':rank===2?'rank-2':rank===3?'rank-3':'rank-n';
+    const rankBadge = rank
+      ? (totalOps > 4
+          ? `<span class="op-rank ${rankCls}" style="font-size:0.65rem;letter-spacing:0">${rank}</span>`
+          : `<span class="op-rank ${rankCls}">${{1:'1st',2:'2nd',3:'3rd',4:'4th'}[rank]||rank+'th'}</span>`)
+      : '';
     return `
       <div class="op-card kpi-${c}">
-        ${avatarHTML(op, c)}
+        <div class="op-avatar-row">
+          ${rankBadge}
+          ${avatarHTML(op, c)}
+        </div>
         <span class="op-name">${nombre2}</span>
         <div class="op-stations">${ests.map(stColHTML).join('')}</div>
       </div>`;
@@ -731,7 +766,10 @@
     const medalEmoji = rank===1?'🥇':rank===2?'🥈':rank===3?'🥉':'';
     const medalClass = rank===1?'oro':rank===2?'plata':rank===3?'bronce':'';
     const medal = medalEmoji;
-    const ops     = (linea.operadores||[]).map(opColHTML).join('');
+    const operadores = linea.operadores||[];
+    const withUph = operadores.map(op => { const s=op.estaciones||[]; return {...op, _uph:s.reduce((a,e)=>a+(e.uph_hora||0),0)}; });
+    const rankMap2 = [...withUph].sort((a,b)=>b._uph-a._uph).reduce((m,op,i)=>{ m[op.num_empleado]=i+1; return m; }, {});
+    const ops = withUph.map(op => opColHTML(op, rankMap2[op.num_empleado], withUph.length)).join('');
     const opsSection = linea.operadores.length > 0
       ? `<div class="card-ops">${ops}</div>`
       : `<div class="card-ops vacia"><span class="ops-empty">Sin operadores asignados</span></div>`;
@@ -809,66 +847,56 @@
 
   }
 
-  // ── Fetch ────────────────────────────────────────────────────
-  async function fetchData() {
-    const dot = document.getElementById('ft-dot');
+  const MOCK = { turno_activo: 1, lineas: [
+    { linea:'HI-1', modelo:'55A6K', uph_actual:92, uph_meta:90, piezas_modelo:368, plan_modelo:1201, en_descanso:false,
+      operadores:[
+        { num_empleado:'001', nombre:'Ana García López',      foto_url:null, estaciones:[{estacion:'101',uph_hora:48,uph_meta:45},{estacion:'102',uph_hora:44,uph_meta:45}] },
+        { num_empleado:'002', nombre:'Carlos Martínez Ruiz',  foto_url:null, estaciones:[{estacion:'103',uph_hora:50,uph_meta:45},{estacion:'104',uph_hora:38,uph_meta:45}] },
+        { num_empleado:'003', nombre:'María Rodríguez Pérez', foto_url:null, estaciones:[{estacion:'105',uph_hora:55,uph_meta:45}] },
+        { num_empleado:'004', nombre:'José Hernández Torres', foto_url:null, estaciones:[{estacion:'106',uph_hora:42,uph_meta:45},{estacion:'107',uph_hora:47,uph_meta:45}] },
+      ]},
+    { linea:'HI-2', modelo:'65Q8K', uph_actual:78, uph_meta:90, piezas_modelo:234, plan_modelo:177, en_descanso:false,
+      operadores:[
+        { num_empleado:'005', nombre:'Laura Sánchez Flores',   foto_url:null, estaciones:[{estacion:'201',uph_hora:38,uph_meta:45},{estacion:'202',uph_hora:35,uph_meta:45}] },
+        { num_empleado:'006', nombre:'Miguel Cruz Vega',        foto_url:null, estaciones:[{estacion:'203',uph_hora:42,uph_meta:45}] },
+        { num_empleado:'007', nombre:'Patricia Jiménez Luna',   foto_url:null, estaciones:[{estacion:'204',uph_hora:36,uph_meta:45},{estacion:'205',uph_hora:39,uph_meta:45}] },
+      ]},
+    { linea:'HI-3', modelo:'43A4K', uph_actual:105, uph_meta:90, piezas_modelo:695, plan_modelo:732, en_descanso:false,
+      operadores:[
+        { num_empleado:'008', nombre:'Roberto Díaz Morales',   foto_url:null, estaciones:[{estacion:'301',uph_hora:55,uph_meta:45},{estacion:'302',uph_hora:52,uph_meta:45}] },
+        { num_empleado:'009', nombre:'Sofía Ramírez Castillo', foto_url:null, estaciones:[{estacion:'303',uph_hora:48,uph_meta:45}] },
+        { num_empleado:'010', nombre:'Fernando López Medina',  foto_url:null, estaciones:[{estacion:'304',uph_hora:60,uph_meta:45},{estacion:'305',uph_hora:58,uph_meta:45}] },
+      ]},
+    { linea:'HI-4', modelo:'75U7K', uph_actual:60, uph_meta:90, piezas_modelo:70, plan_modelo:79, en_descanso:false,
+      operadores:[
+        { num_empleado:'011', nombre:'Alejandro Reyes Núñez',  foto_url:null, estaciones:[{estacion:'401',uph_hora:30,uph_meta:45}] },
+        { num_empleado:'012', nombre:'Gabriela Vargas Ortiz',  foto_url:null, estaciones:[{estacion:'402',uph_hora:28,uph_meta:45}] },
+        { num_empleado:'013', nombre:'Eduardo Moreno Rivas',   foto_url:null, estaciones:[{estacion:'403',uph_hora:35,uph_meta:45}] },
+        { num_empleado:'014', nombre:'Verónica Torres Gómez',  foto_url:null, estaciones:[{estacion:'404',uph_hora:42,uph_meta:45}] },
+        { num_empleado:'015', nombre:'Ricardo Leal Fuentes',   foto_url:null, estaciones:[{estacion:'405',uph_hora:38,uph_meta:45}] },
+        { num_empleado:'016', nombre:'Sofía Ramírez Ibáñez',   foto_url:null, estaciones:[{estacion:'406',uph_hora:44,uph_meta:45}] },
+      ]},
+    { linea:'HI-5', modelo:'50A6K', uph_actual:88, uph_meta:90, piezas_modelo:3900, plan_modelo:4180, en_descanso:false,
+      operadores:[
+        { num_empleado:'013', nombre:'Claudia Fuentes Ibáñez', foto_url:null, estaciones:[{estacion:'501',uph_hora:44,uph_meta:45},{estacion:'502',uph_hora:46,uph_meta:45}] },
+        { num_empleado:'014', nombre:'Luis Mendoza Salinas',   foto_url:null, estaciones:[{estacion:'503',uph_hora:43,uph_meta:45},{estacion:'504',uph_hora:42,uph_meta:45},{estacion:'505',uph_hora:38,uph_meta:45}] },
+        { num_empleado:'015', nombre:'Diana Castillo Peña',    foto_url:null, estaciones:[{estacion:'506',uph_hora:49,uph_meta:45},{estacion:'507',uph_hora:51,uph_meta:45},{estacion:'508',uph_hora:44,uph_meta:45}] },
+      ]},
+    { linea:'HI-6', modelo:'40A4K', uph_actual:95, uph_meta:90, piezas_modelo:368, plan_modelo:400, en_descanso:false,
+      operadores:[
+        { num_empleado:'016', nombre:'Héctor Guerrero Campos', foto_url:null, estaciones:[{estacion:'601',uph_hora:51,uph_meta:45},{estacion:'602',uph_hora:48,uph_meta:45},{estacion:'603',uph_hora:53,uph_meta:45}] },
+        { num_empleado:'017', nombre:'Verónica Torres Gómez',  foto_url:null, estaciones:[{estacion:'604',uph_hora:50,uph_meta:45},{estacion:'605',uph_hora:44,uph_meta:45},{estacion:'606',uph_hora:47,uph_meta:45}] },
+      ]},
+  ]};
+
+  function fetchData() {
+    const dot     = document.getElementById('ft-dot');
     const liveDot = document.getElementById('h-live-dot');
-    try {
-      const res  = await fetch('/api/uph/dashboard/lineas-hoy');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const lineas = data.lineas||[];
-      if (data.fuera_horario) {
-        document.getElementById('lines').innerHTML =
-          `<div style="grid-column:1/-1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;">
-            <span style="font-size:2.5rem;opacity:0.3">🌙</span>
-            <span style="color:#0a3530;font-size:1.1rem;font-weight:700;letter-spacing:2px;">FUERA DE HORARIO</span>
-            <span style="color:#071a17;font-size:0.75rem;">Sáb 18:30–Dom 06:30 · Dom 18:30–Lun 06:30 sin operaciones</span>
-          </div>`;
-        document.getElementById('sb-turno-badge').textContent = '—';
-        document.getElementById('sb-ranking-title').textContent = '🏆 Ranking · Turno —';
-        document.getElementById('sb-ranking').innerHTML      = '';
-      } else if (lineas.length > 0) {
-        render(lineas);
-        renderSidebar(lineas, data.turno_activo);
-      } else {
-        document.getElementById('lines').innerHTML =
-          `<div style="grid-column:1/-1;display:flex;align-items:center;justify-content:center;color:#00856e;font-size:1rem;">Sin datos · asigna operadores para comenzar</div>`;
-      }
-      dot.className = 'ft-dot';
-      liveDot.className = 'h-live-dot';
-      document.getElementById('last-upd').textContent = `Actualizado: ${new Date().toLocaleTimeString('es-MX')}`;
-    } catch(e) {
-      dot.className = 'ft-dot err';
-      liveDot.className = 'h-live-dot err';
-      document.getElementById('last-upd').textContent = `Sin conexión · ${e.message}`;
-    }
-  }
-
-  // ── WebSocket — refresco en tiempo real ──────────────────────
-  let wsRetryMs = 2000;
-  function connectWS() {
-    const wsProto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl   = `${wsProto}//${window.location.hostname}:${window.location.port}/api/uph/ws`;
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      console.log('[WS] conectado');
-      wsRetryMs = 2000;
-      document.getElementById('last-upd').textContent = '⚡ Tiempo real conectado';
-    };
-    ws.onmessage = (e) => {
-      if (e.data === 'refresh') fetchData();
-    };
-    ws.onclose = () => {
-      console.warn(`[WS] desconectado, reintentando en ${wsRetryMs}ms`);
-      setTimeout(connectWS, wsRetryMs);
-      wsRetryMs = Math.min(wsRetryMs * 2, 30000);
-    };
-    ws.onerror = () => ws.close();
-
-    // Ping cada 25s para mantener viva la conexión
-    setInterval(() => { if (ws.readyState === WebSocket.OPEN) ws.send('ping'); }, 25000);
+    render(MOCK.lineas);
+    renderSidebar(MOCK.lineas, MOCK.turno_activo);
+    dot.className     = 'ft-dot';
+    liveDot.className = 'h-live-dot';
+    document.getElementById('last-upd').textContent = `[MOCK] ${new Date().toLocaleTimeString('es-MX')}`;
   }
 
   // ── Reloj ────────────────────────────────────────────────────
@@ -879,9 +907,15 @@
   }
 
   tick(); setInterval(tick, 1000);
-  fetchData();            // carga inicial
-  connectWS();            // tiempo real vía WebSocket
-  setInterval(fetchData, 60000); // fallback cada 60s por si el WS falla
+  fetchData();
+
+  // ── WebSocket — tiempo real ───────────────────────────────────
+  function conectarWS() {
+    const ws = new WebSocket('ws://localhost:8000/api/uph/ws');
+    ws.onmessage = () => fetchData();
+    ws.onclose   = () => setTimeout(conectarWS, 3000); // reconectar si cae
+  }
+  conectarWS();
 </script>
 </body>
 </html>

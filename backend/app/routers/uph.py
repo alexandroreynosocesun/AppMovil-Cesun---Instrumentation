@@ -10,7 +10,7 @@ Router UPH/Andon - Sistema de producción Hisense
 import csv
 import os
 from pathlib import Path
-from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Request, WebSocket, WebSocketDisconnect, UploadFile, File
 from fastapi.responses import HTMLResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
@@ -234,6 +234,21 @@ def _uph_hora_actual(db: Session, linea: str, estacion: Optional[str] = None) ->
     return float(q.scalar() or 0)
 
 
+def _uph_turno(db: Session, linea: str, inicio_turno: datetime, estacion: Optional[str] = None) -> float:
+    """UPH real del turno: piezas desde inicio del turno ÷ horas transcurridas."""
+    ahora = datetime.now(timezone.utc)
+    horas = max((ahora - inicio_turno).total_seconds() / 3600, 0.01)
+    q = db.query(func.count(EventoUPH.id)).filter(
+        EventoUPH.linea == linea,
+        EventoUPH.evento == "GOOD",
+        EventoUPH.timestamp >= inicio_turno,
+        EventoUPH.timestamp <= ahora,
+    )
+    if estacion:
+        q = q.filter(EventoUPH.estacion == estacion)
+    return float(q.scalar() or 0) / horas
+
+
 # Alias para compatibilidad con código existente
 def _uph_ultima_hora(db: Session, linea: str, estacion: Optional[str] = None) -> float:
     return _uph_hora_actual(db, linea, estacion)
@@ -276,7 +291,7 @@ def _ensure_gerencia(current_user: Tecnico):
 # ─────────────────────────────────────────────
 
 @router.post("/evento", status_code=201)
-def recibir_evento(evento: EventoIn, request: Request, db: Session = Depends(get_uph_db)):
+async def recibir_evento(evento: EventoIn, request: Request, db: Session = Depends(get_uph_db)):
     """
     Recibe eventos del cliente OCR.
     Sin autenticación (solo red local).
@@ -284,7 +299,6 @@ def recibir_evento(evento: EventoIn, request: Request, db: Session = Depends(get
     if evento.evento != "GOOD":
         return {"ok": False, "detalle": "Evento ignorado (solo se registran GOOD)"}
 
-    # Siempre usar la hora del servidor para evitar desfase por zona horaria de las PCs
     ts = datetime.now(timezone.utc)
 
     registro = EventoUPH(
@@ -297,9 +311,53 @@ def recibir_evento(evento: EventoIn, request: Request, db: Session = Depends(get
     db.add(registro)
     db.commit()
 
-    # Guardar también en CSV en el servidor
     _append_csv(evento.linea, evento.estacion, evento.evento, evento.contador, ts)
 
+    # ── Auto-avance al 95%: buscar PlanLinea activo para esta línea ──
+    # evento.linea es "L6"; BD almacena "HI-6"
+    num = ''.join(filter(str.isdigit, evento.linea))
+    if num:
+        hoy = datetime.now().strftime("%Y-%m-%d")
+        linea_obj = db.query(Linea).filter(Linea.nombre == f"HI-{num}").first()
+        if linea_obj:
+            plan_activo = db.query(PlanLinea).filter(
+                PlanLinea.linea_id == linea_obj.id,
+                PlanLinea.fecha    == hoy,
+                PlanLinea.activo   == True,
+            ).first()
+            if plan_activo and plan_activo.plan_total:
+                piezas = db.query(func.count(EventoUPH.id)).filter(
+                    EventoUPH.linea      == evento.linea,
+                    EventoUPH.evento     == "GOOD",
+                    EventoUPH.timestamp  >= plan_activo.creado_en,
+                ).scalar() or 0
+
+                if piezas >= plan_activo.plan_total * 0.95:
+                    # Buscar siguiente modelo en PlanDiaLinea
+                    orden_actual = db.query(PlanDiaLinea).filter(
+                        PlanDiaLinea.linea_id  == linea_obj.id,
+                        PlanDiaLinea.modelo_id == plan_activo.modelo_id,
+                        PlanDiaLinea.fecha     == hoy,
+                    ).first()
+                    if orden_actual:
+                        siguiente = db.query(PlanDiaLinea).filter(
+                            PlanDiaLinea.linea_id == linea_obj.id,
+                            PlanDiaLinea.fecha    == hoy,
+                            PlanDiaLinea.orden    >  orden_actual.orden,
+                        ).order_by(PlanDiaLinea.orden).first()
+                        if siguiente:
+                            plan_activo.activo = False
+                            db.add(PlanLinea(
+                                linea_id  = linea_obj.id,
+                                modelo_id = siguiente.modelo_id,
+                                plan_total= siguiente.plan_piezas,
+                                fecha     = hoy,
+                                activo    = True,
+                                creado_en = ts,
+                            ))
+                            db.commit()
+
+    await ws_manager.broadcast("refresh")
     return {"ok": True, "id": registro.id}
 
 
@@ -1307,7 +1365,7 @@ def scoreboard_hoy(
 
 ESTACIONES_POR_LINEA = {
     # Líneas HI (producción principal)
-    "HI-1": [str(i) for i in range(101, 105)],   # 101-104
+    "HI-1": [str(i) for i in range(101, 108)],   # 101-107
     "HI-2": [str(i) for i in range(201, 208)],   # 201-207
     "HI-3": [str(i) for i in range(301, 307)],   # 301-306
     "HI-4": [str(i) for i in range(401, 409)],   # 401-408
@@ -1783,19 +1841,13 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
         _val = getattr(modelo, _attr, None) if (modelo and _attr) else None
         uph_meta = _val if _val else (modelo.uph_total if modelo else 0) if modelo else 0
 
-        # UPH actual: piezas desde inicio de la hora en punto (XX:00)
-        uph_actual = db.query(func.count(EventoUPH.id)).filter(
-            EventoUPH.linea == nombre_evento,
-            EventoUPH.evento == "GOOD",
-            EventoUPH.timestamp >= inicio_hora,
-            EventoUPH.timestamp <= ahora,
-        ).scalar() or 0
+        # UPH actual: piezas del turno ÷ horas transcurridas del turno
+        uph_actual = round(_uph_turno(db, nombre_evento, inicio_turno_utc), 1)
 
-        # Plan activo de hoy para esta línea
-        hoy_str = ahora.strftime("%Y-%m-%d")
+        # Plan activo de hoy para esta línea (usar fecha local, igual que plan/subir)
         plan_activo = db.query(PlanLinea).filter(
             PlanLinea.linea_id == linea.id,
-            PlanLinea.fecha    == hoy_str,
+            PlanLinea.fecha    == hoy,
             PlanLinea.activo   == True,
         ).first()
 
@@ -1835,11 +1887,11 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                     "foto_url": op.foto_url if op else None,
                     "estaciones": [],
                 }
-            uph_hora_est = _uph_hora_actual(db, nombre_evento, a.estacion)
+            uph_hora_est = round(uph_actual / num_est, 1)
             kpi_pct = round((uph_hora_est / uph_meta_est * 100) if uph_meta_est > 0 else 0, 1)
             ops_dict[emp]["estaciones"].append({
                 "estacion": a.estacion,
-                "uph_hora": round(uph_hora_est, 1),
+                "uph_hora": uph_hora_est,
                 "uph_meta": uph_meta_est,
                 "kpi_pct": kpi_pct,
             })
@@ -2491,13 +2543,23 @@ def plan_listar_modelos(db: Session = Depends(get_uph_db)):
 
 
 @router.post("/plan/subir")
-def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
+async def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
     """Procesa filas del Excel: upsert modelos, PlanDiaLinea (todos los modelos del día)
     y PlanLinea activo (primer modelo de cada línea si no hay uno activo)."""
     guardados = 0
     hoy = datetime.now().strftime("%Y-%m-%d")
-    # orden por línea para asignar secuencia dentro del día
     orden_por_linea: dict = {}
+
+    # Limpiar PlanDiaLinea de hoy para las líneas del upload antes de insertar
+    lineas_nombres = {f.linea.strip() for f in data.filas if f.linea}
+    for nombre in lineas_nombres:
+        linea_obj = db.query(Linea).filter(Linea.nombre.ilike(nombre)).first()
+        if linea_obj:
+            db.query(PlanDiaLinea).filter(
+                PlanDiaLinea.linea_id == linea_obj.id,
+                PlanDiaLinea.fecha    == hoy,
+            ).delete()
+    db.flush()
 
     for fila in data.filas:
         if not fila.modelo:
@@ -2547,24 +2609,14 @@ def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                 orden = orden_por_linea.get(linea_key, 0)
                 orden_por_linea[linea_key] = orden + 1
 
-                # Upsert por linea+modelo+fecha — reemplaza con el valor del nuevo Excel
-                entrada = db.query(PlanDiaLinea).filter(
-                    PlanDiaLinea.linea_id  == linea_obj.id,
-                    PlanDiaLinea.modelo_id == modelo.id,
-                    PlanDiaLinea.fecha     == hoy,
-                ).first()
-                if entrada:
-                    # El parser ya acumuló duplicados → reemplazar con el total correcto
-                    entrada.plan_piezas = piezas
-                    entrada.orden       = orden
-                else:
-                    db.add(PlanDiaLinea(
-                        linea_id=linea_obj.id,
-                        modelo_id=modelo.id,
-                        fecha=hoy,
-                        plan_piezas=piezas,
-                        orden=orden,
-                    ))
+                # Insertar directo — PlanDiaLinea fue limpiado al inicio del request
+                db.add(PlanDiaLinea(
+                    linea_id=linea_obj.id,
+                    modelo_id=modelo.id,
+                    fecha=hoy,
+                    plan_piezas=piezas,
+                    orden=orden,
+                ))
 
                 # ── PlanLinea activo: primer modelo de cada línea ──
                 # plan_piezas ya viene como total (día + noche) desde el parser
@@ -2603,6 +2655,7 @@ def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
         guardados += 1
 
     db.commit()
+    await ws_manager.broadcast("refresh")
     return {"guardados": guardados, "ok": True}
 
 
@@ -2638,4 +2691,234 @@ def get_plan_dia(linea: str, db: Session = Depends(get_uph_db)):
             }
             for e in entradas
         ]
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# DASHBOARD LÍDERES — estado actual por líder + línea asignada
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get("/dashboard/lideres")
+def dashboard_lideres(db: Session = Depends(get_uph_db)):
+    ahora_loc = datetime.now()
+    ahora_utc = datetime.now(timezone.utc)
+    hoy       = ahora_loc.strftime("%Y-%m-%d")
+    utc_offset = ahora_utc.replace(tzinfo=None) - ahora_loc
+
+    # Turno activo
+    mins = ahora_loc.hour * 60 + ahora_loc.minute
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30
+    wd = ahora_loc.weekday()
+    if wd < 4:
+        turno_id_act = 1 if T_INI <= mins < T_FIN else 2
+    elif wd == 4:
+        turno_id_act = 2 if mins < T_INI else (3 if T_INI <= mins < T_FIN else 2)
+    elif wd == 5:
+        turno_id_act = 2 if mins < T_INI else (3 if T_INI <= mins < T_FIN else None)
+    else:
+        turno_id_act = 3 if T_INI <= mins < T_FIN else None
+
+    inicio_turno_loc = ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0)
+    if turno_id_act == 2:
+        if mins < T_INI:
+            inicio_turno_loc = (ahora_loc - timedelta(days=1)).replace(hour=18, minute=30, second=0, microsecond=0)
+        else:
+            inicio_turno_loc = ahora_loc.replace(hour=18, minute=30, second=0, microsecond=0)
+    inicio_turno_utc = (inicio_turno_loc + utc_offset).replace(tzinfo=timezone.utc)
+    horas_turno = max((ahora_utc - inicio_turno_utc).total_seconds() / 3600, 0.01)
+
+    lideres = db.query(Tecnico).filter(
+        Tecnico.tipo_usuario == "lider_linea",
+        Tecnico.activo == True,
+    ).all()
+
+    resultado = []
+    for lider in lideres:
+        linea_nombre = lider.linea_uph  # ej. "HI-1"
+        if not linea_nombre:
+            continue
+
+        linea_obj = db.query(Linea).filter(Linea.nombre.ilike(linea_nombre)).first()
+        if not linea_obj:
+            continue
+
+        # Evento nombre para EventoUPH
+        num = linea_nombre.replace("HI-", "").replace("L", "")
+        nombre_evento = f"HI-{num}" if not linea_nombre.startswith("HI-") else linea_nombre
+
+        # UPH turno de la línea
+        piezas_turno = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea == nombre_evento,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_turno_utc,
+            EventoUPH.timestamp <= ahora_utc,
+        ).scalar() or 0
+        uph_actual = round(piezas_turno / horas_turno, 1)
+
+        # Modelo activo
+        plan_activo = db.query(PlanLinea).filter(
+            PlanLinea.linea_id == linea_obj.id,
+            PlanLinea.fecha    == hoy,
+            PlanLinea.activo   == True,
+        ).first()
+        modelo_obj = plan_activo.modelo if plan_activo else None
+        modelo_nombre = modelo_obj.nombre if modelo_obj else None
+
+        # UPH meta
+        _num = num if num.isdigit() else None
+        _attr = f"uph_hi{_num}" if _num else None
+        _val = getattr(modelo_obj, _attr, None) if (modelo_obj and _attr) else None
+        uph_meta = _val if _val else (modelo_obj.uph_total if modelo_obj else 0) if modelo_obj else 0
+
+        # Piezas y plan
+        piezas_modelo = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea == nombre_evento,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= (plan_activo.creado_en if plan_activo else inicio_turno_utc),
+            EventoUPH.timestamp <= ahora_utc,
+        ).scalar() or 0
+        plan_modelo = plan_activo.plan_total if plan_activo else 0
+
+        kpi_pct = round((uph_actual / uph_meta * 100) if uph_meta > 0 else 0, 1)
+
+        resultado.append({
+            "num_empleado": lider.numero_empleado,
+            "nombre":       lider.nombre,
+            "foto_url":     lider.foto_url,
+            "turno":        lider.turno_actual,
+            "linea":        linea_nombre,
+            "modelo":       modelo_nombre,
+            "uph_actual":   uph_actual,
+            "uph_meta":     round(uph_meta, 1),
+            "kpi_pct":      kpi_pct,
+            "piezas_modelo": piezas_modelo,
+            "plan_modelo":  plan_modelo,
+            "plan_pct":     round((piezas_modelo / plan_modelo * 100) if plan_modelo > 0 else 0, 1),
+        })
+
+    return {"lideres": resultado, "turno_activo": turno_id_act}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# RANKING SEMANAL DE LÍNEAS
+# ─────────────────────────────────────────────────────────────────────────────
+@router.get("/ranking/lineas-semana")
+def ranking_lineas_semana(db: Session = Depends(get_uph_db)):
+    ahora_loc = datetime.now()
+    ahora_utc = datetime.now(timezone.utc)
+    utc_offset = ahora_utc.replace(tzinfo=None) - ahora_loc
+
+    wd   = ahora_loc.weekday()
+    mins = ahora_loc.hour * 60 + ahora_loc.minute
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30
+
+    dias_desde_lunes = wd
+    lunes_local  = ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0) - timedelta(days=dias_desde_lunes)
+    viernes_fin  = (lunes_local + timedelta(days=4)).replace(hour=18, minute=30, second=0, microsecond=0)
+    semana_cerrada = ahora_loc >= viernes_fin
+
+    inicio_semana_utc = (lunes_local + utc_offset).replace(tzinfo=timezone.utc)
+    fin_semana_utc    = (viernes_fin  + utc_offset).replace(tzinfo=timezone.utc)
+    corte_utc         = fin_semana_utc if semana_cerrada else ahora_utc
+
+    horas_semana: float = 0.0
+    for d in range(5):
+        dia_ini_local = lunes_local + timedelta(days=d)
+        dia_fin_local = dia_ini_local.replace(hour=18, minute=30, second=0, microsecond=0)
+        dia_ini_utc   = (dia_ini_local + utc_offset).replace(tzinfo=timezone.utc)
+        dia_fin_utc   = (dia_fin_local + utc_offset).replace(tzinfo=timezone.utc)
+        if corte_utc <= dia_ini_utc:
+            break
+        efectivo_fin = min(corte_utc, dia_fin_utc)
+        horas_semana += max(0.0, (efectivo_fin - dia_ini_utc).total_seconds() / 3600)
+    horas_semana = max(horas_semana, 1.0)
+
+    lineas = db.query(Linea).filter(Linea.activa == True).all()
+    ranking = []
+    for linea in lineas:
+        nombre_ev = linea.nombre
+        piezas = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea  == nombre_ev,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_semana_utc,
+            EventoUPH.timestamp <  corte_utc,
+        ).scalar() or 0
+
+        # Líder asignado a esta línea
+        lider = db.query(Tecnico).filter(
+            Tecnico.tipo_usuario == "lider_linea",
+            Tecnico.linea_uph.ilike(linea.nombre),
+            Tecnico.activo == True,
+        ).first()
+
+        uph_semana = round(piezas / horas_semana, 2)
+        ranking.append({
+            "linea":       linea.nombre,
+            "lider_nombre": lider.nombre if lider else None,
+            "foto_url":    None,
+            "uph_semana":  uph_semana,
+            "total_piezas": piezas,
+        })
+
+    ranking.sort(key=lambda x: x["uph_semana"], reverse=True)
+    # Inyectar foto_url real de cada líder
+    for item in ranking:
+        lid = db.query(Tecnico).filter(
+            Tecnico.tipo_usuario == "lider_linea",
+            Tecnico.linea_uph.ilike(item["linea"]),
+            Tecnico.activo == True,
+        ).first()
+        item["foto_url"] = lid.foto_url if lid else None
+    return {
+        "ranking":        ranking,
+        "periodo_inicio": lunes_local.strftime("%Y-%m-%d"),
+        "periodo_fin":    viernes_fin.strftime("%Y-%m-%d"),
+        "horas_semana":   round(horas_semana, 1),
+        "semana_cerrada": semana_cerrada,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# SUBIR FOTO DE LÍDER
+# ─────────────────────────────────────────────────────────────────────────────
+@router.post("/lider/{numero_empleado}/foto")
+async def subir_foto_lider(
+    numero_empleado: str,
+    foto: UploadFile = File(...),
+    db: Session = Depends(get_uph_db),
+):
+    lider = db.query(Tecnico).filter(
+        Tecnico.numero_empleado == numero_empleado,
+        Tecnico.tipo_usuario    == "lider_linea",
+    ).first()
+    if not lider:
+        raise HTTPException(404, "Líder no encontrado")
+
+    uploads_dir = Path(__file__).parent.parent.parent / "uploads" / "lideres"
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = Path(foto.filename).suffix.lower() or ".jpg"
+    filename = f"lider_{numero_empleado}{ext}"
+    dest = uploads_dir / filename
+    content = await foto.read()
+    dest.write_bytes(content)
+
+    lider.foto_url = f"/uploads/lideres/{filename}"
+    db.commit()
+    return {"foto_url": lider.foto_url}
+
+
+@router.get("/lider/{numero_empleado}")
+def get_lider(numero_empleado: str, db: Session = Depends(get_uph_db)):
+    lider = db.query(Tecnico).filter(
+        Tecnico.numero_empleado == numero_empleado,
+        Tecnico.tipo_usuario    == "lider_linea",
+    ).first()
+    if not lider:
+        raise HTTPException(404, "Líder no encontrado")
+    return {
+        "numero_empleado": lider.numero_empleado,
+        "nombre":          lider.nombre,
+        "linea":           lider.linea_uph,
+        "turno":           lider.turno_actual,
+        "foto_url":        lider.foto_url,
     }

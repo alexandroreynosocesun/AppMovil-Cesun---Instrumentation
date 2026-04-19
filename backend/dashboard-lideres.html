@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Dashboard Líderes · Hisense AMI</title>
+  <script>
+  (function() {
+    const TARGET_W = 1920;
+    function aplicarZoom() {
+      const sw = window.screen.width;
+      if (sw <= TARGET_W) return;
+      const scale = sw / TARGET_W;
+      document.documentElement.style.zoom = scale.toFixed(4);
+      document.documentElement.style.width = (100/scale).toFixed(4) + 'vw';
+      document.documentElement.style.height = (100/scale).toFixed(4) + 'vh';
+      document.documentElement.style.overflow = 'hidden';
+    }
+    document.addEventListener('DOMContentLoaded', aplicarZoom);
+    window.addEventListener('resize', aplicarZoom);
+  })();
+  </script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%; background: #040f0e; color: #e0f7f5;
+      font-family: 'Segoe UI', system-ui, sans-serif; overflow: hidden;
+    }
+
+    /* ── HEADER ── */
+    .header {
+      display: flex; align-items: center; gap: 14px;
+      padding: 10px 18px; background: #061412;
+      border-bottom: 1px solid #0a2e2a;
+      flex-shrink: 0;
+    }
+    .h-back {
+      text-decoration: none; color: #00856e; font-size: 1.3rem;
+      transition: color 0.2s;
+    }
+    .h-back:hover { color: #00c8b8; }
+    .h-title { font-size: 1rem; font-weight: 900; color: #e0f7f5; letter-spacing: 2px; text-transform: uppercase; }
+    .h-sub   { font-size: 0.6rem; color: #00856e; letter-spacing: 2px; text-transform: uppercase; margin-top: 1px; }
+    .h-spacer { flex: 1; }
+    .h-live-dot {
+      width: 8px; height: 8px; border-radius: 50%; background: #555;
+      box-shadow: none; transition: all 0.4s;
+    }
+    .h-live-dot.on { background: #00c8b8; box-shadow: 0 0 10px #00c8b8aa; animation: blink 2s infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .h-last-upd { font-size: 0.55rem; color: #00856e; letter-spacing: 1px; }
+    .btn-semana {
+      display: flex; align-items: center; gap: 7px;
+      padding: 8px 18px; border-radius: 20px;
+      background: transparent; border: 1px solid #ffd70066; color: #ffd700;
+      font-size: 0.65rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .btn-semana:hover { background: #ffd70011; box-shadow: 0 0 16px #ffd70044; }
+
+    body { display: flex; flex-direction: column; }
+
+    /* ── MAIN ── */
+    .main { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 12px 18px; gap: 12px; overflow-y: auto; }
+
+    /* ══ PODIO ══ */
+    .podio {
+      display: flex; align-items: flex-end; justify-content: center;
+      gap: 12px; flex-shrink: 0;
+    }
+    .podio-slot {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      flex: 1; max-width: 320px;
+    }
+    .podio-slot.pos-1 { order: 2; }
+    .podio-slot.pos-2 { order: 1; }
+    .podio-slot.pos-3 { order: 3; }
+
+    /* Card del podio */
+    .podio-card {
+      width: 100%; border-radius: 18px; padding: 16px 18px;
+      display: flex; flex-direction: column; align-items: center; gap: 10px;
+      border: 1px solid #0a2e2a; background: #061412;
+    }
+    .podio-slot.pos-1 .podio-card {
+      border-color: #ffd700; background: linear-gradient(160deg,#131000,#1c1a00);
+      box-shadow: 0 0 40px #ffd70044; padding: 20px 20px;
+    }
+    .podio-slot.pos-2 .podio-card {
+      border-color: #c0c0c0bb; background: linear-gradient(160deg,#111,#1a1a1a);
+      box-shadow: 0 0 20px #c0c0c022;
+    }
+    .podio-slot.pos-3 .podio-card {
+      border-color: #cd7f32aa; background: linear-gradient(160deg,#110800,#1a0e00);
+      box-shadow: 0 0 16px #cd7f3222;
+    }
+
+    /* Medalla encima */
+    .podio-medal { font-size: 2rem; line-height: 1; filter: drop-shadow(0 0 12px #ffd70099); }
+    .podio-slot.pos-1 .podio-medal { font-size: 2.8rem; }
+
+    /* Avatar */
+    .podio-avatar {
+      border-radius: 50%; border: 3px solid #0a2e2a;
+      background: #071a17; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; color: #00c8b8; object-fit: cover; flex-shrink: 0;
+      width: 80px; height: 80px; font-size: 1.6rem;
+    }
+    .podio-slot.pos-1 .podio-avatar { width: 100px; height: 100px; font-size: 2rem; border-color: #ffd700; box-shadow: 0 0 28px #ffd70077; }
+    .podio-slot.pos-2 .podio-avatar { border-color: #c0c0c0; box-shadow: 0 0 14px #c0c0c044; }
+    .podio-slot.pos-3 .podio-avatar { border-color: #cd7f32; box-shadow: 0 0 12px #cd7f3244; }
+
+    .podio-nombre {
+      font-size: 0.9rem; font-weight: 900; text-align: center; color: #e0f7f5;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+    }
+    .podio-slot.pos-1 .podio-nombre { font-size: 1.05rem; color: #ffd700; text-shadow: 0 0 14px #ffd70066; }
+
+    .podio-badges { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: center; }
+    .podio-linea {
+      font-size: 0.6rem; font-weight: 800; letter-spacing: 1.5px;
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 8px;
+      padding: 2px 10px; color: #00c8b8;
+    }
+    .podio-slot.pos-1 .podio-linea { border-color: #ffd70066; color: #ffd700; }
+    .podio-turno {
+      font-size: 0.55rem; font-weight: 700; letter-spacing: 1px;
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 8px;
+      padding: 2px 8px; color: #00856e;
+    }
+
+    /* UPH bar en podio */
+    .podio-uph-row { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+    .podio-uph-label { display: flex; justify-content: space-between; font-size: 0.5rem; color: #00856e; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+    .podio-uph-val { font-size: 0.8rem; font-weight: 900; color: #00c8b8; }
+    .podio-slot.pos-1 .podio-uph-val { color: #ffd700; }
+    .podio-bar-track { height: 7px; background: #071a17; border-radius: 4px; overflow: hidden; }
+    .podio-slot.pos-1 .podio-bar-track { height: 9px; }
+    .podio-bar-fill { height: 100%; border-radius: 4px; width: 0; transition: width 1s cubic-bezier(.4,0,.2,1); }
+    .podio-bar-fill.uph  { background: linear-gradient(90deg,#006655,#00c8b8); }
+    .podio-slot.pos-1 .podio-bar-fill.uph { background: linear-gradient(90deg,#6a4500,#ffd700,#fff7aa); box-shadow: 0 0 8px #ffd70055; }
+    .podio-bar-fill.plan { background: linear-gradient(90deg,#004a30,#00e58a); }
+    .podio-slot.pos-1 .podio-bar-fill.plan { background: linear-gradient(90deg,#4a3a00,#ffd700); }
+
+    /* Escalón del podio */
+    .podio-escalon {
+      width: 100%; border-radius: 8px 8px 0 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.6rem; font-weight: 900; color: #040f0e;
+    }
+    .podio-slot.pos-1 .podio-escalon { height: 44px; background: linear-gradient(180deg,#ffd700,#b8860b); }
+    .podio-slot.pos-2 .podio-escalon { height: 28px; background: linear-gradient(180deg,#c0c0c0,#888); }
+    .podio-slot.pos-3 .podio-escalon { height: 18px; background: linear-gradient(180deg,#cd7f32,#7a3e00); }
+
+    /* ══ FILA RESTO ══ */
+    .resto-fila {
+      display: flex; gap: 10px; flex-shrink: 0; flex-wrap: wrap;
+    }
+    .resto-card {
+      flex: 1; min-width: 160px; background: #061412; border: 1px solid #0a2e2a;
+      border-radius: 14px; padding: 12px 14px;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .resto-pos { font-size: 1rem; font-weight: 900; color: #00856e; min-width: 24px; }
+    .resto-avatar {
+      width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+      background: #071a17; border: 2px solid #0a2e2a;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 900; color: #00c8b8; object-fit: cover;
+    }
+    .resto-info { flex: 1; min-width: 0; }
+    .resto-nombre { font-size: 0.75rem; font-weight: 800; color: #e0f7f5; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .resto-badges { display: flex; gap: 5px; margin-top: 3px; flex-wrap: wrap; }
+    .resto-linea {
+      font-size: 0.5rem; font-weight: 800; letter-spacing: 1px;
+      background: #071a17; border: 1px solid #0a2e2a; border-radius: 6px;
+      padding: 1px 7px; color: #00c8b8;
+    }
+    .resto-turno { font-size: 0.5rem; color: #00856e; font-weight: 700; letter-spacing: 1px; background: #071a17; border: 1px solid #0a2e2a; border-radius: 6px; padding: 1px 7px; }
+    .resto-kpi { font-size: 0.75rem; font-weight: 900; color: #00c8b8; flex-shrink: 0; }
+
+    /* ── SIN DATOS ── */
+    .empty-state { width: 100%; text-align: center; color: #00856e; font-size: 0.8rem; letter-spacing: 2px; padding: 60px 0; }
+
+    /* ── KPI DOTS ── */
+    .kpi-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+    .kpi-dot.verde   { background: #00c8b8; box-shadow: 0 0 6px #00c8b888; }
+    .kpi-dot.naranja { background: #ff9900; box-shadow: 0 0 6px #ff990088; }
+    .kpi-dot.rojo    { background: #ff4444; box-shadow: 0 0 6px #ff444488; }
+
+    /* ══════════════════════════════════════════
+       PANTALLA RANKING SEMANAL (overlay)
+    ══════════════════════════════════════════ */
+    .fireworks { position: fixed; inset: 0; pointer-events: none; z-index: 8; }
+    .fw-particle {
+      position: absolute; width: 6px; height: 6px; border-radius: 50%;
+      animation: fw-explode ease-out forwards;
+    }
+    @keyframes fw-explode {
+      0%   { opacity: 1; transform: translate(0,0) scale(1); }
+      100% { opacity: 0; transform: translate(var(--tx), var(--ty)) scale(0.3); }
+    }
+    .confetti-wrap { position: fixed; inset: 0; pointer-events: none; z-index: 9; }
+    .confetti-piece {
+      position: absolute; top: -20px;
+      animation: confetti-fall linear forwards; border-radius: 2px;
+    }
+    @keyframes confetti-fall {
+      0%   { transform: translateY(0) rotate(0deg); opacity: 1; }
+      100% { transform: translateY(110vh) rotate(720deg); opacity: 0; }
+    }
+    .spotlight {
+      position: fixed; inset: 0; pointer-events: none; z-index: 7;
+      background: radial-gradient(ellipse 400px 500px at 50% 45%, transparent 0%, #040f0ecc 70%);
+      opacity: 0; transition: opacity 1.5s;
+    }
+    .spotlight.on { opacity: 1; }
+
+    #pantalla-ranking {
+      position: fixed; inset: 0; z-index: 10; background: #040f0e;
+      display: flex; flex-direction: column; align-items: center;
+      padding: 30px 40px; gap: 14px;
+      opacity: 0; pointer-events: none; transition: opacity 0.6s;
+    }
+    #pantalla-ranking.visible { opacity: 1; pointer-events: all; }
+
+    #fase-trofeo-linea {
+      position: fixed; inset: 0; z-index: 11;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 16px; pointer-events: none; opacity: 0; transition: opacity 0.3s;
+    }
+    #fase-trofeo-linea.visible { opacity: 1; }
+
+    .trofeo-emoji { font-size: 10rem; line-height: 1;
+      filter: drop-shadow(0 0 50px #ffd700cc);
+      animation: trofeo-drop 1s cubic-bezier(.36,1.6,.4,1) forwards; opacity: 0;
+    }
+    @keyframes trofeo-drop {
+      0%   { opacity: 0; transform: translateY(-120px) scale(0.5) rotate(-15deg); }
+      70%  { transform: translateY(10px) scale(1.05) rotate(3deg); }
+      100% { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); }
+    }
+    .trofeo-sub {
+      font-size: 1rem; font-weight: 700; letter-spacing: 4px; text-transform: uppercase;
+      color: #ffd700; opacity: 0;
+      animation: fade-up 0.6s ease forwards 0.8s;
+      text-shadow: 0 0 20px #ffd70077;
+    }
+    @keyframes fade-up {
+      0%   { opacity: 0; transform: translateY(20px); }
+      100% { opacity: 1; transform: translateY(0); }
+    }
+
+    .rk-header { display: flex; flex-direction: column; align-items: center; gap: 4px; flex-shrink: 0; }
+    .rk-titulo { font-size: 1.8rem; font-weight: 900; color: #ffd700;
+                 text-shadow: 0 0 30px #ffd700aa; letter-spacing: 3px; text-transform: uppercase; }
+    .rk-sub    { font-size: 0.7rem; color: #00856e; letter-spacing: 3px; text-transform: uppercase; }
+
+    .rk-list {
+      width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 8px; flex: 1;
+      overflow-y: auto; min-height: 0;
+      scrollbar-width: thin; scrollbar-color: #0a2e2a transparent;
+    }
+    .rk-row {
+      display: flex; align-items: center; gap: 14px;
+      background: #061412; border: 1px solid #0a2e2a;
+      border-radius: 14px; padding: 12px 18px;
+      opacity: 0; transform: translateX(-60px);
+      transition: opacity 0.5s, transform 0.5s;
+    }
+    .rk-row.visible { opacity: 1; transform: translateX(0); }
+    .rk-row.top-1 {
+      border-color: #ffd700;
+      background: linear-gradient(105deg, #131000 0%, #1a1500 60%, #0a0e00 100%);
+      box-shadow: 0 0 32px #ffd70044;
+      padding: 16px 20px;
+    }
+    .rk-row.top-2 { border-color: #c0c0c0bb; background: linear-gradient(105deg, #111 0%, #181818 60%, #0d0d0d 100%); }
+    .rk-row.top-3 { border-color: #cd7f32aa; background: linear-gradient(105deg, #110800 0%, #1a0e00 60%, #0d0800 100%); }
+
+    .rk-pos { font-size: 1.4rem; font-weight: 900; min-width: 44px; text-align: center; }
+    .rk-row.top-1 .rk-pos { font-size: 2rem; text-shadow: 0 0 20px #ffd700cc; }
+    .rk-row.top-2 .rk-pos { font-size: 1.7rem; text-shadow: 0 0 14px #c0c0c099; }
+    .rk-row.top-3 .rk-pos { font-size: 1.5rem; }
+    .rk-pos.resto { color: #00856e; font-size: 1rem; }
+
+    .rk-linea-badge {
+      font-size: 1.1rem; font-weight: 900; color: #040f0e;
+      background: #00c8b8; border-radius: 10px; padding: 4px 14px;
+      flex-shrink: 0;
+    }
+    .rk-row.top-1 .rk-linea-badge { background: #ffd700; font-size: 1.4rem; padding: 5px 18px; }
+    .rk-row.top-2 .rk-linea-badge { background: #c0c0c0; }
+    .rk-row.top-3 .rk-linea-badge { background: #cd7f32; }
+
+    .rk-info { flex: 1; min-width: 0; }
+    .rk-lider { font-size: 0.9rem; font-weight: 700; color: #e0f7f5; }
+    .rk-row.top-1 .rk-lider { color: #ffd700; font-size: 1.1rem; font-weight: 900; }
+    .rk-sub2 { font-size: 0.6rem; color: #00856e; margin-top: 2px; letter-spacing: 1px; }
+
+    .rk-bar-wrap { flex: 1; height: 10px; background: #071a17; border-radius: 5px; overflow: hidden; min-width: 80px; }
+    .rk-row.top-1 .rk-bar-wrap { height: 13px; }
+    .rk-bar-fill { height: 100%; border-radius: 5px; width: 0; transition: width 1s cubic-bezier(.4,0,.2,1); }
+    .rk-bar-fill.top-1 { background: linear-gradient(90deg, #6a4500, #ffd700, #fff7aa); box-shadow: 0 0 8px #ffd70066; }
+    .rk-bar-fill.top-2 { background: linear-gradient(90deg, #404040, #c0c0c0); }
+    .rk-bar-fill.top-3 { background: linear-gradient(90deg, #5a3000, #cd7f32); }
+    .rk-bar-fill.resto { background: linear-gradient(90deg, #003d2a, #00c8b8); }
+
+    .rk-uph { font-size: 1.3rem; font-weight: 900; min-width: 65px; text-align: right; font-variant-numeric: tabular-nums; }
+    .rk-row.top-1 .rk-uph { font-size: 1.7rem; color: #ffd700; text-shadow: 0 0 18px #ffd700aa; }
+    .rk-row.top-2 .rk-uph { color: #e0e0e0; }
+    .rk-row.top-3 .rk-uph { color: #e8a060; }
+    .rk-uph.resto { color: #00c8b8; }
+
+    .rk-footer { display: flex; gap: 10px; align-items: center; flex-shrink: 0; }
+    .btn-volver {
+      padding: 10px 32px; border-radius: 20px;
+      background: transparent; border: 1px solid #0a2e2a; color: #00856e;
+      font-size: 0.7rem; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+      cursor: pointer; transition: all 0.3s;
+    }
+    .btn-volver:hover { border-color: #00c8b8; color: #00c8b8; box-shadow: 0 0 14px #00c8b844; }
+  </style>
+</head>
+<body>
+
+<div class="fireworks" id="fireworks"></div>
+<div class="confetti-wrap" id="confetti"></div>
+<div class="spotlight" id="spotlight"></div>
+
+<!-- FASE TROFEO LÍNEA -->
+<div id="fase-trofeo-linea">
+  <div class="trofeo-emoji">🏆</div>
+  <div class="trofeo-sub">Mejor línea de la semana</div>
+</div>
+
+<!-- PANTALLA RANKING SEMANAL -->
+<div id="pantalla-ranking">
+  <div class="rk-header">
+    <div class="rk-titulo">🏆 Ranking Líneas · Semana</div>
+    <div class="rk-sub" id="rk-periodo">UPH promedio · últimos 7 días</div>
+  </div>
+  <div class="rk-list" id="rk-list"></div>
+  <div class="rk-footer">
+    <button class="btn-volver" onclick="cerrarRanking()">← Volver</button>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <a href="/dashboard_operadores.html" class="h-back" title="Volver">←</a>
+  <div>
+    <div class="h-title">🫡 Dashboard Líderes</div>
+    <div class="h-sub">Rendimiento por línea · turno activo</div>
+  </div>
+  <div class="h-spacer"></div>
+  <div class="h-live-dot" id="live-dot"></div>
+  <div class="h-last-upd" id="last-upd">—</div>
+  <button class="btn-semana" onclick="abrirRankingSemana()">🏆 Mejor Línea · Semana</button>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="main-grid">
+  <div class="empty-state">Cargando líderes…</div>
+</div>
+
+
+<script>
+  const API = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
+  const fwColors = ['#ffd700','#ff4040','#00c8b8','#ff8800','#c0c0c0','#69f0ae','#ff69b4'];
+  const confColors = ['#ffd700','#00c8b8','#ff4040','#ff8800','#c0c0c0','#69f0ae'];
+
+  function ini(n) { return (n||'?').trim().split(' ').slice(0,2).map(p=>p[0]||'').join('').toUpperCase(); }
+  function n2(n)  { const p=(n||'').trim().split(/\s+/); return p.length>=3?p[0]+' '+p[2]:p.slice(0,2).join(' '); }
+
+  function fuego(x, y) {
+    const cont = document.getElementById('fireworks');
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement('div');
+      p.className = 'fw-particle';
+      const angle = (Math.PI * 2 / 30) * i;
+      const dist = Math.random() * 120 + 60;
+      p.style.cssText = `left:${x}px;top:${y}px;background:${fwColors[Math.floor(Math.random()*fwColors.length)]};--tx:${Math.cos(angle)*dist}px;--ty:${Math.sin(angle)*dist}px;animation-duration:${Math.random()*0.6+0.6}s;`;
+      cont.appendChild(p);
+      setTimeout(() => p.remove(), 1400);
+    }
+  }
+  function confetti() {
+    const wrap = document.getElementById('confetti');
+    for (let i = 0; i < 60; i++) {
+      setTimeout(() => {
+        const p = document.createElement('div');
+        p.className = 'confetti-piece';
+        const w = Math.random()*8+4, h = Math.random()*14+6;
+        p.style.cssText = `left:${Math.random()*100}%;width:${w}px;height:${h}px;background:${confColors[Math.floor(Math.random()*confColors.length)]};animation-duration:${Math.random()*2+2}s;`;
+        wrap.appendChild(p);
+        setTimeout(() => p.remove(), 4500);
+      }, i * 60);
+    }
+  }
+
+  // ── RENDER ──
+  function avatarHTML(l, cls) {
+    return l.foto_url
+      ? `<img class="${cls}" src="${l.foto_url}" onerror="this.outerHTML='<div class=\\'${cls}\\'>${ini(l.nombre)}</div>'">`
+      : `<div class="${cls}">${ini(l.nombre)}</div>`;
+  }
+
+  function podioCardHTML(l, pos) {
+    const medals = ['🥇','🥈','🥉'];
+    const uphPct  = Math.min((l.uph_actual/(l.uph_meta||1))*100,100).toFixed(1);
+    const planPct = Math.min(l.plan_pct,100).toFixed(1);
+    return `
+    <div class="podio-slot pos-${pos}">
+      <div class="podio-medal">${medals[pos-1]}</div>
+      <div class="podio-card">
+        ${avatarHTML(l,'podio-avatar')}
+        <div class="podio-nombre">${n2(l.nombre)}</div>
+        <div class="podio-badges">
+          <span class="podio-linea">${l.linea}</span>
+          <span class="podio-turno">Turno ${l.turno||'—'}</span>
+        </div>
+        <div class="podio-uph-row">
+          <div class="podio-uph-label"><span>UPH</span><span class="podio-uph-val">${l.uph_actual}/${l.uph_meta}</span></div>
+          <div class="podio-bar-track"><div class="podio-bar-fill uph" data-w="${uphPct}" style="width:0%"></div></div>
+        </div>
+        <div class="podio-uph-row">
+          <div class="podio-uph-label"><span>PLAN</span><span class="podio-uph-val">${l.piezas_modelo}/${l.plan_modelo}</span></div>
+          <div class="podio-bar-track"><div class="podio-bar-fill plan" data-w="${planPct}" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="podio-escalon">${pos}</div>
+    </div>`;
+  }
+
+  function restoCardHTML(l, rank) {
+    const kpiColor = l.kpi_pct >= 90 ? 'verde' : l.kpi_pct >= 70 ? 'naranja' : 'rojo';
+    const kpiCol   = kpiColor==='verde'?'#00c8b8':kpiColor==='naranja'?'#ff9900':'#ff4444';
+    return `
+    <div class="resto-card">
+      <div class="resto-pos">#${rank}</div>
+      ${avatarHTML(l,'resto-avatar')}
+      <div class="resto-info">
+        <div class="resto-nombre">${n2(l.nombre)}</div>
+        <div class="resto-badges">
+          <span class="resto-linea">${l.linea}</span>
+          <span class="resto-turno">Turno ${l.turno||'—'}</span>
+        </div>
+      </div>
+      <div class="resto-kpi" style="color:${kpiCol}">${l.kpi_pct}%</div>
+    </div>`;
+  }
+
+  function render(lideres) {
+    const grid = document.getElementById('main-grid');
+    if (!lideres || lideres.length === 0) {
+      grid.innerHTML = '<div class="empty-state">No hay líderes registrados</div>';
+      return;
+    }
+    const sorted = [...lideres].sort((a,b) => b.kpi_pct - a.kpi_pct);
+    const top3   = sorted.slice(0,3);
+    const resto  = sorted.slice(3);
+
+    // Podio: orden visual 2°-1°-3°
+    const podioOrder = [top3[1], top3[0], top3[2]].filter(Boolean);
+    const posMap = [2,1,3];
+
+    let html = `<div class="podio">`;
+    podioOrder.forEach((l, i) => { html += podioCardHTML(l, posMap[i]); });
+    html += `</div>`;
+
+    if (resto.length > 0) {
+      html += `<div class="resto-fila">`;
+      resto.forEach((l, i) => { html += restoCardHTML(l, i+4); });
+      html += `</div>`;
+    }
+
+    grid.innerHTML = html;
+
+    requestAnimationFrame(() => {
+      document.querySelectorAll('.podio-bar-fill').forEach(b => { b.style.width = (b.dataset.w||0)+'%'; });
+    });
+  }
+
+  // ── FETCH LÍDERES ──
+  const MOCK_LIDERES = [
+    { num_empleado:'L001', nombre:'Carlos Mendoza Ruiz',     foto_url:null, turno:'A', linea:'HI-1', modelo:'65U7K',  uph_actual:87,  uph_meta:90,  kpi_pct:96.7, piezas_modelo:870, plan_modelo:990,  plan_pct:87.9 },
+    { num_empleado:'L002', nombre:'Laura Sánchez Torres',    foto_url:null, turno:'A', linea:'HI-2', modelo:'75U7K',  uph_actual:95,  uph_meta:90,  kpi_pct:105.6,piezas_modelo:950, plan_modelo:990,  plan_pct:95.9 },
+    { num_empleado:'L003', nombre:'Miguel Ángel Flores',     foto_url:null, turno:'A', linea:'HI-3', modelo:'43A4K',  uph_actual:72,  uph_meta:90,  kpi_pct:80.0, piezas_modelo:720, plan_modelo:990,  plan_pct:72.7 },
+    { num_empleado:'L004', nombre:'Patricia Gutiérrez Vega', foto_url:null, turno:'A', linea:'HI-4', modelo:'55U7K',  uph_actual:102, uph_meta:90,  kpi_pct:113.3,piezas_modelo:1020,plan_modelo:990,  plan_pct:103.0},
+    { num_empleado:'L005', nombre:'Roberto Hernández Luna',  foto_url:null, turno:'A', linea:'HI-5', modelo:'50A4K',  uph_actual:60,  uph_meta:90,  kpi_pct:66.7, piezas_modelo:600, plan_modelo:990,  plan_pct:60.6 },
+    { num_empleado:'L006', nombre:'Alejandra Ramos Cruz',    foto_url:null, turno:'A', linea:'HI-6', modelo:'40A4K',  uph_actual:91,  uph_meta:90,  kpi_pct:101.1,piezas_modelo:910, plan_modelo:990,  plan_pct:91.9 },
+  ];
+
+  async function fetchLideres() {
+    try {
+      const r = await fetch(`${API}/api/uph/dashboard/lideres`);
+      if (!r.ok) throw new Error(r.status);
+      const data = await r.json();
+      const lideres = (data.lideres || []).length > 0 ? data.lideres : MOCK_LIDERES;
+      render(lideres);
+      document.getElementById('live-dot').className = 'h-live-dot on';
+      document.getElementById('last-upd').textContent = (data.lideres||[]).length > 0
+        ? new Date().toLocaleTimeString('es-MX')
+        : `[MOCK] ${new Date().toLocaleTimeString('es-MX')}`;
+    } catch(e) {
+      render(MOCK_LIDERES);
+      document.getElementById('live-dot').className = 'h-live-dot on';
+      document.getElementById('last-upd').textContent = `[MOCK] ${new Date().toLocaleTimeString('es-MX')}`;
+    }
+  }
+
+  // ── WEBSOCKET ──
+  function conectarWS() {
+    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+    const ws = new WebSocket(`${proto}://${location.hostname}:${location.port}/api/uph/ws`);
+    ws.onmessage = e => { if (e.data === 'refresh') fetchLideres(); };
+    ws.onclose   = () => setTimeout(conectarWS, 3000);
+  }
+
+  // ── RANKING SEMANAL ──
+  async function abrirRankingSemana() {
+    // Fase trofeo
+    const fase = document.getElementById('fase-trofeo-linea');
+    const spotlight = document.getElementById('spotlight');
+    fase.classList.add('visible');
+    spotlight.classList.add('on');
+    fuego(window.innerWidth * 0.3, window.innerHeight * 0.4);
+    fuego(window.innerWidth * 0.7, window.innerHeight * 0.3);
+    confetti();
+
+    setTimeout(async () => {
+      fase.classList.remove('visible');
+      spotlight.classList.remove('on');
+
+      try {
+        const r = await fetch(`${API}/api/uph/ranking/lineas-semana`);
+        const data = await r.json();
+        renderRanking(data);
+      } catch(e) {
+        renderRanking({ ranking: [], periodo_inicio: '', periodo_fin: '' });
+      }
+
+      document.getElementById('pantalla-ranking').classList.add('visible');
+
+      // Animar filas
+      setTimeout(() => {
+        document.querySelectorAll('.rk-row').forEach((row, i) => {
+          setTimeout(() => {
+            row.classList.add('visible');
+            const bar = row.querySelector('.rk-bar-fill');
+            if (bar) bar.style.width = (bar.dataset.w || 0) + '%';
+          }, i * 120);
+        });
+      }, 100);
+
+      // Fuegos extra para top 1
+      setTimeout(() => {
+        fuego(window.innerWidth * 0.5, window.innerHeight * 0.25);
+        fuego(window.innerWidth * 0.2, window.innerHeight * 0.5);
+        fuego(window.innerWidth * 0.8, window.innerHeight * 0.5);
+        confetti();
+      }, 500);
+    }, 2800);
+  }
+
+  function renderRanking(data) {
+    const list = document.getElementById('rk-list');
+    const periodo = document.getElementById('rk-periodo');
+    if (data.periodo_inicio) {
+      periodo.textContent = `${data.periodo_inicio} → ${data.periodo_fin} · ${data.horas_semana}h efectivas`;
+    }
+    const maxUph = data.ranking.length > 0 ? data.ranking[0].uph_semana : 1;
+    list.innerHTML = (data.ranking || []).map((item, i) => {
+      const rank = i + 1;
+      const topCls = rank <= 3 ? `top-${rank}` : '';
+      const barCls = rank <= 3 ? `top-${rank}` : 'resto';
+      const pct = maxUph > 0 ? Math.min((item.uph_semana / maxUph) * 100, 100) : 0;
+      const rankSymbol = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+      return `
+      <div class="rk-row ${topCls}">
+        <div class="rk-pos ${rank>3?'resto':''}">${rankSymbol}</div>
+        <div class="rk-linea-badge">${item.linea.replace('HI-','L')}</div>
+        <div class="rk-info">
+          <div class="rk-lider">${item.lider_nombre || 'Sin líder'}</div>
+          <div class="rk-sub2">${item.total_piezas.toLocaleString()} piezas · ${item.linea}</div>
+        </div>
+        <div class="rk-bar-wrap">
+          <div class="rk-bar-fill ${barCls}" style="width:0%" data-w="${pct.toFixed(1)}"></div>
+        </div>
+        <div class="rk-uph ${rank>3?'resto':''}">${item.uph_semana}</div>
+      </div>`;
+    }).join('') || '<div class="empty-state">Sin datos esta semana</div>';
+  }
+
+  function cerrarRanking() {
+    document.getElementById('pantalla-ranking').classList.remove('visible');
+    document.getElementById('fireworks').innerHTML = '';
+    document.getElementById('confetti').innerHTML = '';
+  }
+
+  // ── INIT ──
+  fetchLideres();
+  setInterval(fetchLideres, 30000);
+  conectarWS();
+</script>
+</body>
+</html>

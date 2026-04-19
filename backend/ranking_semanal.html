@@ -535,11 +535,29 @@
   // ── Ranking global para exportar ──
   let _rankingData = [];
 
+  // ── MOCKUP ──
+  const MOCKUP_RANKING = {
+    semana_cerrada: false,
+    periodo_inicio: '2026-04-14',
+    periodo_fin:    '2026-04-18',
+    horas_semana:   44.0,
+    ranking: [
+      { num_empleado:'10003', nombre:'María Rodríguez Pérez',   foto_url:'https://i.pravatar.cc/150?u=10003', turno:'A', estacion:'E105', total_eventos:520, uph_promedio:98 },
+      { num_empleado:'10010', nombre:'Fernando López Medina',   foto_url:'https://i.pravatar.cc/150?u=10010', turno:'B', estacion:'E305', total_eventos:490, uph_promedio:94 },
+      { num_empleado:'10005', nombre:'Laura Sánchez Flores',    foto_url:'https://i.pravatar.cc/150?u=10005', turno:'A', estacion:'E201', total_eventos:470, uph_promedio:91 },
+      { num_empleado:'10008', nombre:'Roberto Díaz Morales',    foto_url:'https://i.pravatar.cc/150?u=10008', turno:'B', estacion:'E301', total_eventos:455, uph_promedio:88 },
+      { num_empleado:'10001', nombre:'Ana García López',        foto_url:'https://i.pravatar.cc/150?u=10001', turno:'A', estacion:'E101', total_eventos:440, uph_promedio:85 },
+      { num_empleado:'10014', nombre:'Eduardo Moreno Rivas',    foto_url:'https://i.pravatar.cc/150?u=10014', turno:'B', estacion:'E405', total_eventos:420, uph_promedio:81 },
+      { num_empleado:'10009', nombre:'Sofía Ramírez Castillo',  foto_url:'https://i.pravatar.cc/150?u=10009', turno:'B', estacion:'E303', total_eventos:405, uph_promedio:78 },
+      { num_empleado:'10006', nombre:'Miguel Ángel Cruz Vega',  foto_url:'https://i.pravatar.cc/150?u=10006', turno:'A', estacion:'E203', total_eventos:390, uph_promedio:75 },
+      { num_empleado:'10012', nombre:'Alejandro Reyes Núñez',   foto_url:'https://i.pravatar.cc/150?u=10012', turno:'B', estacion:'E401', total_eventos:370, uph_promedio:71 },
+      { num_empleado:'10017', nombre:'Diana Castillo Peña',     foto_url:'https://i.pravatar.cc/150?u=10017', turno:'C', estacion:'E601', total_eventos:350, uph_promedio:67 },
+    ]
+  };
+
   // ── Datos ──
   async function cargar() {
-    const res = await fetch('/api/uph/ranking/semanal');
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
+    const json = MOCKUP_RANKING;
     const ranking = json.ranking || [];
     // Actualizar subtítulo con período real
     const sub = json.semana_cerrada

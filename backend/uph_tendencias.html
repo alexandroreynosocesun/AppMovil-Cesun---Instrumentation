@@ -83,7 +83,8 @@
       background: #061412; border: 1px solid #0a2e2a;
       border-radius: 14px; display: flex; flex-direction: column;
       padding: 10px 14px 8px; gap: 6px; overflow: hidden;
-      transition: border-color 0.5s;
+      transition: border-color 0.5s, box-shadow 0.5s;
+      position: relative;
     }
     .card.verde    { border-color: #00877a88; }
     .card.amarillo { border-color: #cc770066; }
@@ -116,7 +117,44 @@
     .card-uph-pct.rojo     { color: #ff8a80; }
 
     /* Flecha tendencia */
-    .card-trend { font-size: 1.4rem; line-height: 1; margin-left: auto; flex-shrink: 0; }
+    .card-trend { font-size: 1.4rem; line-height: 1; flex-shrink: 0; }
+
+    /* ─── RANKING MARCOS ─── */
+    .card.rank-1 { border-color: #ffd700; box-shadow: 0 0 24px #ffd70033; }
+    .card.rank-2 { border-color: #c0c0c0bb; box-shadow: 0 0 16px #c0c0c022; }
+    .card.rank-3 { border-color: #cd7f32aa; box-shadow: 0 0 14px #cd7f3222; }
+
+    /* ─── MEDALLA ─── */
+    .card-medal {
+      position: absolute; top: 8px; right: 8px;
+      font-size: 1.2rem; line-height: 1;
+      filter: drop-shadow(0 0 6px #ffd70099);
+    }
+
+    /* ─── LÍDER (derecha del card-head) ─── */
+    .card-head-spacer { flex: 1; }
+    .card-lider {
+      display: flex; align-items: center; gap: 8px;
+      flex-shrink: 0; margin-left: 8px;
+    }
+    .card-lider-avatar {
+      width: 70px; height: 70px; border-radius: 50%; flex-shrink: 0;
+      background: #0a2e2a; border: 3px solid #0a2e2a;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.3rem; font-weight: 900; color: #00c8b8;
+      object-fit: cover;
+    }
+    .card.rank-1 .card-lider-avatar { border-color: #ffd700; box-shadow: 0 0 10px #ffd70066; }
+    .card.rank-2 .card-lider-avatar { border-color: #c0c0c0; }
+    .card.rank-3 .card-lider-avatar { border-color: #cd7f32; }
+    .card-lider-info { display: flex; flex-direction: column; gap: 2px; text-align: right; }
+    .card-lider-label { font-size: 0.45rem; font-weight: 700; color: #00856e; letter-spacing: 1.5px; text-transform: uppercase; }
+    .card-lider-nombre {
+      font-size: 0.72rem; font-weight: 800; color: #e0f7f5;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;
+    }
+    .card.rank-1 .card-lider-nombre { color: #ffd700; }
+    .card-no-lider { font-size: 0.55rem; color: #0a2e2a; letter-spacing: 1px; }
 
     /* ─── GRÁFICA ─── */
     .card-chart { flex: 1; min-height: 0; position: relative; }
@@ -141,6 +179,40 @@
 <script>
   const API = `${window.location.protocol}//${window.location.hostname}:${window.location.port}`;
   let _charts = {};
+  let _lideres = {};  // linea → {nombre, foto_url}
+
+  function ini(n) { return (n||'?').trim().split(' ').slice(0,2).map(p=>p[0]||'').join('').toUpperCase(); }
+  function n2(n)  { const p=(n||'').trim().split(/\s+/); return p.length>=3?p[0]+' '+p[2]:p.slice(0,2).join(' '); }
+
+  const MOCK_LIDERES = [
+    { linea:'HI-1', nombre:'Carlos Mendoza Ruiz',    foto_url:null },
+    { linea:'HI-2', nombre:'Laura Sánchez Torres',   foto_url:null },
+    { linea:'HI-3', nombre:'Miguel Ángel Flores',    foto_url:null },
+    { linea:'HI-4', nombre:'Patricia Gutiérrez Vega',foto_url:null },
+    { linea:'HI-5', nombre:'Roberto Hernández Luna', foto_url:null },
+    { linea:'HI-6', nombre:'Alejandra Ramos Cruz',   foto_url:null },
+  ];
+
+  async function fetchLideres() {
+    try {
+      const r = await fetch(`${API}/api/uph/dashboard/lideres`);
+      const d = await r.json();
+      const reales = d.lideres || [];
+      // Si el API no regresa líderes, usar mocks
+      const fuente = reales.length > 0 ? reales : MOCK_LIDERES;
+      _lideres = {};
+      fuente.forEach(l => {
+        const key = (l.linea||'').replace(/^HI-?/i,'L');
+        _lideres[key] = l;
+      });
+    } catch(e) {
+      _lideres = {};
+      MOCK_LIDERES.forEach(l => {
+        const key = l.linea.replace(/^HI-?/i,'L');
+        _lideres[key] = l;
+      });
+    }
+  }
 
   // ── Calcular inicio del turno activo (misma lógica que el backend) ──
   function turnoActivo() {
@@ -183,7 +255,9 @@
         nombre = 'Turno B';
         inicio.setDate(inicio.getDate()-1); inicio.setHours(18,30,0,0);
       } else {
-        nombre = null; inicio = null; // fuera de horario
+        // fuera de horario → últimas 12h
+        nombre = 'Últimas 12h';
+        inicio = new Date(ahora); inicio.setHours(ahora.getHours()-12,30,0,0);
       }
     }
 
@@ -221,7 +295,23 @@
         const div = document.createElement('div');
         div.className = 'card gris';
         div.id = `card-${lbl}`;
+        const lid = _lideres[lbl];
+        const avatarHTML = lid
+          ? (lid.foto_url
+              ? `<img class="card-lider-avatar" src="${lid.foto_url}" onerror="this.outerHTML='<div class=\\'card-lider-avatar\\'>${ini(lid.nombre)}</div>'">`
+              : `<div class="card-lider-avatar">${ini(lid.nombre)}</div>`)
+          : '';
+        const lidHTML = lid
+          ? `<div class="card-lider" id="lider-${lbl}">
+               ${avatarHTML}
+               <div class="card-lider-info">
+                 <span class="card-lider-label">Líder</span>
+                 <span class="card-lider-nombre">${n2(lid.nombre)}</span>
+               </div>
+             </div>`
+          : `<span class="card-no-lider" id="lider-${lbl}">Sin líder</span>`;
         div.innerHTML = `
+          <div class="card-medal" id="medal-${lbl}" style="display:none"></div>
           <div class="card-head">
             <span class="card-label gris" id="lbl-${lbl}">${lbl}</span>
             <div class="card-info">
@@ -233,6 +323,8 @@
               </div>
             </div>
             <span class="card-trend" id="trend-${lbl}">—</span>
+            <div class="card-head-spacer"></div>
+            <div id="lider-${lbl}">${lidHTML}</div>
           </div>
           <div class="card-chart"><canvas id="cv-${lbl}"></canvas></div>`;
         grid.appendChild(div);
@@ -258,6 +350,20 @@
       const card = document.getElementById(`card-${lbl}`);
       if (!card) return;
       card.className = `card ${c}`;
+
+      // Actualizar líder en cada render
+      const liderSlot = document.getElementById(`lider-${lbl}`);
+      const lid = _lideres[lbl];
+      if (liderSlot) {
+        if (lid) {
+          const avatarHTML = lid.foto_url
+            ? `<img class="card-lider-avatar" src="${lid.foto_url}" onerror="this.outerHTML='<div class=\\'card-lider-avatar\\'>${ini(lid.nombre)}</div>'">`
+            : `<div class="card-lider-avatar">${ini(lid.nombre)}</div>`;
+          liderSlot.innerHTML = `<div class="card-lider">${avatarHTML}<div class="card-lider-info"><span class="card-lider-label">Líder</span><span class="card-lider-nombre">${n2(lid.nombre)}</span></div></div>`;
+        } else {
+          liderSlot.innerHTML = '';
+        }
+      }
       document.getElementById(`lbl-${lbl}`).className    = `card-label ${c}`;
       document.getElementById(`uph-${lbl}`).className    = `card-uph-val ${c}`;
       document.getElementById(`uph-${lbl}`).textContent  = uphAct;
@@ -405,6 +511,34 @@
       }
     });
 
+    // ── Ranking: marcos y medallas top 3 por % KPI ──
+    const kpiPorLinea = data.lineas.map(linea => {
+      const lbl   = lineaLabel(linea.linea);
+      const meta  = linea.uph_meta || 100;
+      const puntos = linea.puntos || [];
+      const conDatos = puntos.filter(p => p.uph > 0);
+      const ultPunto = conDatos.length ? conDatos[conDatos.length-1] : null;
+      const uphAct   = ultPunto ? (ultPunto.minutos > 0 ? Math.round(ultPunto.uph/ultPunto.minutos*60) : ultPunto.uph) : 0;
+      const pct      = meta > 0 ? Math.round(uphAct/meta*100) : 0;
+      return { lbl, pct };
+    }).sort((a,b) => b.pct - a.pct);
+
+    const medals = ['🥇','🥈','🥉'];
+    kpiPorLinea.forEach(({ lbl, pct }, i) => {
+      const card   = document.getElementById(`card-${lbl}`);
+      const medal  = document.getElementById(`medal-${lbl}`);
+      if (!card || !medal) return;
+      // Quitar clases rank previas
+      card.classList.remove('rank-1','rank-2','rank-3');
+      if (i < 3 && pct > 0) {
+        card.classList.add(`rank-${i+1}`);
+        medal.textContent = medals[i];
+        medal.style.display = 'block';
+      } else {
+        medal.style.display = 'none';
+      }
+    });
+
     document.getElementById('live-dot').className = 'h-live-dot';
   }
 
@@ -447,7 +581,7 @@
   tick(); setInterval(tick, 1000);
 
   // Carga inicial + refresco cada 60s
-  fetchData();
+  fetchLideres().then(fetchData);
   setInterval(fetchData, 60000);
 
   // WebSocket para refresco en tiempo real

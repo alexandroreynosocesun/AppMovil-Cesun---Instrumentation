@@ -226,6 +226,14 @@ async def chart_js():
 async def uph_tendencias_page():
     return FileResponse(Path(__file__).parent / "uph_tendencias.html")
 
+@app.get("/plan.html")
+async def plan_page():
+    return FileResponse(Path(__file__).parent / "plan.html")
+
+@app.get("/dashboard-lideres.html")
+async def dashboard_lideres_page():
+    return FileResponse(Path(__file__).parent / "dashboard-lideres.html")
+
 @app.get("/")
 @limiter.limit("10/minute")
 async def root(request: Request):
