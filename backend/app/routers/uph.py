@@ -1365,14 +1365,20 @@ async def crear_asignacion_bulk(
 
     ahora_utc = datetime.now(timezone.utc)
 
-    # Borrar TODAS las asignaciones de hoy para esta línea (sin filtrar hora_fin)
-    # y recrear desde cero para evitar duplicados acumulados
-    db.query(Asignacion).filter(
+    # Cerrar asignaciones activas con hora_fin y crear nuevas
+    # Usar .is_(None) — forma correcta de IS NULL en SQLAlchemy
+    activas = db.query(Asignacion).filter(
         Asignacion.linea_id == linea.id,
         Asignacion.fecha    == data.fecha,
-    ).delete(synchronize_session='fetch')
-    db.flush()
-    hora_inicio_nueva = ahora_utc
+        Asignacion.hora_fin.is_(None),
+    ).all()
+    if activas:
+        for a in activas:
+            a.hora_fin = ahora_utc
+        db.flush()
+        hora_inicio_nueva = ahora_utc
+    else:
+        hora_inicio_nueva = None
 
     creadas = 0
     for item in data.asignaciones:
