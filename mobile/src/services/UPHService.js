@@ -286,6 +286,42 @@ class UPHService {
       return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
     }
   }
+
+  async getLideresLista() {
+    try {
+      const response = await apiClient.get('/uph/lideres/lista');
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async claimLider(num_empleado, session_id) {
+    try {
+      const response = await apiClient.post('/uph/lideres/claim', { num_empleado, session_id });
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async releaseLider(num_empleado, session_id) {
+    try {
+      await apiClient.delete(`/uph/lideres/claim/${num_empleado}?session_id=${session_id}`);
+      return { success: true };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async getSesionLider(session_id) {
+    try {
+      const response = await apiClient.get(`/uph/lideres/sesion/${session_id}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
 }
 
 export const uphService = new UPHService();

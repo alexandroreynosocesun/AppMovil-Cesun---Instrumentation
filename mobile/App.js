@@ -9,6 +9,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { LanguageProvider } from './src/contexts/LanguageContext';
 import { AuthProvider } from './src/contexts/AuthContext';
 import { ValidationProvider } from './src/contexts/ValidationContext';
+import { LiderPerfilProvider } from './src/contexts/LiderPerfilContext';
 
 // Navegador de autenticación
 import AuthNavigator from './src/components/AuthNavigator';
@@ -292,6 +293,7 @@ export default function App() {
     <LanguageProvider>
       <PaperProvider theme={MD3LightTheme}>
         <AuthProvider>
+          <LiderPerfilProvider>
           <ValidationProvider>
             <NavigationContainer theme={{
               ...DefaultTheme,
@@ -317,6 +319,7 @@ export default function App() {
               </View>
             </NavigationContainer>
           </ValidationProvider>
+          </LiderPerfilProvider>
         </AuthProvider>
       </PaperProvider>
     </LanguageProvider>

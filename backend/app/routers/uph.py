@@ -3146,3 +3146,122 @@ def get_lider(numero_empleado: str, db: Session = Depends(get_uph_db)):
         "turno":           lider.turno_actual,
         "foto_url":        lider.foto_url,
     }
+
+
+# ══════════════════════════════════════════════════════════════════
+# SELECCIÓN DE PERFIL DE LÍDER — sin DB, archivo JSON de sesiones
+# ══════════════════════════════════════════════════════════════════
+
+import json
+import threading
+
+_LIDERES_FILE  = Path(__file__).parent.parent.parent / "lider_sessions.json"
+_LIDERES_LOCK  = threading.Lock()
+_FOTOS_LIDERES = Path(__file__).parent.parent.parent / "uploads" / "lideres"
+
+# Lista fija de líderes del listado AMI
+LIDERES_AMI = [
+    {"num_empleado": "202",   "nombre": "ALTAMIRANO GALINDO ODALIS YESENIA",    "linea": "HI-2"},
+    {"num_empleado": "439",   "nombre": "NEVAREZ CARDOZA MARIA ANGELICA",        "linea": "HI-5"},
+    {"num_empleado": "518",   "nombre": "MENDIETA CABRERA MARTHA LETICIA",       "linea": "HI-6"},
+    {"num_empleado": "555",   "nombre": "ROJO MACIAS JANETH CORAL",              "linea": "HI-1"},
+    {"num_empleado": "2319",  "nombre": "MONTELONGO BARAJAS YADIRA",             "linea": "HI-3"},
+    {"num_empleado": "7683",  "nombre": "PEREZ VIDAL YESENIA",                   "linea": "HI-5"},
+    {"num_empleado": "9972",  "nombre": "CANTARERO MENJIVAR KEYLA",              "linea": "HI-6"},
+    {"num_empleado": "10085", "nombre": "FRANCO VELAZQUEZ ADRIANA",              "linea": "HI-6"},
+    {"num_empleado": "10893", "nombre": "MILLAN ROMERO SANDRA",                  "linea": "HI"},
+    {"num_empleado": "12806", "nombre": "AVILES FLORES RAFAEL ANTONIO",          "linea": "HI-1"},
+    {"num_empleado": "16902", "nombre": "FARIAS GONZALEZ CARMINA JUDITH",        "linea": "HI"},
+    {"num_empleado": "16935", "nombre": "MARTINEZ DE LOS SANTOS PABLO JOSUE",   "linea": "HI-2"},
+    {"num_empleado": "17666", "nombre": "DOMINGUEZ ROMERO MONICA",               "linea": "HI"},
+    {"num_empleado": "18148", "nombre": "CONTRERAS ORTEGA FRANCISCO JAVIER",    "linea": "HI-4"},
+    {"num_empleado": "19481", "nombre": "ALVAREZ URIOSTEGUI MA. GUADALUPE",     "linea": "SMT-1"},
+    {"num_empleado": "20179", "nombre": "QUINTERO DANIEL AARON ENRIQUE",         "linea": "HI-3"},
+    {"num_empleado": "26184", "nombre": "CATARINO SANCHEZ FERNANDO JOSE",        "linea": "HI-4"},
+    {"num_empleado": "33247", "nombre": "SILVA VILLASEÑOR EVA NOEMY",            "linea": "HI-6"},
+]
+
+
+def _read_sessions() -> dict:
+    try:
+        if _LIDERES_FILE.exists():
+            return json.loads(_LIDERES_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        pass
+    return {}
+
+
+def _write_sessions(data: dict):
+    _LIDERES_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _foto_url(num_empleado: str) -> Optional[str]:
+    for ext in [".jpg", ".jpeg", ".png"]:
+        if (_FOTOS_LIDERES / f"{num_empleado}{ext}").exists():
+            return f"/uploads/lideres/{num_empleado}{ext}"
+    return None
+
+
+class LiderClaimIn(BaseModel):
+    num_empleado: str
+    session_id:   str
+
+
+@router.get("/lideres/lista")
+def lista_lideres():
+    """Lista de líderes AMI con estado de disponibilidad. Sin auth."""
+    with _LIDERES_LOCK:
+        sessions = _read_sessions()
+    resultado = []
+    for l in LIDERES_AMI:
+        session_actual = sessions.get(l["num_empleado"])
+        resultado.append({
+            **l,
+            "foto_url":  _foto_url(l["num_empleado"]),
+            "ocupado":   session_actual is not None,
+            "session_id": session_actual,
+        })
+    return {"lideres": resultado}
+
+
+@router.post("/lideres/claim")
+def claim_lider(data: LiderClaimIn):
+    """Reclamar un perfil de líder para una sesión. Sin auth."""
+    with _LIDERES_LOCK:
+        sessions = _read_sessions()
+        actual = sessions.get(data.num_empleado)
+        if actual and actual != data.session_id:
+            raise HTTPException(status_code=409, detail="Perfil ya en uso por otro dispositivo")
+        # Liberar cualquier perfil anterior de esta sesión
+        sessions = {k: v for k, v in sessions.items() if v != data.session_id}
+        sessions[data.num_empleado] = data.session_id
+        _write_sessions(sessions)
+    lider = next((l for l in LIDERES_AMI if l["num_empleado"] == data.num_empleado), None)
+    if not lider:
+        raise HTTPException(status_code=404, detail="Líder no encontrado")
+    return {**lider, "foto_url": _foto_url(data.num_empleado)}
+
+
+@router.delete("/lideres/claim/{num_empleado}")
+def release_lider(num_empleado: str, session_id: str):
+    """Liberar perfil de líder. Sin auth."""
+    with _LIDERES_LOCK:
+        sessions = _read_sessions()
+        if sessions.get(num_empleado) == session_id:
+            del sessions[num_empleado]
+            _write_sessions(sessions)
+    return {"ok": True}
+
+
+@router.get("/lideres/sesion/{session_id}")
+def get_sesion_lider(session_id: str):
+    """Obtener el líder reclamado por esta sesión. Sin auth."""
+    with _LIDERES_LOCK:
+        sessions = _read_sessions()
+    num = next((k for k, v in sessions.items() if v == session_id), None)
+    if not num:
+        return {"lider": None}
+    lider = next((l for l in LIDERES_AMI if l["num_empleado"] == num), None)
+    if not lider:
+        return {"lider": None}
+    return {"lider": {**lider, "foto_url": _foto_url(num)}}

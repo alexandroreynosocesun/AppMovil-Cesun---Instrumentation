@@ -73,22 +73,26 @@ import LiderTabNavigator from '../navigators/LiderTabNavigator';
 import OperadorHistorialDiaScreen from '../screens/OperadorHistorialDiaScreen';
 // FCT Dashboard
 import MESDashboardScreen from '../screens/MESDashboardScreen';
+// Selección de perfil líder
+import SeleccionLiderScreen from '../screens/SeleccionLiderScreen';
+import { useLiderPerfil } from '../contexts/LiderPerfilContext';
 
 const Stack = createStackNavigator();
 
 export default function AuthNavigator() {
   const { isAuthenticated, loading, user } = useAuth();
   const { isWeb, maxWidth } = usePlatform();
+  const { perfil, loadingPerfil } = useLiderPerfil();
 
   const getInitialRoute = () => {
     const role = user?.tipo_usuario;
     if (role === 'gerencia') return 'UPHDashboard';
-    if (role === 'lider_linea') return 'LiderTabs';
+    if (role === 'lider_linea') return perfil ? 'LiderTabs' : 'SeleccionLider';
     if (role === 'balances') return 'SearchMainboard';
     return 'ModuleSelection';
   };
 
-  if (loading) {
+  if (loading || (user?.tipo_usuario === 'lider_linea' && loadingPerfil)) {
     return (
       <View style={[styles.loadingContainer, isWeb && webStyles.container]}>
         <ActivityIndicator size="large" color="#2196F3" />
@@ -404,6 +408,11 @@ export default function AuthNavigator() {
             name="OperadorHistorialDia"
             component={OperadorHistorialDiaScreen}
             options={{ title: 'Historial del día', headerShown: false }}
+          />
+          <Stack.Screen
+            name="SeleccionLider"
+            component={SeleccionLiderScreen}
+            options={{ headerShown: false }}
           />
         </>
       ) : (
