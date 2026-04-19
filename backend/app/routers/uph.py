@@ -1011,7 +1011,7 @@ def top_operadores(
                 "piezas_hora": 0,
                 "piezas_dia": 0,
             }
-        linea_nombre = asig.linea.nombre if asig.linea else ""
+        linea_nombre = _event_name_for_linea(asig.linea.nombre if asig.linea else "")
         piezas_hora = db.query(func.count(EventoUPH.id)).filter(
             EventoUPH.estacion == asig.estacion,
             EventoUPH.linea == linea_nombre,
