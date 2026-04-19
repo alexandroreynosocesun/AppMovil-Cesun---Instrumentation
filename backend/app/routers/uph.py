@@ -1963,12 +1963,21 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                 .all()
             )
 
-        # Modelo actual desde primera asignación
-        modelo = asignaciones[0].modelo if asignaciones else None
-        modelo_nombre = modelo.nombre if modelo else None
-
         # Nombre de línea tal como llega en los eventos (L6, L1, etc.)
         nombre_evento = _linea_evento(linea.nombre)
+
+        # Plan activo de hoy para esta línea (usar fecha local, igual que plan/subir)
+        plan_activo = db.query(PlanLinea).filter(
+            PlanLinea.linea_id == linea.id,
+            PlanLinea.fecha    == hoy,
+            PlanLinea.activo   == True,
+        ).first()
+
+        # Modelo actual: preferir el del plan activo (avanza con el plan),
+        # caer en el de la primera asignación si no hay plan
+        modelo = (plan_activo.modelo if plan_activo else None) or \
+                 (asignaciones[0].modelo if asignaciones else None)
+        modelo_nombre = modelo.nombre if modelo else None
 
         # UPH meta específica de la línea
         _num = ''.join(filter(str.isdigit, linea.nombre))
@@ -1980,13 +1989,6 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
         uph_actual  = round(_uph_turno(db, nombre_evento, inicio_turno_utc), 1)
         # Piezas RAW en la hora actual (contador para el número X/Y)
         piezas_hora = int(_uph_hora_actual(db, nombre_evento))
-
-        # Plan activo de hoy para esta línea (usar fecha local, igual que plan/subir)
-        plan_activo = db.query(PlanLinea).filter(
-            PlanLinea.linea_id == linea.id,
-            PlanLinea.fecha    == hoy,
-            PlanLinea.activo   == True,
-        ).first()
 
         # Piezas: desde inicio del plan activo (cruza turnos) o desde inicio del turno
         inicio_conteo = plan_activo.creado_en if plan_activo else inicio_turno_utc
