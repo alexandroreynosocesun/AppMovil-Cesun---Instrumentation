@@ -95,7 +95,6 @@ function AvatarLider({ perfil, size = 72 }) {
 export default function LiderDashboardScreen({ navigation }) {
   const { user, logout, updateProfile } = useAuth();
   const { perfil: liderPerfil } = useLiderPerfil();
-  const { perfil: liderPerfil } = useLiderPerfil();
 
   const turnoAuto = detectarTurno();
 
