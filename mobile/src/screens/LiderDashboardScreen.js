@@ -94,7 +94,7 @@ function AvatarLider({ perfil, size = 72 }) {
 // ── Pantalla principal ────────────────────────────────────
 export default function LiderDashboardScreen({ navigation }) {
   const { user, logout, updateProfile } = useAuth();
-  const { perfil: liderPerfil } = useLiderPerfil();
+  const { perfil: liderPerfil, liberarPerfil } = useLiderPerfil();
 
   const turnoAuto = detectarTurno();
 
@@ -215,7 +215,7 @@ export default function LiderDashboardScreen({ navigation }) {
   const handleLogout = () => {
     showAlert('Cerrar sesión', '¿Deseas cerrar sesión?', [
       { text: 'Cancelar', style: 'cancel' },
-      { text: 'Salir', style: 'destructive', onPress: logout },
+      { text: 'Salir', style: 'destructive', onPress: async () => { await liberarPerfil(); logout(); } },
     ]);
   };
 
