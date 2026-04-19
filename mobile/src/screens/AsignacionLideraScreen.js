@@ -322,10 +322,14 @@ export default function AsignacionLideraScreen({ navigation }) {
 
   // ── Guardar ─────────────────────────────────────────────
   const ejecutarGuardar = async () => {
+    const seen = new Set();
     const items = [];
     Object.values(asignacion).forEach(v => {
       if (v?.op && v.estaciones.length > 0) {
-        v.estaciones.forEach(est => items.push({ estacion: est, num_empleado: v.op.num_empleado }));
+        v.estaciones.forEach(est => {
+          const key = `${v.op.num_empleado}_${est}`;
+          if (!seen.has(key)) { seen.add(key); items.push({ estacion: est, num_empleado: v.op.num_empleado }); }
+        });
       }
     });
     if (items.length === 0) return showAlert('Sin estaciones', 'Abre cada card y selecciona las estaciones.');

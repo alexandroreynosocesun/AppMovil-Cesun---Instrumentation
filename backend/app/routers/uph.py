@@ -1365,24 +1365,14 @@ async def crear_asignacion_bulk(
 
     ahora_utc = datetime.now(timezone.utc)
 
-    # ¿Ya hay asignaciones activas para este día/línea?
-    ya_hay = db.query(Asignacion).filter(
+    # Borrar TODAS las asignaciones de hoy para esta línea (sin filtrar hora_fin)
+    # y recrear desde cero para evitar duplicados acumulados
+    db.query(Asignacion).filter(
         Asignacion.linea_id == linea.id,
         Asignacion.fecha    == data.fecha,
-        Asignacion.hora_fin == None,   # activas
-    ).first()
-
-    if ya_hay:
-        # Borrar las activas y recrear limpias
-        db.query(Asignacion).filter(
-            Asignacion.linea_id == linea.id,
-            Asignacion.fecha    == data.fecha,
-            Asignacion.hora_fin == None,
-        ).delete(synchronize_session='fetch')
-        db.flush()
-        hora_inicio_nueva = ahora_utc
-    else:
-        hora_inicio_nueva = None
+    ).delete(synchronize_session='fetch')
+    db.flush()
+    hora_inicio_nueva = ahora_utc
 
     creadas = 0
     for item in data.asignaciones:
