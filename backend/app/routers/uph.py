@@ -782,22 +782,25 @@ def resumen_todas_lineas(
         _attr = f"uph_hi{_num}" if _num else None
         _val = getattr(modelo, _attr, None) if (modelo and _attr) else None
         uph_meta = _val if _val else (modelo.uph_total or 0) if modelo else 0
+        # Si no hay modelo en asignación, intentar desde el plan activo
+        if not uph_meta:
+            plan_modelo_temp = db.query(PlanLinea).filter(
+                PlanLinea.linea_id == linea.id,
+                PlanLinea.fecha    == hoy,
+                PlanLinea.activo   == True,
+            ).first()
+            if plan_modelo_temp and plan_modelo_temp.modelo:
+                m2 = plan_modelo_temp.modelo
+                _val2 = getattr(m2, _attr, None) if _attr else None
+                uph_meta = _val2 if _val2 else (m2.uph_total or 0)
         nombre_ev = _linea_evento(linea.nombre)   # "HI-6" → "L6"
-        uph_real = _uph_ultima_hora(db, nombre_ev)
+        ahora = datetime.now(timezone.utc)
+
         total_estaciones = (
             db.query(func.count(func.distinct(Asignacion.estacion)))
             .filter(Asignacion.linea_id == linea.id, Asignacion.fecha == hoy)
             .scalar() or 0
         )
-        # Contar piezas reales en la hora actual (desde inicio de hora hasta ahora)
-        ahora = datetime.now(timezone.utc)
-        inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
-        piezas_hora = db.query(func.count(EventoUPH.id)).filter(
-            EventoUPH.linea == nombre_ev,
-            EventoUPH.evento == "GOOD",
-            EventoUPH.timestamp >= inicio_hora,
-            EventoUPH.timestamp <= ahora,
-        ).scalar() or 0
 
         # Plan del día (del planner via plan.html)
         plan_hoy = db.query(PlanLinea).filter(
@@ -807,13 +810,30 @@ def resumen_todas_lineas(
         ).first()
         plan_modelo_nombre = plan_hoy.modelo.nombre if plan_hoy and plan_hoy.modelo else (modelo.nombre if modelo else None)
         plan_total         = plan_hoy.plan_total if plan_hoy else None
-        piezas_modelo      = None
+
+        # Referencia temporal: desde que inició el plan activo (o hace 1h como mínimo)
+        inicio_ref = plan_hoy.creado_en if plan_hoy else (ahora - timedelta(hours=1))
+
+        # UPH real: piezas desde inicio del plan ÷ horas transcurridas
+        uph_real = round(_uph_turno(db, nombre_ev, inicio_ref), 1)
+
+        # Piezas acumuladas desde inicio del plan
+        piezas_modelo = None
         if plan_hoy:
             piezas_modelo = db.query(func.count(EventoUPH.id)).filter(
                 EventoUPH.linea    == nombre_ev,
                 EventoUPH.evento   == "GOOD",
                 EventoUPH.timestamp >= plan_hoy.creado_en,
             ).scalar() or 0
+
+        # Piezas en la hora actual (contador para X/Y)
+        inicio_hora = ahora.replace(minute=0, second=0, microsecond=0)
+        piezas_hora = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea == nombre_ev,
+            EventoUPH.evento == "GOOD",
+            EventoUPH.timestamp >= inicio_hora,
+            EventoUPH.timestamp <= ahora,
+        ).scalar() or 0
 
         # ¿Hay siguiente modelo en PlanDiaLinea?
         tiene_siguiente = False
