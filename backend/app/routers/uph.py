@@ -1248,7 +1248,11 @@ def get_asignacion_hoy(
 
     asigs = (
         db.query(Asignacion)
-        .filter(Asignacion.linea_id == linea_obj.id, Asignacion.fecha == hoy)
+        .filter(
+            Asignacion.linea_id == linea_obj.id,
+            Asignacion.fecha    == hoy,
+            Asignacion.hora_fin.is_(None),
+        )
         .all()
     )
     if not asigs:
@@ -1448,19 +1452,16 @@ def scoreboard_hoy(
         nombre_ev_sb = _linea_evento(linea_nombre)   # "HI-6" → "L6"
         uph_hora = _uph_ultima_hora(db, nombre_ev_sb, asig.estacion)
 
-        # Contar piezas solo en la ventana de esta asignación
-        # hora_inicio=None → desde inicio del turno (inicio_dia)
-        desde_asig = asig.hora_inicio if asig.hora_inicio else inicio_dia
-        hasta_asig = asig.hora_fin    if asig.hora_fin    else ahora
-
+        # total_hoy = piezas del día completo en esa estación
+        # (independiente de cuándo se asignó el operador — evita reset al reasignar)
         total_hoy = (
             db.query(func.count(EventoUPH.id))
             .filter(
                 EventoUPH.estacion == asig.estacion,
                 EventoUPH.linea == nombre_ev_sb,
                 EventoUPH.evento == "GOOD",
-                EventoUPH.timestamp >= desde_asig,
-                EventoUPH.timestamp <= hasta_asig,
+                EventoUPH.timestamp >= inicio_dia,
+                EventoUPH.timestamp <= ahora,
             )
             .scalar() or 0
         )
