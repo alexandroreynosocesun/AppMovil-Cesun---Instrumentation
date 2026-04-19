@@ -308,12 +308,12 @@ export default function LiderDashboardScreen({ navigation }) {
                         <View style={s.planMetricasRow}>
                           <View style={s.planMetrica}>
                             <Text style={s.planMetricaVal}>{uphLinea ?? '—'}</Text>
-                            <Text style={s.planMetricaLabel}>UPH línea</Text>
+                            <Text style={s.planMetricaLabel}>UPH modelo</Text>
                           </View>
                           <View style={s.planMetricaSep} />
                           <View style={s.planMetrica}>
                             <Text style={s.planMetricaVal}>{meta > 0 ? meta.toLocaleString() : '—'}</Text>
-                            <Text style={s.planMetricaLabel}>Meta día</Text>
+                            <Text style={s.planMetricaLabel}>Plan modelo</Text>
                           </View>
                           <View style={s.planMetricaSep} />
                           <View style={s.planMetrica}>
