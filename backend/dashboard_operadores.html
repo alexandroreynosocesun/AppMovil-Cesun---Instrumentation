@@ -173,8 +173,19 @@
     .id-linea.amarillo { color: #ff8c00; text-shadow: 0 0 20px #ff8c0066; }
     .id-linea.rojo     { color: #ff5555; text-shadow: 0 0 20px #ff555566; }
     .id-linea.gris     { color: #00c8b8; text-shadow: 0 0 16px #00c8b866; }
-    .id-modelo { font-size: 0.48rem; color: #00856e; letter-spacing: 1px;
-                 text-transform: uppercase; }
+    .id-modelo { display: none; }
+    .card-modelo-banner {
+      display: flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 5px 10px; border-bottom: 1px solid #0a2e2a;
+      background: #00c8b808;
+    }
+    .card-modelo-nombre,
+    .card-modelo-interno,
+    .card-modelo-sep,
+    .card-modelo-uph      { font-size: 0.72rem; font-weight: 700; color: #00c8b8cc;
+                            letter-spacing: 0.5px; text-transform: uppercase; flex-shrink: 0; }
+    .card-modelo-nombre   { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .card-modelo-sep      { color: #0a4a40; }
     .card-kpis { flex: 1; display: flex; flex-direction: column; gap: 4px; justify-content: center; }
 
     /* ── Barras KPI ── */
@@ -793,6 +804,12 @@
           </div>
         </div>
 
+        ${(linea.modelo || linea.modelo_interno) ? `
+        <div class="card-modelo-banner">
+          <span class="card-modelo-nombre">${linea.modelo||'—'}</span>
+          ${linea.modelo_interno ? `<span class="card-modelo-sep">·</span><span class="card-modelo-interno">${linea.modelo_interno}</span>` : ''}
+          ${linea.uph_meta > 0 ? `<span class="card-modelo-sep">–</span><span class="card-modelo-uph">UPH ${Math.round(linea.uph_meta)}</span>` : ''}
+        </div>` : ''}
         ${opsSection}
       </div>`;
   }

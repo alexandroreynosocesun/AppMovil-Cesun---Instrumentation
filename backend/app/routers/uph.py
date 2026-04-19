@@ -2059,10 +2059,13 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                 ).first()
                 tiene_siguiente = sig is not None
 
+        modelo_interno = modelo.modelo_interno if modelo else None
+
         resultado.append({
             "linea": linea.nombre,
             "linea_id": linea.id,
             "modelo": modelo_nombre,
+            "modelo_interno": modelo_interno,
             "uph_actual": uph_actual,
             "piezas_hora": piezas_hora,
             "uph_meta": uph_meta,
