@@ -211,6 +211,15 @@ class UPHService {
     }
   }
 
+  async avanzarModelo(lineaId) {
+    try {
+      const response = await apiClient.post(`/uph/plan/avanzar/${lineaId}`);
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
   async cerrarPlanLinea(linea) {
     try {
       const response = await apiClient.delete(`/uph/plan-linea/${encodeURIComponent(linea)}`);

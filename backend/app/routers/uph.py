@@ -815,6 +815,22 @@ def resumen_todas_lineas(
                 EventoUPH.timestamp >= plan_hoy.creado_en,
             ).scalar() or 0
 
+        # ¿Hay siguiente modelo en PlanDiaLinea?
+        tiene_siguiente = False
+        if plan_hoy:
+            orden_actual = db.query(PlanDiaLinea).filter(
+                PlanDiaLinea.linea_id  == linea.id,
+                PlanDiaLinea.modelo_id == plan_hoy.modelo_id,
+                PlanDiaLinea.fecha     == hoy,
+            ).first()
+            if orden_actual:
+                sig = db.query(PlanDiaLinea).filter(
+                    PlanDiaLinea.linea_id == linea.id,
+                    PlanDiaLinea.fecha    == hoy,
+                    PlanDiaLinea.orden    >  orden_actual.orden,
+                ).first()
+                tiene_siguiente = sig is not None
+
         resultado.append({
             "linea":           linea.nombre,
             "linea_id":        linea.id,
@@ -822,10 +838,11 @@ def resumen_todas_lineas(
             "uph_real":        round(uph_real, 1),
             "uph_meta":        round(uph_meta, 1),
             "piezas_hora":     piezas_hora,
-            "piezas_modelo":   piezas_modelo,   # producidas desde inicio del plan
-            "plan_modelo":     plan_total,       # meta total del día (Day+Night)
+            "piezas_modelo":   piezas_modelo,
+            "plan_modelo":     plan_total,
             "color":           _color_semaforo(uph_real, uph_meta),
             "total_estaciones": total_estaciones,
+            "tiene_siguiente": tiene_siguiente,
             "actualizado":     datetime.now(timezone.utc).isoformat(),
         })
     return {"lineas": resultado, "actualizado": datetime.now(timezone.utc).isoformat()}
@@ -1841,8 +1858,10 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
         _val = getattr(modelo, _attr, None) if (modelo and _attr) else None
         uph_meta = _val if _val else (modelo.uph_total if modelo else 0) if modelo else 0
 
-        # UPH actual: piezas del turno ÷ horas transcurridas del turno
-        uph_actual = round(_uph_turno(db, nombre_evento, inicio_turno_utc), 1)
+        # UPH actual: piezas del turno ÷ horas transcurridas (average para barra/%)
+        uph_actual  = round(_uph_turno(db, nombre_evento, inicio_turno_utc), 1)
+        # Piezas RAW en la hora actual (contador para el número X/Y)
+        piezas_hora = int(_uph_hora_actual(db, nombre_evento))
 
         # Plan activo de hoy para esta línea (usar fecha local, igual que plan/subir)
         plan_activo = db.query(PlanLinea).filter(
@@ -1887,25 +1906,50 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                     "foto_url": op.foto_url if op else None,
                     "estaciones": [],
                 }
-            uph_hora_est = round(uph_actual / num_est, 1)
+            uph_hora_est   = round(_uph_turno(db, nombre_evento, inicio_turno_utc, a.estacion), 1)
+            piezas_hora_est = int(_uph_hora_actual(db, nombre_evento, a.estacion))
             kpi_pct = round((uph_hora_est / uph_meta_est * 100) if uph_meta_est > 0 else 0, 1)
             ops_dict[emp]["estaciones"].append({
-                "estacion": a.estacion,
-                "uph_hora": uph_hora_est,
-                "uph_meta": uph_meta_est,
-                "kpi_pct": kpi_pct,
+                "estacion":   a.estacion,
+                "uph_hora":   uph_hora_est,    # average (para barra/%)
+                "piezas_hora": piezas_hora_est, # contador raw esta hora (para número)
+                "uph_meta":   uph_meta_est,
+                "kpi_pct":    kpi_pct,
             })
 
         en_descanso = _esta_en_descanso(db, linea.id, turno_id_act)
 
+        # ¿Plan completado? (piezas >= plan_total)
+        plan_completado = plan_activo is not None and plan_modelo > 0 and piezas_modelo >= plan_modelo
+
+        # ¿Hay siguiente modelo en PlanDiaLinea?
+        tiene_siguiente = False
+        if plan_activo:
+            orden_actual = db.query(PlanDiaLinea).filter(
+                PlanDiaLinea.linea_id  == linea.id,
+                PlanDiaLinea.modelo_id == plan_activo.modelo_id,
+                PlanDiaLinea.fecha     == hoy,
+            ).first()
+            if orden_actual:
+                sig = db.query(PlanDiaLinea).filter(
+                    PlanDiaLinea.linea_id == linea.id,
+                    PlanDiaLinea.fecha    == hoy,
+                    PlanDiaLinea.orden    >  orden_actual.orden,
+                ).first()
+                tiene_siguiente = sig is not None
+
         resultado.append({
             "linea": linea.nombre,
+            "linea_id": linea.id,
             "modelo": modelo_nombre,
             "uph_actual": uph_actual,
+            "piezas_hora": piezas_hora,
             "uph_meta": uph_meta,
             "piezas_modelo": piezas_modelo,
             "plan_modelo": plan_modelo,
             "en_descanso": en_descanso,
+            "plan_completado": plan_completado,
+            "tiene_siguiente": tiene_siguiente,
             "operadores": list(ops_dict.values()),
         })
 
@@ -1913,6 +1957,62 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
         "lineas": resultado,
         "turno_activo": turno_id_act,
         "actualizado": ahora.isoformat(),
+    }
+
+
+@router.post("/plan/avanzar/{linea_id}")
+async def plan_avanzar_modelo(linea_id: int, db: Session = Depends(get_uph_db)):
+    """Avance manual al siguiente modelo del plan (solo admin).
+    No requiere auth para simplificar el acceso desde dashboard interno."""
+    hoy = datetime.now().strftime("%Y-%m-%d")
+    ts  = datetime.now(timezone.utc)
+
+    plan_activo = db.query(PlanLinea).filter(
+        PlanLinea.linea_id == linea_id,
+        PlanLinea.fecha    == hoy,
+        PlanLinea.activo   == True,
+    ).first()
+
+    if not plan_activo:
+        raise HTTPException(status_code=404, detail="Sin plan activo para esta línea hoy")
+
+    orden_actual = db.query(PlanDiaLinea).filter(
+        PlanDiaLinea.linea_id  == linea_id,
+        PlanDiaLinea.modelo_id == plan_activo.modelo_id,
+        PlanDiaLinea.fecha     == hoy,
+    ).first()
+
+    if not orden_actual:
+        raise HTTPException(status_code=404, detail="Plan actual no encontrado en PlanDiaLinea")
+
+    siguiente = db.query(PlanDiaLinea).filter(
+        PlanDiaLinea.linea_id == linea_id,
+        PlanDiaLinea.fecha    == hoy,
+        PlanDiaLinea.orden    >  orden_actual.orden,
+    ).order_by(PlanDiaLinea.orden).first()
+
+    if not siguiente:
+        raise HTTPException(status_code=404, detail="No hay siguiente modelo en el plan de hoy")
+
+    plan_activo.activo = False
+    nuevo = PlanLinea(
+        linea_id  = linea_id,
+        modelo_id = siguiente.modelo_id,
+        plan_total= siguiente.plan_piezas,
+        fecha     = hoy,
+        activo    = True,
+        creado_en = ts,
+    )
+    db.add(nuevo)
+    db.commit()
+    db.refresh(nuevo)
+
+    modelo = db.query(ModeloUPH).filter(ModeloUPH.id == siguiente.modelo_id).first()
+    await ws_manager.broadcast("refresh")
+    return {
+        "ok": True,
+        "nuevo_modelo": modelo.nombre if modelo else None,
+        "plan_total": siguiente.plan_piezas,
     }
 
 

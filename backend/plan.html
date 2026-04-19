@@ -195,6 +195,15 @@
   <div class="section">
     <div class="section-title">Subir Plan de Producción (Excel)</div>
 
+    <!-- Selector de fecha del plan -->
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
+      <label style="font-size:0.72rem;color:#00856e;letter-spacing:1px;text-transform:uppercase;">Fecha del plan:</label>
+      <input type="date" id="fecha-plan"
+        style="background:#071a17;border:1px solid #0a2e2a;border-radius:8px;color:#e0f7f5;
+               padding:7px 12px;font-size:0.88rem;outline:none;cursor:pointer;" />
+      <span id="fecha-plan-label" style="font-size:0.78rem;color:#00c8b8;font-weight:700;"></span>
+    </div>
+
     <div class="upload-zone" id="drop-zone">
       <input type="file" id="file-input" accept=".xlsx,.xls,.csv"/>
       <div class="upload-icon">📊</div>
@@ -292,6 +301,21 @@
     { key: 'hora_fin',       label: 'Hora fin',         required: false },
   ];
 
+  // ── Inicializar fecha del plan (default: hoy) ────────────────
+  const fechaInput = document.getElementById('fecha-plan');
+  const fechaLabel = document.getElementById('fecha-plan-label');
+  const _hoy = new Date();
+  const _pad = n => String(n).padStart(2,'0');
+  fechaInput.value = `${_hoy.getFullYear()}-${_pad(_hoy.getMonth()+1)}-${_pad(_hoy.getDate())}`;
+  const _dias = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const _meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  function actualizarLabelFecha() {
+    const d = new Date(fechaInput.value + 'T12:00:00');
+    fechaLabel.textContent = `${_dias[d.getDay()]} ${d.getDate()} ${_meses[d.getMonth()]}`;
+  }
+  actualizarLabelFecha();
+  fechaInput.addEventListener('change', actualizarLabelFecha);
+
   const dropZone = document.getElementById('drop-zone');
   const fileInput = document.getElementById('file-input');
 
@@ -373,11 +397,54 @@
     fullRange.e.r = Math.min(fullRange.e.r, 2999); // máx 3000 filas
     ws['!ref'] = XLSX.utils.encode_range(fullRange);
 
-    // Columnas fijas del AMI: EF=Day (135), EG=Night (136)
-    const colDay   = 135;
-    const colNight = 136;
     const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
-    const turno    = detectarTurnoActual();
+    const turno = detectarTurnoActual();
+
+    // Detectar columna Day/Night usando la fecha seleccionada en el picker
+    // Busca en filas 2-6 (índices 1-5) para cubrir variaciones del Excel
+    // Maneja: string "18-Apr", número de serie Excel, o Date object
+    const fechaSelec = new Date(document.getElementById('fecha-plan').value + 'T12:00:00');
+    const meses = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const diaObj = fechaSelec.getDate();
+    const mesObj = meses[fechaSelec.getMonth()];
+
+    function celdaEsFecha(cell) {
+      if (!cell && cell !== 0) return false;
+      // String tipo "18-Apr" o "18-APR"
+      if (typeof cell === 'string') {
+        const m = cell.trim().match(/^(\d{1,2})[-\/]([A-Za-z]{3})/);
+        if (m && parseInt(m[1]) === diaObj && m[2].toLowerCase() === mesObj.toLowerCase()) return true;
+      }
+      // Número de serie Excel (días desde 1900-01-01)
+      if (typeof cell === 'number' && cell > 40000 && cell < 60000) {
+        const d = new Date(Math.round((cell - 25569) * 86400 * 1000));
+        if (d.getUTCDate() === diaObj && d.getUTCMonth() === fechaSelec.getMonth()) return true;
+      }
+      // Date object (cuando XLSX parsea con cellDates:true)
+      if (cell instanceof Date) {
+        if (cell.getUTCDate() === diaObj && cell.getUTCMonth() === fechaSelec.getMonth()) return true;
+      }
+      return false;
+    }
+
+    let colDay = null, colNight = null;
+    outer: for (let r = 1; r <= 6; r++) {
+      const fila = data[r] || [];
+      for (let c = 0; c < fila.length; c++) {
+        if (celdaEsFecha(fila[c])) {
+          colDay   = c;
+          colNight = c + 1;
+          break outer;
+        }
+      }
+    }
+    const fechaLabel = `${diaObj}-${mesObj}`;
+    if (colDay === null) {
+      document.getElementById('ami-section').style.display = 'block';
+      document.getElementById('ami-results').innerHTML =
+        `<div style="color:#ff5555;font-size:0.85rem;">❌ No se encontró <b>${fechaLabel}</b> en el Excel.<br>Verifica que la fecha seleccionada coincida con el plan.</div>`;
+      return;
+    }
 
     const resultados = {'HI-1':[],'HI-2':[],'HI-3':[],'HI-4':[],'HI-5':[],'HI-6':[]};
 

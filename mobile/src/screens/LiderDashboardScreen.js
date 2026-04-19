@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   View, StyleSheet, ScrollView, TouchableOpacity,
@@ -132,6 +132,7 @@ export default function LiderDashboardScreen() {
   const [planActivo, setPlanActivo] = useState(null);
   const [planDia, setPlanDia] = useState([]);
   const [proximosExpanded, setProximosExpanded] = useState(false);
+  const [avanzando, setAvanzando] = useState(false);
   const [loading, setLoading]   = useState(true);
   const [loadingOps, setLoadingOps] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -191,9 +192,41 @@ export default function LiderDashboardScreen() {
     cargarOperadores(lineaLocal);
   }, [lineaLocal, cargarOperadores]);
 
-  useFocusEffect(useCallback(() => { cargar(); }, [cargar]));
+  useFocusEffect(useCallback(() => {
+    cargar();
+    const intervalo = setInterval(cargar, 15000);
+    return () => clearInterval(intervalo);
+  }, [cargar]));
 
   const onRefresh = () => { setRefreshing(true); cargar(); };
+
+  const handleAvanzarModelo = () => {
+    const lineaId = resumenLinea?.linea_id;
+    if (!lineaId) return;
+    showAlert(
+      'Avanzar al siguiente modelo',
+      '¿Confirmas avanzar al siguiente modelo del plan? Esta acción es inmediata.',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Avanzar',
+          style: 'destructive',
+          onPress: async () => {
+            setAvanzando(true);
+            const r = await uphService.avanzarModelo(lineaId);
+            setAvanzando(false);
+            if (r.success) {
+              showAlert('Listo', `Modelo avanzado: ${r.data?.nuevo_modelo || ''}`, [
+                { text: 'OK', onPress: cargar },
+              ]);
+            } else {
+              showAlert('Error', r.error || 'No se pudo avanzar el modelo');
+            }
+          },
+        },
+      ]
+    );
+  };
 
   const handleLogout = () => {
     showAlert('Cerrar sesión', '¿Deseas cerrar sesión?', [
@@ -349,6 +382,21 @@ export default function LiderDashboardScreen() {
                           <View style={s.planBarBg}>
                             <View style={[s.planBarFill, { width: `${pctPlan}%`, backgroundColor: colorPct }]} />
                           </View>
+                        )}
+
+                        {/* Botón avanzar modelo — solo admin/superadmin */}
+                        {(user?.tipo_usuario === 'admin' || user?.tipo_usuario === 'superadmin') &&
+                          resumenLinea?.tiene_siguiente && (
+                          <TouchableOpacity
+                            style={[s.btnAvanzar, avanzando && { opacity: 0.5 }]}
+                            onPress={handleAvanzarModelo}
+                            disabled={avanzando}
+                            activeOpacity={0.75}
+                          >
+                            <Text style={s.btnAvanzarText}>
+                              {avanzando ? 'Avanzando…' : '⏭  Avanzar al siguiente modelo'}
+                            </Text>
+                          </TouchableOpacity>
                         )}
                       </View>
                     );
@@ -583,6 +631,14 @@ const s = StyleSheet.create({
   planMetricaSep:   { width: 1, height: 36, backgroundColor: '#1B5E20', marginHorizontal: 4, alignSelf: 'center' },
   planBarBg:  { height: 5, backgroundColor: '#0A2E0A', borderRadius: 3, overflow: 'hidden' },
   planBarFill:{ height: 5, borderRadius: 3 },
+
+  // Botón avanzar modelo
+  btnAvanzar: {
+    marginTop: 12, paddingVertical: 10, borderRadius: 8,
+    backgroundColor: '#0D3321', borderWidth: 1, borderColor: '#2E7D32',
+    alignItems: 'center',
+  },
+  btnAvanzarText: { color: '#66BB6A', fontSize: 13, fontWeight: '800', letterSpacing: 0.5 },
 
   // Próximos cambios
   proximosBtn: {
