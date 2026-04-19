@@ -1373,18 +1373,15 @@ async def crear_asignacion_bulk(
     ).first()
 
     if ya_hay:
-        # Reasignación mid-turno: cerrar las activas con hora_fin = ahora
-        activas = db.query(Asignacion).filter(
+        # Borrar las activas y recrear limpias
+        db.query(Asignacion).filter(
             Asignacion.linea_id == linea.id,
             Asignacion.fecha    == data.fecha,
             Asignacion.hora_fin == None,
-        ).all()
-        for a in activas:
-            a.hora_fin = ahora_utc
+        ).delete(synchronize_session='fetch')
         db.flush()
         hora_inicio_nueva = ahora_utc
     else:
-        # Primera asignación del turno: hora_inicio = None → desde inicio de turno
         hora_inicio_nueva = None
 
     creadas = 0
