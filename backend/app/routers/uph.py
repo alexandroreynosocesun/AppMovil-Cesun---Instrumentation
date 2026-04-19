@@ -3179,6 +3179,7 @@ LIDERES_AMI = [
     {"num_empleado": "20179", "nombre": "QUINTERO DANIEL AARON ENRIQUE",         "linea": "HI-3"},
     {"num_empleado": "26184", "nombre": "CATARINO SANCHEZ FERNANDO JOSE",        "linea": "HI-4"},
     {"num_empleado": "33247", "nombre": "SILVA VILLASEÑOR EVA NOEMY",            "linea": "HI-6"},
+    {"num_empleado": "00000", "nombre": "USUARIO DE PRUEBA",                     "linea": "TEST"},
 ]
 
 
