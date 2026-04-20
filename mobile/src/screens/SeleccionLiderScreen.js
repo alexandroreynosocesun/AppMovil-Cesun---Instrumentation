@@ -10,7 +10,8 @@ import { uphService } from '../services/UPHService';
 import { useLiderPerfil } from '../contexts/LiderPerfilContext';
 import { API_BASE_URL } from '../utils/apiClient';
 
-const COLS = 3;
+const MAX_CONTENT_W = 800;
+const MAX_AVATAR    = 90;
 
 function n2(nombre) {
   const p = (nombre || '').trim().split(' ');
@@ -79,8 +80,10 @@ export default function SeleccionLiderScreen({ navigation }) {
   const [loading,   setLoading]   = useState(true);
   const [claiming,  setClaiming]  = useState(null);
 
-  const CARD_W = (width - 48) / COLS;
-  const AVATAR = CARD_W - 24;
+  const COLS       = width >= 900 ? 6 : width >= 600 ? 4 : 3;
+  const CONTENT_W  = Math.min(width, MAX_CONTENT_W);
+  const CARD_W     = (CONTENT_W - 48) / COLS;
+  const AVATAR     = Math.min(CARD_W - 24, MAX_AVATAR);
 
   const cargar = useCallback(async () => {
     setLoading(true);
@@ -158,15 +161,18 @@ export default function SeleccionLiderScreen({ navigation }) {
         {loading ? (
           <ActivityIndicator size="large" color="#2196F3" style={{ flex: 1 }} />
         ) : (
-          <FlatList
-            data={lideres}
-            keyExtractor={i => i.num_empleado}
-            numColumns={COLS}
-            contentContainerStyle={c.grid}
-            columnWrapperStyle={c.row}
-            renderItem={renderItem}
-            showsVerticalScrollIndicator={false}
-          />
+          <View style={c.gridWrap}>
+            <FlatList
+              key={COLS}
+              data={lideres}
+              keyExtractor={i => i.num_empleado}
+              numColumns={COLS}
+              contentContainerStyle={c.grid}
+              columnWrapperStyle={c.row}
+              renderItem={renderItem}
+              showsVerticalScrollIndicator={false}
+            />
+          </View>
         )}
       </SafeAreaView>
     </View>
@@ -177,10 +183,11 @@ const c = StyleSheet.create({
   container: { flex: 1 },
   safe:      { flex: 1 },
 
-  header:    { alignItems: 'center', paddingTop: 20, paddingBottom: 16 },
+  header:    { alignItems: 'center', paddingTop: 20, paddingBottom: 16, alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_W },
   titulo:    { color: '#fff', fontSize: 26, fontWeight: '800', letterSpacing: 0.5 },
   subtitulo: { color: '#546E7A', fontSize: 13, marginTop: 4 },
 
+  gridWrap: { flex: 1, alignSelf: 'center', width: '100%', maxWidth: MAX_CONTENT_W },
   grid: { paddingHorizontal: 16, paddingBottom: 40 },
   row:  { justifyContent: 'space-between', marginBottom: 8 },
 
