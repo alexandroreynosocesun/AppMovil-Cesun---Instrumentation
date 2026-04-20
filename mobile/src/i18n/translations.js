@@ -1,8 +1,8 @@
 export const translations = {
   es: {
     // App
-    appName: "Hisense CheckApp",
-    appSubtitle: "Sistema de digitalización de validaciones",
+    appName: "HI System",
+    appSubtitle: "Sistema de operaciones · Planta AMI",
     
     // Login
     login: "Iniciar Sesión",

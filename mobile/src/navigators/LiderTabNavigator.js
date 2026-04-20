@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text, Alert } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import LiderDashboardScreen from '../screens/LiderDashboardScreen';
 import UPHDashboardLiderScreen from '../screens/UPHDashboardLiderScreen';
@@ -27,6 +28,7 @@ function TabIcon({ name, focused }) {
 
 export default function LiderTabNavigator() {
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
@@ -36,8 +38,8 @@ export default function LiderTabNavigator() {
           backgroundColor: '#111',
           borderTopColor: '#222',
           borderTopWidth: 1,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom || 8,
         },
         tabBarActiveTintColor: '#2196F3',
         tabBarInactiveTintColor: '#555',

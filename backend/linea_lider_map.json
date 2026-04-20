@@ -1,1 +1,12 @@
-{}
+{
+  "HI-3": {
+    "num_empleado": "00000",
+    "nombre": "USUARIO DE PRUEBA",
+    "foto_url": null
+  },
+  "HI-2": {
+    "num_empleado": "202",
+    "nombre": "ALTAMIRANO GALINDO ODALIS YESENIA",
+    "foto_url": "/uploads/lideres/202.png"
+  }
+}

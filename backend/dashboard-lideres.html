@@ -483,30 +483,18 @@
   }
 
   // ── FETCH LÍDERES ──
-  const MOCK_LIDERES = [
-    { num_empleado:'L001', nombre:'Carlos Mendoza Ruiz',     foto_url:null, turno:'A', linea:'HI-1', modelo:'65U7K',  uph_actual:87,  uph_meta:90,  kpi_pct:96.7, piezas_modelo:870, plan_modelo:990,  plan_pct:87.9 },
-    { num_empleado:'L002', nombre:'Laura Sánchez Torres',    foto_url:null, turno:'A', linea:'HI-2', modelo:'75U7K',  uph_actual:95,  uph_meta:90,  kpi_pct:105.6,piezas_modelo:950, plan_modelo:990,  plan_pct:95.9 },
-    { num_empleado:'L003', nombre:'Miguel Ángel Flores',     foto_url:null, turno:'A', linea:'HI-3', modelo:'43A4K',  uph_actual:72,  uph_meta:90,  kpi_pct:80.0, piezas_modelo:720, plan_modelo:990,  plan_pct:72.7 },
-    { num_empleado:'L004', nombre:'Patricia Gutiérrez Vega', foto_url:null, turno:'A', linea:'HI-4', modelo:'55U7K',  uph_actual:102, uph_meta:90,  kpi_pct:113.3,piezas_modelo:1020,plan_modelo:990,  plan_pct:103.0},
-    { num_empleado:'L005', nombre:'Roberto Hernández Luna',  foto_url:null, turno:'A', linea:'HI-5', modelo:'50A4K',  uph_actual:60,  uph_meta:90,  kpi_pct:66.7, piezas_modelo:600, plan_modelo:990,  plan_pct:60.6 },
-    { num_empleado:'L006', nombre:'Alejandra Ramos Cruz',    foto_url:null, turno:'A', linea:'HI-6', modelo:'40A4K',  uph_actual:91,  uph_meta:90,  kpi_pct:101.1,piezas_modelo:910, plan_modelo:990,  plan_pct:91.9 },
-  ];
-
   async function fetchLideres() {
     try {
       const r = await fetch(`${API}/api/uph/dashboard/lideres`);
       if (!r.ok) throw new Error(r.status);
       const data = await r.json();
-      const lideres = (data.lideres || []).length > 0 ? data.lideres : MOCK_LIDERES;
-      render(lideres);
+      render(data.lideres || []);
       document.getElementById('live-dot').className = 'h-live-dot on';
-      document.getElementById('last-upd').textContent = (data.lideres||[]).length > 0
-        ? new Date().toLocaleTimeString('es-MX')
-        : `[MOCK] ${new Date().toLocaleTimeString('es-MX')}`;
+      document.getElementById('last-upd').textContent = new Date().toLocaleTimeString('es-MX');
     } catch(e) {
-      render(MOCK_LIDERES);
-      document.getElementById('live-dot').className = 'h-live-dot on';
-      document.getElementById('last-upd').textContent = `[MOCK] ${new Date().toLocaleTimeString('es-MX')}`;
+      document.getElementById('live-dot').className = 'h-live-dot';
+      document.getElementById('last-upd').textContent = 'Sin conexión';
+      document.getElementById('main-grid').innerHTML = '<div class="empty-state">Sin conexión con el servidor</div>';
     }
   }
 

@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime, timedelta, timezone
 from ..database_uph import get_uph_db
+from ..database import get_db
 from ..models.uph_models import Operador, Linea, ModeloUPH, Turno, Asignacion, EventoUPH, PlanLinea, DescansoLinea, PlanDiaLinea
 from ..auth import get_current_user
 from ..models.models import Tecnico
@@ -1011,7 +1012,7 @@ def top_operadores(
                 "piezas_hora": 0,
                 "piezas_dia": 0,
             }
-        linea_nombre = _event_name_for_linea(asig.linea.nombre if asig.linea else "")
+        linea_nombre = _linea_evento(asig.linea.nombre if asig.linea else "")
         piezas_hora = db.query(func.count(EventoUPH.id)).filter(
             EventoUPH.estacion == asig.estacion,
             EventoUPH.linea == linea_nombre,
@@ -2921,7 +2922,7 @@ def get_plan_dia(linea: str, db: Session = Depends(get_uph_db)):
 # DASHBOARD LÍDERES — estado actual por líder + línea asignada
 # ─────────────────────────────────────────────────────────────────────────────
 @router.get("/dashboard/lideres")
-def dashboard_lideres(db: Session = Depends(get_uph_db)):
+def dashboard_lideres(db: Session = Depends(get_uph_db), db_main: Session = Depends(get_db)):
     ahora_loc = datetime.now()
     ahora_utc = datetime.now(timezone.utc)
     hoy       = ahora_loc.strftime("%Y-%m-%d")
@@ -2949,7 +2950,7 @@ def dashboard_lideres(db: Session = Depends(get_uph_db)):
     inicio_turno_utc = (inicio_turno_loc + utc_offset).replace(tzinfo=timezone.utc)
     horas_turno = max((ahora_utc - inicio_turno_utc).total_seconds() / 3600, 0.01)
 
-    lideres = db.query(Tecnico).filter(
+    lideres = db_main.query(Tecnico).filter(
         Tecnico.tipo_usuario == "lider_linea",
         Tecnico.activo == True,
     ).all()
@@ -3025,7 +3026,7 @@ def dashboard_lideres(db: Session = Depends(get_uph_db)):
 # RANKING SEMANAL DE LÍNEAS
 # ─────────────────────────────────────────────────────────────────────────────
 @router.get("/ranking/lineas-semana")
-def ranking_lineas_semana(db: Session = Depends(get_uph_db)):
+def ranking_lineas_semana(db: Session = Depends(get_uph_db), db_main: Session = Depends(get_db)):
     ahora_loc = datetime.now()
     ahora_utc = datetime.now(timezone.utc)
     utc_offset = ahora_utc.replace(tzinfo=None) - ahora_loc
@@ -3055,7 +3056,7 @@ def ranking_lineas_semana(db: Session = Depends(get_uph_db)):
         horas_semana += max(0.0, (efectivo_fin - dia_ini_utc).total_seconds() / 3600)
     horas_semana = max(horas_semana, 1.0)
 
-    lineas = db.query(Linea).filter(Linea.activa == True).all()
+    lineas = db.query(Linea).all()
     ranking = []
     for linea in lineas:
         nombre_ev = linea.nombre
@@ -3067,7 +3068,7 @@ def ranking_lineas_semana(db: Session = Depends(get_uph_db)):
         ).scalar() or 0
 
         # Líder asignado a esta línea
-        lider = db.query(Tecnico).filter(
+        lider = db_main.query(Tecnico).filter(
             Tecnico.tipo_usuario == "lider_linea",
             Tecnico.linea_uph.ilike(linea.nombre),
             Tecnico.activo == True,
@@ -3085,7 +3086,7 @@ def ranking_lineas_semana(db: Session = Depends(get_uph_db)):
     ranking.sort(key=lambda x: x["uph_semana"], reverse=True)
     # Inyectar foto_url real de cada líder
     for item in ranking:
-        lid = db.query(Tecnico).filter(
+        lid = db_main.query(Tecnico).filter(
             Tecnico.tipo_usuario == "lider_linea",
             Tecnico.linea_uph.ilike(item["linea"]),
             Tecnico.activo == True,

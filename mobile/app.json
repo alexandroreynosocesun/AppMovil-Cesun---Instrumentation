@@ -1,10 +1,10 @@
 {
   "expo": {
-    "name": "Hisense CheckApp",
+    "name": "HI System",
     "slug": "jigs-validation",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/LOGO NUEVO.png",
+    "icon": "./assets/logo app.png",
     "userInterfaceStyle": "light",
     "splash": {
       "image": "./assets/splash.png",
@@ -19,9 +19,9 @@
       "bundleIdentifier": "com.empresa.jigsvalidation"
     },
     "web": {
-      "favicon": "./assets/LOGO NUEVO.png",
-      "name": "Hisense CheckApp",
-      "shortName": "CheckApp",
+      "favicon": "./assets/logo app.png",
+      "name": "HI System",
+      "shortName": "HI System",
       "lang": "es",
       "themeColor": "#2196F3",
       "backgroundColor": "#0F0F0F",
@@ -32,7 +32,7 @@
     "android": {
       "package": "com.empresa.jigsvalidation",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/LOGO NUEVO.png",
+        "foregroundImage": "./assets/logo app.png",
         "backgroundColor": "#FFFFFF"
       },
       "permissions": [
