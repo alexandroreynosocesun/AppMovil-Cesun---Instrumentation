@@ -1941,28 +1941,17 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
 
     resultado = []
     for linea in lineas:
-        # Asignaciones del turno activo para esta línea
-        # Primero buscar por turno activo exacto; si no hay, usar cualquier asignación del día
+        # Asignaciones del turno activo para esta línea (solo turno actual)
         asignaciones = (
             db.query(Asignacion)
             .filter(
                 Asignacion.linea_id == linea.id,
                 Asignacion.fecha    == fecha_asig,
                 Asignacion.turno_id == turno_id_act,
-                Asignacion.hora_fin == None,
+                Asignacion.hora_fin.is_(None),
             )
             .all()
         )
-        if not asignaciones:
-            asignaciones = (
-                db.query(Asignacion)
-                .filter(
-                    Asignacion.linea_id == linea.id,
-                    Asignacion.fecha    == fecha_asig,
-                    Asignacion.hora_fin == None,
-                )
-                .all()
-            )
 
         # Nombre de línea tal como llega en los eventos (L6, L1, etc.)
         nombre_evento = _linea_evento(linea.nombre)
