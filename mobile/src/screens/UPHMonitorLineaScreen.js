@@ -114,6 +114,14 @@ export default function UPHMonitorLineaScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* Botón asignar operadores */}
+      <TouchableOpacity
+        style={styles.asignarBtn}
+        onPress={() => navigation.navigate('AsignacionLinea', { lineaNombre: lineaData.linea })}
+      >
+        <Text style={styles.asignarBtnText}>👷 Asignar Operadores a {lineaData.linea}</Text>
+      </TouchableOpacity>
+
       {/* Estaciones */}
       <ScrollView
         contentContainerStyle={styles.estList}
@@ -218,6 +226,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a2e2a', borderRadius: 20, borderWidth: 1, borderColor: '#00856e',
   },
   cambiarBtnText: { color: '#00c8b8', fontSize: 12, fontWeight: '700' },
+
+  asignarBtn: {
+    marginHorizontal: 12, marginBottom: 4,
+    backgroundColor: '#0a2e2a', borderRadius: 12,
+    borderWidth: 1, borderColor: '#00856e',
+    paddingVertical: 12, alignItems: 'center',
+  },
+  asignarBtnText: { color: '#00c8b8', fontSize: 13, fontWeight: '700' },
 
   estList: { padding: 12, gap: 8 },
   seccionTitle: { color: '#00856e', fontSize: 10, fontWeight: '700', letterSpacing: 2, marginBottom: 4 },

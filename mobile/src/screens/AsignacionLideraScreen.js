@@ -106,11 +106,12 @@ function ModalOperador({ visible, operadores, onSelect, onClose }) {
 }
 
 // ── Pantalla principal ──────────────────────────────────────
-export default function AsignacionLideraScreen({ navigation }) {
+export default function AsignacionLideraScreen({ navigation, route }) {
   const { isWeb, maxWidth, containerPadding } = usePlatform();
   const { user } = useAuth();
   const { perfil } = useLiderPerfil();
-  const lineaUsuario = user?.linea_uph;
+  const lineaForzada = route?.params?.lineaNombre || null;
+  const lineaUsuario = lineaForzada || user?.linea_uph;
   const turnoUsuario = user?.turno_actual;
 
   const [operadores,         setOperadores]         = useState([]);
