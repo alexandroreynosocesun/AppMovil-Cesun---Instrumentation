@@ -184,15 +184,6 @@
   function ini(n) { return (n||'?').trim().split(' ').slice(0,2).map(p=>p[0]||'').join('').toUpperCase(); }
   function n2(n)  { const p=(n||'').trim().split(/\s+/); return p.length>=3?p[0]+' '+p[2]:p.slice(0,2).join(' '); }
 
-  const MOCK_LIDERES = [
-    { linea:'HI-1', nombre:'Carlos Mendoza Ruiz',    foto_url:null },
-    { linea:'HI-2', nombre:'Laura Sánchez Torres',   foto_url:null },
-    { linea:'HI-3', nombre:'Miguel Ángel Flores',    foto_url:null },
-    { linea:'HI-4', nombre:'Patricia Gutiérrez Vega',foto_url:null },
-    { linea:'HI-5', nombre:'Roberto Hernández Luna', foto_url:null },
-    { linea:'HI-6', nombre:'Alejandra Ramos Cruz',   foto_url:null },
-  ];
-
   async function fetchLideres() {
     try {
       const r = await fetch(`${API}/api/uph/lideres/lineas`);

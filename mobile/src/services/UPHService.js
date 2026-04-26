@@ -331,6 +331,24 @@ class UPHService {
       return { success: false };
     }
   }
+
+  async getMonitorLineas() {
+    try {
+      const response = await apiClient.get('/uph/monitor/lineas');
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
+
+  async getLideresLista() {
+    try {
+      const response = await apiClient.get('/uph/lideres');
+      return { success: true, data: response.data };
+    } catch (error) {
+      return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
+    }
+  }
 }
 
 export const uphService = new UPHService();

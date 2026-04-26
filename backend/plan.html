@@ -677,14 +677,24 @@
     }
     const { mapa, filaEncabezado } = mapaCol;
 
-    let ultimaLinea = null; // propaga Line en celdas fusionadas
+    // Construir mapa de fusiones para la columna Line usando ws['!merges']
+    const lineaMergeMap = {};
+    for (const merge of (ws['!merges'] || [])) {
+      if (merge.s.c === mapa.linea) {
+        const addr = XLSX.utils.encode_cell({ r: merge.s.r, c: mapa.linea });
+        const cell = ws[addr];
+        const lineaMerge = cell ? mapearLinea(cell.v) : null;
+        if (lineaMerge) {
+          for (let r = merge.s.r; r <= merge.e.r; r++) lineaMergeMap[r] = lineaMerge;
+        }
+      }
+    }
+
     for (let i = filaEncabezado + 1; i < data.length; i++) {
       const row = data[i];
       if (!row) continue;
       const lineaRaw = mapa.linea !== undefined ? row[mapa.linea] : null;
-      const lineaDetectada = mapearLinea(lineaRaw);
-      if (lineaDetectada) ultimaLinea = lineaDetectada;
-      const linea = ultimaLinea;
+      const linea = mapearLinea(lineaRaw) || lineaMergeMap[i] || null;
       if (!linea || !resultados[linea]) continue;
 
       const internalModel = mapa.modelo_interno !== undefined ? row[mapa.modelo_interno] : null;

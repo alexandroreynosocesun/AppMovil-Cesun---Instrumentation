@@ -278,6 +278,13 @@
     .rk-row.top-2 { border-color: #c0c0c0bb; background: linear-gradient(105deg, #111 0%, #181818 60%, #0d0d0d 100%); }
     .rk-row.top-3 { border-color: #cd7f32aa; background: linear-gradient(105deg, #110800 0%, #1a0e00 60%, #0d0800 100%); }
 
+    .rk-avatar {
+      width: 44px; height: 44px; border-radius: 50%; flex-shrink: 0;
+      background: #071a17; border: 2px solid #0a2e2a; object-fit: cover;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.85rem; font-weight: 900; color: #00c8b8;
+    }
+    .rk-row.top-1 .rk-avatar { width: 54px; height: 54px; border-color: #ffd700; box-shadow: 0 0 14px #ffd70066; }
     .rk-pos { font-size: 1.4rem; font-weight: 900; min-width: 44px; text-align: center; }
     .rk-row.top-1 .rk-pos { font-size: 2rem; text-shadow: 0 0 20px #ffd700cc; }
     .rk-row.top-2 .rk-pos { font-size: 1.7rem; text-shadow: 0 0 14px #c0c0c099; }
@@ -331,14 +338,14 @@
 <!-- FASE TROFEO LÍNEA -->
 <div id="fase-trofeo-linea">
   <div class="trofeo-emoji">🏆</div>
-  <div class="trofeo-sub">Mejor línea de la semana</div>
+  <div class="trofeo-sub">Mejor líder de la semana</div>
 </div>
 
 <!-- PANTALLA RANKING SEMANAL -->
 <div id="pantalla-ranking">
   <div class="rk-header">
-    <div class="rk-titulo">🏆 Ranking Líneas · Semana</div>
-    <div class="rk-sub" id="rk-periodo">UPH promedio · últimos 7 días</div>
+    <div class="rk-titulo">🏆 Ranking Líderes · Semana</div>
+    <div class="rk-sub" id="rk-periodo">UPH promedio · semana</div>
   </div>
   <div class="rk-list" id="rk-list"></div>
   <div class="rk-footer">
@@ -356,7 +363,7 @@
   <div class="h-spacer"></div>
   <div class="h-live-dot" id="live-dot"></div>
   <div class="h-last-upd" id="last-upd">—</div>
-  <button class="btn-semana" onclick="abrirRankingSemana()">🏆 Mejor Línea · Semana</button>
+  <button class="btn-semana" onclick="abrirRankingSemana()">🏆 Mejor Líder · Semana</button>
 </div>
 
 <!-- MAIN -->
@@ -522,7 +529,7 @@
       spotlight.classList.remove('on');
 
       try {
-        const r = await fetch(`${API}/api/uph/ranking/lineas-semana`);
+        const r = await fetch(`${API}/api/uph/ranking/lideres-semana`);
         const data = await r.json();
         renderRanking(data);
       } catch(e) {
@@ -553,25 +560,32 @@
   }
 
   function renderRanking(data) {
-    const list = document.getElementById('rk-list');
+    const list    = document.getElementById('rk-list');
     const periodo = document.getElementById('rk-periodo');
     if (data.periodo_inicio) {
-      periodo.textContent = `${data.periodo_inicio} → ${data.periodo_fin} · ${data.horas_semana}h efectivas`;
+      periodo.textContent = data.semana_cerrada
+        ? `${data.periodo_inicio} → ${data.periodo_fin} · cerrada`
+        : `${data.periodo_inicio} → ${data.periodo_fin} · ${data.horas_semana}h`;
     }
-    const maxUph = data.ranking.length > 0 ? data.ranking[0].uph_semana : 1;
-    list.innerHTML = (data.ranking || []).map((item, i) => {
-      const rank = i + 1;
-      const topCls = rank <= 3 ? `top-${rank}` : '';
-      const barCls = rank <= 3 ? `top-${rank}` : 'resto';
-      const pct = maxUph > 0 ? Math.min((item.uph_semana / maxUph) * 100, 100) : 0;
+    const ranking = data.ranking || [];
+    const maxUph  = ranking.length > 0 ? ranking[0].uph_semana : 1;
+    list.innerHTML = ranking.map((item, i) => {
+      const rank       = i + 1;
+      const topCls     = rank <= 3 ? `top-${rank}` : '';
+      const barCls     = rank <= 3 ? `top-${rank}` : 'resto';
+      const pct        = maxUph > 0 ? Math.min((item.uph_semana / maxUph) * 100, 100) : 0;
       const rankSymbol = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : rank;
+      const lineasStr  = (item.lineas || []).join(', ');
+      const avt        = item.foto_url
+        ? `<img class="rk-avatar" src="${item.foto_url}" onerror="this.outerHTML='<div class=\\'rk-avatar\\'>${ini(item.nombre)}</div>'">`
+        : `<div class="rk-avatar">${ini(item.nombre)}</div>`;
       return `
       <div class="rk-row ${topCls}">
         <div class="rk-pos ${rank>3?'resto':''}">${rankSymbol}</div>
-        <div class="rk-linea-badge">${item.linea.replace('HI-','L')}</div>
+        ${avt}
         <div class="rk-info">
-          <div class="rk-lider">${item.lider_nombre || 'Sin líder'}</div>
-          <div class="rk-sub2">${item.total_piezas.toLocaleString()} piezas · ${item.linea}</div>
+          <div class="rk-lider">${n2(item.nombre)}</div>
+          <div class="rk-sub2">${lineasStr} · UPH ${item.uph_semana}</div>
         </div>
         <div class="rk-bar-wrap">
           <div class="rk-bar-fill ${barCls}" style="width:0%" data-w="${pct.toFixed(1)}"></div>

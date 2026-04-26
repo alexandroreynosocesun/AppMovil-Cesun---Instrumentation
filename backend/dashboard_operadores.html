@@ -267,6 +267,7 @@
     }
     .card-ops.vacia { align-items: center; justify-content: center; }
     .ops-empty { color: #0a3530; font-size: 0.75rem; }
+    .ops-sin-plan { font-size: 5.5rem; font-weight: 900; color: #1a3a36; letter-spacing: 10px; text-transform: uppercase; }
 
     /* ── Mini scoreboard por línea ── */
     .card-scoreboard {
@@ -345,6 +346,8 @@
                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
                letter-spacing: 0.5px; }
     .op-card.kpi-verde .op-name { color: #00e5cc; text-shadow: 0 0 8px #00c8b866; }
+    .op-turno-total { font-size: 0.95rem; font-weight: 800; color: #00856e;
+                      letter-spacing: 0.5px; text-align: center; margin-top: 1px; }
 
     /* Barras de estaciones dentro de la card */
     .op-stations { display: flex; flex-direction: row; gap: 12px;
@@ -728,6 +731,7 @@
           ${avatarHTML(op, c)}
         </div>
         <span class="op-name">${nombre2}</span>
+        <span class="op-turno-total">${op.piezas_turno||0} pzs</span>
         <div class="op-stations">${ests.map(stColHTML).join('')}</div>
       </div>`;
   }
@@ -786,9 +790,12 @@
     const withUph = operadores.map(op => { const s=op.estaciones||[]; return {...op, _uph:s.reduce((a,e)=>a+(e.uph_hora||0),0)}; });
     const rankMap2 = [...withUph].sort((a,b)=>b._uph-a._uph).reduce((m,op,i)=>{ m[op.num_empleado]=i+1; return m; }, {});
     const ops = withUph.map(op => opColHTML(op, rankMap2[op.num_empleado], withUph.length)).join('');
-    const opsSection = linea.operadores.length > 0
-      ? `<div class="card-ops">${ops}</div>`
-      : `<div class="card-ops vacia"><span class="ops-empty">Sin operadores asignados</span></div>`;
+    const sinModelo = !linea.modelo && !linea.modelo_interno;
+    const opsSection = sinModelo
+      ? `<div class="card-ops vacia"><span class="ops-sin-plan">NO WORK</span></div>`
+      : linea.operadores.length > 0
+        ? `<div class="card-ops">${ops}</div>`
+        : `<div class="card-ops vacia"><span class="ops-empty">Sin operadores asignados</span></div>`;
     return `
       <div class="card ${uphCol} ${rankCls}${enDescanso?' card-descanso':''}">
         ${enDescanso ? `<div class="descanso-banner">☕ DESCANSO</div>` : ''}

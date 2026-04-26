@@ -400,6 +400,7 @@
   <div class="celeb-badges">
     <div class="celeb-badge gold" id="celeb-turno">Turno —</div>
     <div class="celeb-badge" id="celeb-uph"></div>
+    <div class="celeb-badge" id="celeb-semana"></div>
   </div>
   <div class="celeb-countdown">
     <span class="countdown-num" id="countdown-txt">Ranking en 7s</span>
@@ -535,29 +536,18 @@
   // ── Ranking global para exportar ──
   let _rankingData = [];
 
-  // ── MOCKUP ──
-  const MOCKUP_RANKING = {
-    semana_cerrada: false,
-    periodo_inicio: '2026-04-14',
-    periodo_fin:    '2026-04-18',
-    horas_semana:   44.0,
-    ranking: [
-      { num_empleado:'10003', nombre:'María Rodríguez Pérez',   foto_url:'https://i.pravatar.cc/150?u=10003', turno:'A', estacion:'E105', total_eventos:520, uph_promedio:98 },
-      { num_empleado:'10010', nombre:'Fernando López Medina',   foto_url:'https://i.pravatar.cc/150?u=10010', turno:'B', estacion:'E305', total_eventos:490, uph_promedio:94 },
-      { num_empleado:'10005', nombre:'Laura Sánchez Flores',    foto_url:'https://i.pravatar.cc/150?u=10005', turno:'A', estacion:'E201', total_eventos:470, uph_promedio:91 },
-      { num_empleado:'10008', nombre:'Roberto Díaz Morales',    foto_url:'https://i.pravatar.cc/150?u=10008', turno:'B', estacion:'E301', total_eventos:455, uph_promedio:88 },
-      { num_empleado:'10001', nombre:'Ana García López',        foto_url:'https://i.pravatar.cc/150?u=10001', turno:'A', estacion:'E101', total_eventos:440, uph_promedio:85 },
-      { num_empleado:'10014', nombre:'Eduardo Moreno Rivas',    foto_url:'https://i.pravatar.cc/150?u=10014', turno:'B', estacion:'E405', total_eventos:420, uph_promedio:81 },
-      { num_empleado:'10009', nombre:'Sofía Ramírez Castillo',  foto_url:'https://i.pravatar.cc/150?u=10009', turno:'B', estacion:'E303', total_eventos:405, uph_promedio:78 },
-      { num_empleado:'10006', nombre:'Miguel Ángel Cruz Vega',  foto_url:'https://i.pravatar.cc/150?u=10006', turno:'A', estacion:'E203', total_eventos:390, uph_promedio:75 },
-      { num_empleado:'10012', nombre:'Alejandro Reyes Núñez',   foto_url:'https://i.pravatar.cc/150?u=10012', turno:'B', estacion:'E401', total_eventos:370, uph_promedio:71 },
-      { num_empleado:'10017', nombre:'Diana Castillo Peña',     foto_url:'https://i.pravatar.cc/150?u=10017', turno:'C', estacion:'E601', total_eventos:350, uph_promedio:67 },
-    ]
-  };
-
   // ── Datos ──
   async function cargar() {
-    const json = MOCKUP_RANKING;
+    let json;
+    try {
+      const resp = await fetch('/api/uph/ranking-semanal');
+      if (!resp.ok) throw new Error('HTTP ' + resp.status);
+      json = await resp.json();
+    } catch (e) {
+      console.error('Error cargando ranking:', e);
+      document.getElementById('sb-subtitulo').textContent = 'Error cargando datos del servidor';
+      return;
+    }
     const ranking = json.ranking || [];
     // Actualizar subtítulo con período real
     const sub = json.semana_cerrada
@@ -602,6 +592,7 @@
       document.getElementById('celeb-msg').textContent    = `🎉 ¡Felicidades ${nombreCorto}! Esta semana fuiste imparable — el operador más productivo de la planta 🎉`;
       document.getElementById('celeb-turno').textContent  = `Turno ${top.turno||'—'}`;
       document.getElementById('celeb-uph').textContent    = `UPH ${top.uph_promedio} prom.`;
+      document.getElementById('celeb-semana').textContent = `Semana ${json.periodo_inicio} → ${json.periodo_fin}`;
 
       lanzarConfetti();
       setTimeout(lanzarConfetti, 2000);
@@ -631,7 +622,7 @@
           ${avatarHTML}
           <div class="sb-info">
             <div class="sb-nombre">${nombre2}</div>
-            <div class="sb-sub">Est. ${op.estacion||'—'} · ${op.total_eventos||0} pzs
+            <div class="sb-sub">${op.total_eventos||0} pzs
               <span class="sb-turno-pill">Turno ${op.turno||'—'}</span>
             </div>
           </div>
@@ -697,7 +688,6 @@
         return [
           i < 3 ? medals[i] : `#${i+1}`,
           op.nombre || 'Sin asignar',
-          op.estacion || '—',
           `Turno ${op.turno || '—'}`,
           parseFloat(op.uph_promedio.toFixed(2)),
           op.total_eventos || 0,
@@ -744,7 +734,6 @@
         pos,
         rango,
         op.nombre       || 'Sin asignar',
-        op.estacion     || '',
         (op.turno       || '').replace(/^Turno\s*/i, ''),
         parseFloat(op.uph_promedio.toFixed(2)),
         uph_meta,

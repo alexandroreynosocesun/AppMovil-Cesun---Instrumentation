@@ -1982,12 +1982,11 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
         # Piezas RAW en la hora actual (contador para el número X/Y)
         piezas_hora = int(_uph_hora_actual(db, nombre_evento))
 
-        # Piezas: desde inicio del plan activo (cruza turnos) o desde inicio del turno
-        inicio_conteo = plan_activo.creado_en if plan_activo else inicio_turno_utc
+        # Piezas desde inicio del turno (no desde plan_activo.creado_en para no resetear al subir plan)
         piezas_modelo = db.query(func.count(EventoUPH.id)).filter(
             EventoUPH.linea == nombre_evento,
             EventoUPH.evento == "GOOD",
-            EventoUPH.timestamp >= inicio_conteo,
+            EventoUPH.timestamp >= inicio_turno_utc,
             EventoUPH.timestamp <= ahora,
         ).scalar() or 0
 
@@ -2017,16 +2016,25 @@ def dashboard_lineas_hoy(db: Session = Depends(get_uph_db)):
                     "nombre": op.nombre if op else str(emp),
                     "foto_url": op.foto_url if op else None,
                     "estaciones": [],
+                    "piezas_turno": 0,
                 }
-            uph_hora_est   = round(_uph_turno(db, nombre_evento, inicio_turno_utc, a.estacion), 1)
+            uph_hora_est    = round(_uph_turno(db, nombre_evento, inicio_turno_utc, a.estacion), 1)
             piezas_hora_est = int(_uph_hora_actual(db, nombre_evento, a.estacion))
+            piezas_turno_est = db.query(func.count(EventoUPH.id)).filter(
+                EventoUPH.linea     == nombre_evento,
+                EventoUPH.estacion  == a.estacion,
+                EventoUPH.evento    == "GOOD",
+                EventoUPH.timestamp >= inicio_turno_utc,
+                EventoUPH.timestamp <= ahora,
+            ).scalar() or 0
             kpi_pct = round((uph_hora_est / uph_meta_est * 100) if uph_meta_est > 0 else 0, 1)
+            ops_dict[emp]["piezas_turno"] += piezas_turno_est
             ops_dict[emp]["estaciones"].append({
-                "estacion":   a.estacion,
-                "uph_hora":   uph_hora_est,    # average (para barra/%)
-                "piezas_hora": piezas_hora_est, # contador raw esta hora (para número)
-                "uph_meta":   uph_meta_est,
-                "kpi_pct":    kpi_pct,
+                "estacion":    a.estacion,
+                "uph_hora":    uph_hora_est,
+                "piezas_hora": piezas_hora_est,
+                "uph_meta":    uph_meta_est,
+                "kpi_pct":     kpi_pct,
             })
 
         en_descanso = _esta_en_descanso(db, linea.id, turno_id_act)
@@ -3244,6 +3252,40 @@ def _write_linea_lider(data: dict):
     _LINEA_LIDER_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _turno_inicio_actual() -> datetime:
+    """Devuelve el inicio del turno activo en hora local (naive)."""
+    ahora = datetime.now()
+    wd   = ahora.weekday()   # 0=Lun … 6=Dom
+    mins = ahora.hour * 60 + ahora.minute
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30
+    base = ahora.replace(second=0, microsecond=0)
+    if wd <= 3:   # Lun–Jue
+        if mins >= T_INI and mins < T_FIN:
+            return base.replace(hour=6, minute=30)
+        elif mins >= T_FIN:
+            return base.replace(hour=18, minute=30)
+        else:
+            from datetime import timedelta as _td
+            return (base - _td(days=1)).replace(hour=18, minute=30)
+    elif wd == 4:  # Vie
+        if mins < T_INI:
+            from datetime import timedelta as _td
+            return (base - _td(days=1)).replace(hour=18, minute=30)
+        elif mins < T_FIN:
+            return base.replace(hour=6, minute=30)
+        else:
+            return base.replace(hour=18, minute=30)
+    else:          # Sáb–Dom
+        if mins >= T_INI and mins < T_FIN:
+            return base.replace(hour=6, minute=30)
+        elif wd == 6 and mins < T_INI:
+            from datetime import timedelta as _td
+            return (base - _td(days=1)).replace(hour=18, minute=30)
+        else:
+            from datetime import timedelta as _td
+            return ahora - _td(hours=12)
+
+
 class VincularLineaIn(BaseModel):
     num_empleado: str
     linea:        str
@@ -3261,6 +3303,7 @@ def vincular_linea(data: VincularLineaIn):
             "num_empleado": data.num_empleado,
             "nombre":       lider["nombre"],
             "foto_url":     _foto_url(data.num_empleado),
+            "turno_inicio": _turno_inicio_actual().isoformat(),
         }
         _write_linea_lider(mapa)
     return {"ok": True}
@@ -3268,9 +3311,15 @@ def vincular_linea(data: VincularLineaIn):
 
 @router.get("/lideres/lineas")
 def get_lideres_lineas():
-    """Devuelve qué líder está asignado a cada línea."""
+    """Devuelve líderes del turno activo — filtra entradas de turnos anteriores."""
+    turno_ini = _turno_inicio_actual().isoformat()
     with _LIDERES_LOCK:
-        return {"lineas": _read_linea_lider()}
+        mapa = _read_linea_lider()
+    filtrado = {
+        linea: lid for linea, lid in mapa.items()
+        if (lid.get("turno_inicio") or "") >= turno_ini
+    }
+    return {"lineas": filtrado}
 
 
 class LiderClaimIn(BaseModel):
@@ -3336,3 +3385,276 @@ def get_sesion_lider(session_id: str):
     if not lider:
         return {"lider": None}
     return {"lider": {**lider, "foto_url": _foto_url(num)}}
+
+
+@router.get("/ranking/lideres-semana")
+def get_ranking_lideres_semana(db: Session = Depends(get_uph_db)):
+    """Ranking semanal de líderes por UPH promedio de su línea (Lun 06:30 → Dom 18:30)."""
+    ahora      = datetime.now(timezone.utc)
+    ahora_loc  = datetime.now()
+    utc_offset = ahora.replace(tzinfo=None) - ahora_loc
+
+    wd = ahora_loc.weekday()
+    if wd == 0:
+        lunes_date   = (ahora_loc - timedelta(days=7)).date()
+        domingo_date = lunes_date + timedelta(days=6)
+        semana_cerrada = True
+    else:
+        lunes_date   = (ahora_loc - timedelta(days=wd)).date()
+        domingo_date = lunes_date + timedelta(days=6)
+        semana_fin_loc_ = datetime(domingo_date.year, domingo_date.month, domingo_date.day, 18, 30)
+        semana_cerrada  = ahora_loc >= semana_fin_loc_
+
+    semana_inicio_loc = datetime(lunes_date.year, lunes_date.month, lunes_date.day, 6, 30)
+    semana_fin_loc    = datetime(domingo_date.year, domingo_date.month, domingo_date.day, 18, 30)
+    corte_loc         = semana_fin_loc if semana_cerrada else ahora_loc
+
+    semana_inicio_utc = (semana_inicio_loc + utc_offset).replace(tzinfo=timezone.utc)
+    corte_utc         = (corte_loc + utc_offset).replace(tzinfo=timezone.utc)
+    horas_semana      = round((corte_utc - semana_inicio_utc).total_seconds() / 3600, 1)
+
+    with _LIDERES_LOCK:
+        mapa = _read_linea_lider()
+
+    # Por cada líder calcular UPH de su línea en la semana
+    lideres_data: dict = {}
+    for linea_nombre, lid_info in mapa.items():
+        num_emp = lid_info.get("num_empleado")
+        if not num_emp:
+            continue
+        ev_linea = _linea_evento(linea_nombre)
+        cnt = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea     == ev_linea,
+            EventoUPH.evento    == "GOOD",
+            EventoUPH.timestamp >= semana_inicio_utc,
+            EventoUPH.timestamp <= corte_utc,
+        ).scalar() or 0
+        uph_linea = round(cnt / horas_semana, 1) if horas_semana > 0 else 0
+
+        if num_emp not in lideres_data:
+            lideres_data[num_emp] = {
+                "nombre":   lid_info.get("nombre", num_emp),
+                "foto_url": lid_info.get("foto_url"),
+                "uphs":     [],
+                "total":    0,
+                "lineas":   [],
+            }
+        lideres_data[num_emp]["uphs"].append(uph_linea)
+        lideres_data[num_emp]["total"] += cnt
+        lideres_data[num_emp]["lineas"].append(linea_nombre)
+
+    ranking = []
+    for num_emp, info in lideres_data.items():
+        uphs = info["uphs"]
+        uph_promedio = round(sum(uphs) / len(uphs), 1) if uphs else 0
+        ranking.append({
+            "num_empleado": num_emp,
+            "nombre":       info["nombre"],
+            "foto_url":     info["foto_url"],
+            "lineas":       info["lineas"],
+            "uph_semana":   uph_promedio,
+        })
+
+    ranking.sort(key=lambda x: -x["uph_semana"])
+
+    return {
+        "semana_cerrada": semana_cerrada,
+        "periodo_inicio": lunes_date.strftime("%Y-%m-%d"),
+        "periodo_fin":    domingo_date.strftime("%Y-%m-%d"),
+        "horas_semana":   horas_semana,
+        "ranking":        ranking,
+    }
+
+
+@router.get("/ranking-semanal")
+def get_ranking_semanal(db: Session = Depends(get_uph_db)):
+    """Ranking de operadores de la semana (Lun 06:30 → Dom 18:30)."""
+    ahora      = datetime.now(timezone.utc)
+    ahora_loc  = datetime.now()
+    utc_offset = ahora.replace(tzinfo=None) - ahora_loc
+
+    wd = ahora_loc.weekday()
+
+    if wd == 0:
+        # Lunes: mostrar semana anterior ya cerrada
+        lunes_date   = (ahora_loc - timedelta(days=7)).date()
+        domingo_date = lunes_date + timedelta(days=6)
+        semana_cerrada = True
+    else:
+        lunes_date   = (ahora_loc - timedelta(days=wd)).date()
+        domingo_date = lunes_date + timedelta(days=6)
+        semana_fin_loc = datetime(domingo_date.year, domingo_date.month, domingo_date.day, 18, 30)
+        semana_cerrada = ahora_loc >= semana_fin_loc
+
+    semana_inicio_loc = datetime(lunes_date.year,   lunes_date.month,   lunes_date.day,   6, 30)
+    semana_fin_loc    = datetime(domingo_date.year, domingo_date.month, domingo_date.day, 18, 30)
+    corte_loc         = semana_fin_loc if semana_cerrada else ahora_loc
+
+    semana_inicio_utc = (semana_inicio_loc + utc_offset).replace(tzinfo=timezone.utc)
+    corte_utc         = (corte_loc         + utc_offset).replace(tzinfo=timezone.utc)
+
+    horas_semana = round((corte_utc - semana_inicio_utc).total_seconds() / 3600, 1)
+
+    semana_fechas = [
+        (lunes_date + timedelta(days=i)).strftime("%Y-%m-%d")
+        for i in range(7)
+    ]
+
+    # Asignaciones de la semana con info de línea
+    asig_rows = (
+        db.query(Asignacion, Linea)
+        .join(Linea, Linea.id == Asignacion.linea_id)
+        .filter(Asignacion.fecha.in_(semana_fechas))
+        .all()
+    )
+
+    # Por cada asignación calcular UPH individual (eventos / horas reales del turno)
+    # Luego el UPH semanal del operador = promedio de todos sus UPH por asignación
+    ops_uphs:  dict = {}  # num_empleado -> [uph_asig, ...]
+    ops_total: dict = {}  # num_empleado -> total eventos
+    ops_turno: dict = {}  # num_empleado -> turno_id
+
+    for asig, linea_obj in asig_rows:
+        ev_linea  = _linea_evento(linea_obj.nombre)
+        fecha_dt  = datetime.strptime(asig.fecha, "%Y-%m-%d")
+
+        # Ventana del turno en hora local
+        if asig.turno_id == 2:  # B: 18:30 → 06:30 siguiente día
+            t_ini_loc = fecha_dt.replace(hour=18, minute=30, second=0, microsecond=0)
+            t_fin_loc = (fecha_dt + timedelta(days=1)).replace(hour=6, minute=30, second=0, microsecond=0)
+        else:                   # A y C: 06:30 → 18:30
+            t_ini_loc = fecha_dt.replace(hour=6,  minute=30, second=0, microsecond=0)
+            t_fin_loc = fecha_dt.replace(hour=18, minute=30, second=0, microsecond=0)
+
+        t_ini_utc = (t_ini_loc + utc_offset).replace(tzinfo=timezone.utc)
+        t_fin_utc = min((t_fin_loc + utc_offset).replace(tzinfo=timezone.utc), corte_utc)
+
+        if t_ini_utc >= t_fin_utc:
+            continue
+
+        horas_asig = (t_fin_utc - t_ini_utc).total_seconds() / 3600
+
+        cnt = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea     == ev_linea,
+            EventoUPH.estacion  == asig.estacion,
+            EventoUPH.evento    == "GOOD",
+            EventoUPH.timestamp >= t_ini_utc,
+            EventoUPH.timestamp <= t_fin_utc,
+        ).scalar() or 0
+
+        emp = asig.num_empleado
+        uph_asig = round(cnt / horas_asig, 2) if horas_asig > 0 else 0
+
+        ops_uphs.setdefault(emp, []).append(uph_asig)
+        ops_total[emp] = ops_total.get(emp, 0) + cnt
+        ops_turno.setdefault(emp, asig.turno_id)
+
+    # Construir ranking: UPH promedio = media de UPH por cada asignación
+    ranking = []
+    for emp, uphs in ops_uphs.items():
+        if not uphs:
+            continue
+        uph_promedio = round(sum(uphs) / len(uphs), 1)
+        total        = ops_total[emp]
+        op           = db.query(Operador).filter(Operador.num_empleado == emp).first()
+        turno_letra  = {1: "A", 2: "B", 3: "C"}.get(ops_turno.get(emp), "—")
+        ranking.append({
+            "num_empleado":  emp,
+            "nombre":        op.nombre   if op else emp,
+            "foto_url":      op.foto_url if op else None,
+            "turno":         turno_letra,
+            "total_eventos": total,
+            "uph_promedio":  uph_promedio,
+        })
+
+    ranking.sort(key=lambda x: -x["uph_promedio"])
+
+    return {
+        "semana_cerrada": semana_cerrada,
+        "periodo_inicio": lunes_date.strftime("%Y-%m-%d"),
+        "periodo_fin":    domingo_date.strftime("%Y-%m-%d"),
+        "horas_semana":   horas_semana,
+        "ranking":        ranking[:10],
+    }
+
+
+@router.get("/monitor/lineas")
+def get_monitor_lineas(db: Session = Depends(get_uph_db)):
+    """Monitor admin: 6 líneas con eventos del turno activo y desglose por estación."""
+    ahora     = datetime.now(timezone.utc)
+    ahora_loc = datetime.now()
+    utc_offset = ahora.replace(tzinfo=None) - ahora_loc
+
+    def _to_utc(naive_loc: datetime) -> datetime:
+        return (naive_loc + utc_offset).replace(tzinfo=timezone.utc)
+
+    wd   = ahora_loc.weekday()
+    mins = ahora_loc.hour * 60 + ahora_loc.minute
+    T_INI, T_FIN = 6 * 60 + 30, 18 * 60 + 30
+
+    if wd in (0, 1, 2, 3):
+        if T_INI <= mins < T_FIN:
+            inicio_utc = _to_utc(ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0))
+        elif mins >= T_FIN:
+            inicio_utc = _to_utc(ahora_loc.replace(hour=18, minute=30, second=0, microsecond=0))
+        else:
+            inicio_utc = _to_utc((ahora_loc - timedelta(days=1)).replace(hour=18, minute=30, second=0, microsecond=0))
+    elif wd == 4:
+        if mins < T_INI:
+            inicio_utc = _to_utc((ahora_loc - timedelta(days=1)).replace(hour=18, minute=30, second=0, microsecond=0))
+        elif T_INI <= mins < T_FIN:
+            inicio_utc = _to_utc(ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0))
+        else:
+            inicio_utc = _to_utc(ahora_loc.replace(hour=18, minute=30, second=0, microsecond=0))
+    else:
+        if T_INI <= mins < T_FIN:
+            inicio_utc = _to_utc(ahora_loc.replace(hour=6, minute=30, second=0, microsecond=0))
+        else:
+            inicio_utc = _to_utc((ahora_loc - timedelta(days=1)).replace(hour=6, minute=30, second=0, microsecond=0))
+
+    horas_elapsed = max((ahora - inicio_utc).total_seconds() / 3600, 0.01)
+
+    with _LIDERES_LOCK:
+        lideres_mapa = _read_linea_lider()
+
+    LINEAS = [("HI-1","L1"),("HI-2","L2"),("HI-3","L3"),
+              ("HI-4","L4"),("HI-5","L5"),("HI-6","L6")]
+
+    resultado = []
+    for nombre_bd, nombre_ev in LINEAS:
+        total = db.query(func.count(EventoUPH.id)).filter(
+            EventoUPH.linea     == nombre_ev,
+            EventoUPH.evento    == "GOOD",
+            EventoUPH.timestamp >= inicio_utc,
+            EventoUPH.timestamp <= ahora,
+        ).scalar() or 0
+
+        est_rows = db.query(
+            EventoUPH.estacion,
+            func.count(EventoUPH.id).label("cnt"),
+        ).filter(
+            EventoUPH.linea     == nombre_ev,
+            EventoUPH.evento    == "GOOD",
+            EventoUPH.timestamp >= inicio_utc,
+            EventoUPH.timestamp <= ahora,
+        ).group_by(EventoUPH.estacion).order_by(EventoUPH.estacion).all()
+
+        lider_info = lideres_mapa.get(nombre_bd) or {}
+        uph_actual  = round(total / horas_elapsed, 1)
+
+        resultado.append({
+            "linea":          nombre_bd,
+            "linea_evento":   nombre_ev,
+            "total_turno":    total,
+            "uph_actual":     uph_actual,
+            "lider_nombre":   lider_info.get("nombre"),
+            "lider_foto":     lider_info.get("foto_url"),
+            "lider_emp":      lider_info.get("num_empleado"),
+            "estaciones":     [{"estacion": r.estacion, "total": r.cnt} for r in est_rows],
+        })
+
+    return {
+        "lineas":        resultado,
+        "inicio_turno":  inicio_utc.isoformat(),
+        "actualizado":   ahora.isoformat(),
+    }

@@ -27,7 +27,8 @@ export default function ModuleSelectionScreen({ navigation }) {
   const { user } = useAuth();
 
   const role = user?.tipo_usuario;
-  const esAdminOIngeniero = ['admin', 'superadmin', 'ingeniero'].includes(role);
+  const esAdmin = ['admin', 'superadmin'].includes(role);
+  const esAdminOIngeniero = esAdmin || role === 'ingeniero';
 
   const modules = [
     {
@@ -86,6 +87,14 @@ export default function ModuleSelectionScreen({ navigation }) {
       color: ['#00695C', '#004D40'],
       route: 'MESDashboard'
     }] : []),
+    ...(esAdmin ? [{
+      id: 'uph_monitor',
+      title: 'Monitor UPH',
+      description: 'Monitoreo en tiempo real de las 6 líneas, estaciones y líderes',
+      icon: '📡',
+      color: ['#004D40', '#00251a'],
+      route: 'UPHMonitor'
+    }] : []),
   ];
 
   const handleModulePress = (module) => {
@@ -103,6 +112,8 @@ export default function ModuleSelectionScreen({ navigation }) {
       navigation.navigate('OperadoresAdmin');
     } else if (module.id === 'passrate') {
       navigation.navigate('MESDashboard');
+    } else if (module.id === 'uph_monitor') {
+      navigation.navigate('UPHMonitor');
     } else {
       alert(t('comingSoon', { module: module.title }));
     }

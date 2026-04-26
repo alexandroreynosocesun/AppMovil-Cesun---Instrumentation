@@ -73,6 +73,9 @@ import LiderTabNavigator from '../navigators/LiderTabNavigator';
 import OperadorHistorialDiaScreen from '../screens/OperadorHistorialDiaScreen';
 // FCT Dashboard
 import MESDashboardScreen from '../screens/MESDashboardScreen';
+// Monitor UPH Admin
+import UPHMonitorScreen from '../screens/UPHMonitorScreen';
+import UPHMonitorLineaScreen from '../screens/UPHMonitorLineaScreen';
 // Selección de perfil líder
 import SeleccionLiderScreen from '../screens/SeleccionLiderScreen';
 import { useLiderPerfil } from '../contexts/LiderPerfilContext';
@@ -412,6 +415,16 @@ export default function AuthNavigator() {
           <Stack.Screen
             name="SeleccionLider"
             component={SeleccionLiderScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="UPHMonitor"
+            component={UPHMonitorScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="UPHMonitorLinea"
+            component={UPHMonitorLineaScreen}
             options={{ headerShown: false }}
           />
         </>
