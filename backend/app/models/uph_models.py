@@ -100,13 +100,15 @@ class PlanLinea(UphBase):
     Un registro por línea por día; se reemplaza si el planner sube un Excel nuevo."""
     __tablename__ = "planes_linea"
 
-    id         = Column(Integer, primary_key=True, index=True)
-    linea_id   = Column(Integer, ForeignKey("lineas.id"), nullable=False)
-    modelo_id  = Column(Integer, ForeignKey("modelos_uph.id"), nullable=False)
-    plan_total = Column(Integer, nullable=False)
-    fecha      = Column(String, nullable=False, index=True)   # "2026-04-18"
-    creado_en  = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
-    activo     = Column(Boolean, default=True)
+    id                = Column(Integer, primary_key=True, index=True)
+    linea_id          = Column(Integer, ForeignKey("lineas.id"), nullable=False)
+    modelo_id         = Column(Integer, ForeignKey("modelos_uph.id"), nullable=False)
+    plan_total        = Column(Integer, nullable=False)
+    plan_piezas_dia   = Column(Integer, nullable=True)
+    plan_piezas_noche = Column(Integer, nullable=True)
+    fecha             = Column(String, nullable=False, index=True)   # "2026-04-18"
+    creado_en         = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    activo            = Column(Boolean, default=True)
 
     linea  = relationship("Linea")
     modelo = relationship("ModeloUPH")
@@ -116,12 +118,14 @@ class PlanDiaLinea(UphBase):
     """Todos los modelos planificados para una línea en un día (importados desde AMI plan)."""
     __tablename__ = "plan_dia_linea"
 
-    id          = Column(Integer, primary_key=True, index=True)
-    linea_id    = Column(Integer, ForeignKey("lineas.id"), nullable=False)
-    modelo_id   = Column(Integer, ForeignKey("modelos_uph.id"), nullable=False)
-    fecha       = Column(String, nullable=False)   # "2026-04-18"
-    plan_piezas = Column(Integer, nullable=True)
-    orden       = Column(Integer, default=0)       # posición en el día
+    id                = Column(Integer, primary_key=True, index=True)
+    linea_id          = Column(Integer, ForeignKey("lineas.id"), nullable=False)
+    modelo_id         = Column(Integer, ForeignKey("modelos_uph.id"), nullable=False)
+    fecha             = Column(String, nullable=False)   # "2026-04-18"
+    plan_piezas       = Column(Integer, nullable=True)
+    plan_piezas_dia   = Column(Integer, nullable=True)
+    plan_piezas_noche = Column(Integer, nullable=True)
+    orden             = Column(Integer, default=0)
 
     linea  = relationship("Linea")
     modelo = relationship("ModeloUPH")

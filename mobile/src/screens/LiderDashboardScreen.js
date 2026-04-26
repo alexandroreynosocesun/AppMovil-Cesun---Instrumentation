@@ -311,6 +311,24 @@ export default function LiderDashboardScreen({ navigation }) {
                 <>
                   {/* ── Card modelo activo del plan ── */}
                   {planActivo ? (() => {
+                    const turno       = detectarTurno();
+                    const esNoche     = turno === 'B';
+                    const piezasTurno = esNoche
+                      ? planActivo.plan_piezas_noche
+                      : planActivo.plan_piezas_dia;
+
+                    // NO WORK: hay plan pero sin piezas para este turno (0 o null)
+                    if (!piezasTurno) {
+                      return (
+                        <View style={[s.planCard, { borderColor: '#37474F', alignItems: 'center', justifyContent: 'center', paddingVertical: 32, gap: 10 }]}>
+                          <Text style={{ color: '#EF5350', fontSize: 22, fontWeight: '900', letterSpacing: 4 }}>NO WORK</Text>
+                          <Text style={{ color: '#546E7A', fontSize: 12, letterSpacing: 1 }}>
+                            Sin plan para turno {esNoche ? 'noche' : 'día'}
+                          </Text>
+                        </View>
+                      );
+                    }
+
                     const producido   = planActivo.piezas_actual || 0;
                     const meta        = planActivo.plan_total || 0;
                     const pctPlan     = meta > 0 ? Math.min(Math.round((producido / meta) * 100), 100) : 0;

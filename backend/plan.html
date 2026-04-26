@@ -10,33 +10,46 @@
     html, body { min-height: 100vh; background: #040f0e; color: #e0f7f5;
       font-family: 'Segoe UI', system-ui, sans-serif; }
 
-    /* ── LOGIN ── */
-    #login-overlay {
-      position: fixed; inset: 0; background: #040f0e;
-      display: flex; align-items: center; justify-content: center; z-index: 100;
+    /* ── MODAL HISTORIAL ── */
+    #hist-overlay {
+      position: fixed; inset: 0; background: #000000bb; z-index: 200;
+      display: flex; align-items: center; justify-content: center;
     }
-    #login-overlay.hidden { display: none; }
-    .login-box {
-      background: #061412; border: 1px solid #0a2e2a; border-radius: 18px;
-      padding: 40px 48px; display: flex; flex-direction: column; gap: 20px;
-      align-items: center; min-width: 320px;
+    #hist-overlay.hidden { display: none; }
+    .hist-modal {
+      background: #061412; border: 1px solid #0a2e2a; border-radius: 16px;
+      padding: 32px 36px; width: 640px; max-width: 95vw; max-height: 80vh;
+      display: flex; flex-direction: column; gap: 18px;
       box-shadow: 0 0 60px #00c8b811;
     }
-    .login-logo { font-size: 2.2rem; font-weight: 900; color: #00c8b8;
-                  letter-spacing: 3px; text-shadow: 0 0 28px #00c8b888; }
-    .login-title { font-size: 0.85rem; color: #00856e; letter-spacing: 2px;
-                   text-transform: uppercase; }
-    .login-field { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-    .login-field label { font-size: 0.7rem; color: #00856e; letter-spacing: 1px; text-transform: uppercase; }
-    .login-field input {
+    .hist-modal-header { display: flex; align-items: center; justify-content: space-between; }
+    .hist-modal-title  { font-size: 0.8rem; font-weight: 700; color: #00c8b8;
+                         letter-spacing: 2px; text-transform: uppercase; }
+    .hist-close { background: none; border: none; color: #00856e; font-size: 1.3rem;
+                  cursor: pointer; line-height: 1; padding: 2px 6px; }
+    .hist-close:hover { color: #ff5555; }
+    .hist-body  { overflow-y: auto; flex: 1; }
+    .hist-row   { display: flex; align-items: center; gap: 14px; padding: 9px 0;
+                  border-bottom: 1px solid #071a17; font-size: 0.82rem; flex-wrap: wrap; }
+    .hist-row:last-child { border-bottom: none; }
+    .hist-fecha { color: #00c8b8; font-weight: 700; min-width: 90px; }
+    .hist-hora  { color: #e0f7f5; min-width: 80px; }
+    .hist-tipo  { color: #00856e; font-size: 0.72rem; letter-spacing: 1px;
+                  text-transform: uppercase; min-width: 100px; }
+    .hist-regs  { color: #7ecdc4; font-size: 0.78rem; }
+    .hist-plan  { color: #00856e; font-size: 0.72rem; margin-left: auto; }
+    .hist-empty { color: #0a3530; font-size: 0.85rem; text-align: center; padding: 20px; }
+    /* password step */
+    #hist-pass-step { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+    #hist-pass-step input {
       background: #071a17; border: 1px solid #0a2e2a; border-radius: 8px;
       color: #e0f7f5; padding: 10px 14px; font-size: 0.9rem; outline: none;
-      transition: border-color 0.2s;
+      transition: border-color 0.2s; width: 100%;
     }
-    .login-field input:focus { border-color: #00c8b8; }
-    .login-field input.err { border-color: #ff4040; animation: shake 0.3s; }
-    @keyframes shake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
-    .login-err { font-size: 0.72rem; color: #ff5555; min-height: 16px; }
+    #hist-pass-step input:focus { border-color: #00c8b8; }
+    #hist-pass-step input.err   { border-color: #ff4040; }
+    #hist-pass-err { font-size: 0.72rem; color: #ff5555; min-height: 16px; }
+
     .btn-primary {
       background: linear-gradient(90deg, #005a50, #00877a);
       color: #fff; border: none; border-radius: 10px;
@@ -55,11 +68,6 @@
     .h-logo { font-size: 1.5rem; font-weight: 900; color: #00c8b8;
                letter-spacing: 3px; text-shadow: 0 0 20px #00c8b866; }
     .h-title { font-size: 0.8rem; color: #00856e; letter-spacing: 2px; text-transform: uppercase; }
-    .btn-logout { background: none; border: 1px solid #0a2e2a; border-radius: 8px;
-                  color: #00856e; padding: 6px 16px; cursor: pointer; font-size: 0.75rem;
-                  letter-spacing: 1px; transition: all 0.2s; }
-    .btn-logout:hover { border-color: #ff4040; color: #ff5555; }
-
     /* ── MAIN ── */
     main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; display: flex; flex-direction: column; gap: 28px; }
 
@@ -158,25 +166,95 @@
     .badge-cambio { color:#FFA726; font-size:0.72rem; }
     .badge-ok     { color:#66BB6A; font-size:0.72rem; }
     .ami-fecha-warn { font-size:0.75rem; color:#FFA726; margin-top:4px; }
+
+    /* ── MODAL TURNO ── */
+    #turno-overlay {
+      position:fixed; inset:0; background:#000000cc; z-index:150;
+      display:flex; align-items:center; justify-content:center;
+    }
+    #turno-overlay.hidden { display:none; }
+    .turno-modal {
+      background:#061412; border:1px solid #0a2e2a; border-radius:18px;
+      padding:40px 48px; display:flex; flex-direction:column; gap:28px;
+      align-items:center; box-shadow:0 0 60px #00c8b811;
+    }
+    .turno-modal-title {
+      font-size:0.8rem; font-weight:700; color:#00c8b8;
+      letter-spacing:3px; text-transform:uppercase;
+    }
+    .turno-cards { display:flex; gap:20px; }
+    .turno-card {
+      width:160px; height:140px; border-radius:14px; border:2px solid #0a2e2a;
+      background:#071a17; cursor:pointer; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; gap:10px;
+      transition:all 0.2s;
+    }
+    .turno-card:hover { transform:translateY(-3px); box-shadow:0 8px 32px #00000044; }
+    .turno-card.card-ac:hover, .turno-card.card-ac.sel {
+      border-color:#1565C0; background:#1565C011;
+      box-shadow:0 0 24px #1565C044;
+    }
+    .turno-card.card-b:hover,  .turno-card.card-b.sel  {
+      border-color:#7B1FA2; background:#7B1FA211;
+      box-shadow:0 0 24px #7B1FA244;
+    }
+    .turno-card-letter {
+      font-size:2.2rem; font-weight:900; letter-spacing:2px;
+    }
+    .card-ac .turno-card-letter { color:#42A5F5; }
+    .card-b  .turno-card-letter { color:#CE93D8; }
+    .turno-card-label {
+      font-size:0.72rem; letter-spacing:2px; text-transform:uppercase;
+    }
+    .card-ac .turno-card-label { color:#1565C0; }
+    .card-b  .turno-card-label { color:#7B1FA2; }
+    /* badge turno activo en sección */
+    .turno-badge-activo {
+      display:inline-flex; align-items:center; gap:8px;
+      padding:3px 12px; border-radius:8px; font-size:0.72rem; font-weight:700;
+      letter-spacing:1px; cursor:pointer;
+    }
+    .turno-badge-activo.t-ac { background:#1565C022; color:#42A5F5; border:1px solid #1565C0; }
+    .turno-badge-activo.t-b  { background:#4A148C22; color:#CE93D8; border:1px solid #4A148C; }
   </style>
 </head>
 <body>
 
-<!-- ── LOGIN ── -->
-<div id="login-overlay">
-  <div class="login-box">
-    <div class="login-logo">Hisense</div>
-    <div class="login-title">Admin · Plan de Producción</div>
-    <div class="login-field">
-      <label>Usuario</label>
-      <input type="text" id="login-user" placeholder="usuario" autocomplete="username"/>
+<!-- ── MODAL TURNO ── -->
+<div id="turno-overlay">
+  <div class="turno-modal">
+    <div class="turno-modal-title">Selecciona tu turno</div>
+    <div class="turno-cards">
+      <div class="turno-card card-ac" onclick="elegirTurno('AC')">
+        <div class="turno-card-letter">A / C</div>
+        <div class="turno-card-label">Día · Fin de semana</div>
+      </div>
+      <div class="turno-card card-b" onclick="elegirTurno('B')">
+        <div class="turno-card-letter">B</div>
+        <div class="turno-card-label">Noche</div>
+      </div>
     </div>
-    <div class="login-field">
-      <label>Contraseña</label>
-      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
+  </div>
+</div>
+
+<!-- ── MODAL HISTORIAL ── -->
+<div id="hist-overlay" class="hidden">
+  <div class="hist-modal">
+    <div class="hist-modal-header">
+      <div class="hist-modal-title">Historial de subidas</div>
+      <button class="hist-close" onclick="cerrarHistorial()">✕</button>
     </div>
-    <div class="login-err" id="login-err"></div>
-    <button class="btn-primary" onclick="doLogin()">Entrar</button>
+    <!-- paso contraseña -->
+    <div id="hist-pass-step">
+      <input type="password" id="hist-pass-input" placeholder="Contraseña" style="max-width:260px;"/>
+      <div id="hist-pass-err"></div>
+      <button class="btn-primary" style="width:auto;padding:9px 28px;" onclick="verificarPassHistorial()">Ver historial</button>
+    </div>
+    <!-- contenido historial -->
+    <div id="hist-content" style="display:none;flex-direction:column;gap:12px;">
+      <div class="hist-body" id="historial-list"></div>
+      <button class="btn-secondary" style="align-self:flex-end;padding:6px 18px;font-size:0.72rem;" onclick="limpiarHistorial()">Limpiar historial</button>
+    </div>
   </div>
 </div>
 
@@ -186,14 +264,17 @@
     <div class="h-logo">Hisense</div>
     <div class="h-title">Admin · Plan de Producción</div>
   </div>
-  <button class="btn-logout" onclick="doLogout()">Cerrar sesión</button>
+  <button class="btn-secondary" style="padding:6px 18px;font-size:0.75rem;" onclick="abrirHistorial()">Historial</button>
 </header>
 
 <main>
 
   <!-- ── SUBIR EXCEL ── -->
   <div class="section">
-    <div class="section-title">Subir Plan de Producción (Excel)</div>
+    <div class="section-title" style="display:flex;align-items:center;justify-content:space-between;">
+      <span>Subir Plan de Producción (Excel)</span>
+      <span id="turno-badge-activo" class="turno-badge-activo" onclick="abrirModalTurno()" title="Cambiar turno"></span>
+    </div>
 
     <!-- Selector de fecha del plan -->
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;">
@@ -259,33 +340,95 @@
 </main>
 
 <script>
-  // ── Auth ──────────────────────────────────────────────────────
-  const USERS = { 'admin': 'hisense2026', 'plan': 'plan2026' };
+  // ── Turno modal ───────────────────────────────────────────────
+  let turnoSeleccionado = null;
 
-  function doLogin() {
-    const user = document.getElementById('login-user').value.trim();
-    const pass = document.getElementById('login-pass').value;
-    if (USERS[user] && USERS[user] === pass) {
-      sessionStorage.setItem('admin-ok', '1');
-      document.getElementById('login-overlay').classList.add('hidden');
+  function elegirTurno(t) {
+    turnoSeleccionado = t; // 'AC' o 'B'
+    document.getElementById('turno-overlay').classList.add('hidden');
+    const badge = document.getElementById('turno-badge-activo');
+    if (t === 'B') {
+      badge.className = 'turno-badge-activo t-b';
+      badge.textContent = 'Turno B — Noche  ✎';
     } else {
-      const inp = document.getElementById('login-pass');
-      inp.classList.add('err');
-      document.getElementById('login-err').textContent = 'Usuario o contraseña incorrectos';
-      inp.value = '';
-      setTimeout(() => inp.classList.remove('err'), 400);
+      badge.className = 'turno-badge-activo t-ac';
+      badge.textContent = 'Turno A / C — Día  ✎';
     }
   }
-  function doLogout() {
-    sessionStorage.removeItem('admin-ok');
-    location.reload();
-  }
-  document.getElementById('login-pass').addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-  document.getElementById('login-user').addEventListener('keydown', e => { if(e.key==='Enter') document.getElementById('login-pass').focus(); });
 
-  if (sessionStorage.getItem('admin-ok')) {
-    document.getElementById('login-overlay').classList.add('hidden');
+  function abrirModalTurno() {
+    document.getElementById('turno-overlay').classList.remove('hidden');
   }
+
+  // ── Historial ─────────────────────────────────────────────────
+  const HIST_KEY  = 'plan-historial';
+  const HIST_PASS = 'password';
+
+  function registrarHistorial(tipo, registros) {
+    const now = new Date();
+    const h = now.getHours(), m = now.getMinutes();
+    const ampm = h >= 12 ? 'PM' : 'AM';
+    const hora = `${h % 12 || 12}:${String(m).padStart(2,'0')} ${ampm}`;
+    const fechaHoy = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const fechaPlan = document.getElementById('fecha-plan-label').textContent || fechaHoy;
+    const hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    hist.unshift({ fecha: fechaHoy, hora, tipo, registros, fechaPlan });
+    localStorage.setItem(HIST_KEY, JSON.stringify(hist.slice(0, 100)));
+  }
+
+  function renderHistorial() {
+    const hist = JSON.parse(localStorage.getItem(HIST_KEY) || '[]');
+    const el = document.getElementById('historial-list');
+    if (!hist.length) { el.innerHTML = '<div class="hist-empty">Sin registros aún</div>'; return; }
+    el.innerHTML = hist.map(e => `
+      <div class="hist-row">
+        <span class="hist-fecha">${e.fecha}</span>
+        <span class="hist-hora">${e.hora}</span>
+        <span class="hist-tipo">${e.tipo}</span>
+        <span class="hist-regs">${e.registros} registros</span>
+        <span class="hist-plan">Plan: ${e.fechaPlan}</span>
+      </div>`).join('');
+  }
+
+  function abrirHistorial() {
+    document.getElementById('hist-overlay').classList.remove('hidden');
+    document.getElementById('hist-pass-step').style.display = 'flex';
+    document.getElementById('hist-content').style.display = 'none';
+    document.getElementById('hist-pass-input').value = '';
+    document.getElementById('hist-pass-err').textContent = '';
+    setTimeout(() => document.getElementById('hist-pass-input').focus(), 80);
+  }
+
+  function cerrarHistorial() {
+    document.getElementById('hist-overlay').classList.add('hidden');
+  }
+
+  function verificarPassHistorial() {
+    const inp = document.getElementById('hist-pass-input');
+    if (inp.value !== HIST_PASS) {
+      inp.classList.add('err');
+      document.getElementById('hist-pass-err').textContent = 'Contraseña incorrecta';
+      inp.value = '';
+      setTimeout(() => inp.classList.remove('err'), 400);
+      return;
+    }
+    document.getElementById('hist-pass-step').style.display = 'none';
+    document.getElementById('hist-content').style.display = 'flex';
+    renderHistorial();
+  }
+
+  function limpiarHistorial() {
+    if (!confirm('¿Borrar todo el historial?')) return;
+    localStorage.removeItem(HIST_KEY);
+    renderHistorial();
+  }
+
+  document.getElementById('hist-pass-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') verificarPassHistorial();
+  });
+  document.getElementById('hist-overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('hist-overlay')) cerrarHistorial();
+  });
 
   // ── Excel upload ──────────────────────────────────────────────
   let rawRows = [], rawHeaders = [];
@@ -345,6 +488,31 @@
     if (day >= 1 && day <= 4) return mins >= manana && mins < tarde ? 'A' : 'B';
     if (day === 5) return mins < manana ? 'B' : 'C';
     return 'C'; // Sab, Dom
+  }
+
+  const SINONIMOS = {
+    linea:          ['line'],
+    modelo_interno: ['internal model'],
+    board_model:    ['board / model', 'board/model', 'board model'],
+    market:         ['market/country', 'market / country', 'market/c'],
+    uph:            ['uph'],
+  };
+
+  function encontrarMapaColumnas(data) {
+    for (let r = 0; r <= 8; r++) {
+      const fila = data[r] || [];
+      const mapa = {};
+      for (const [campo, sinonimos] of Object.entries(SINONIMOS)) {
+        for (let c = 0; c < fila.length; c++) {
+          const celda = String(fila[c] ?? '').trim().toLowerCase();
+          if (sinonimos.includes(celda)) { mapa[campo] = c; break; }
+        }
+      }
+      if (mapa.linea !== undefined && (mapa.modelo_interno !== undefined || mapa.board_model !== undefined)) {
+        return { mapa, filaEncabezado: r };
+      }
+    }
+    return null;
   }
 
   // Busca directamente en celdas del worksheet (más confiable que sheet_to_json)
@@ -428,13 +596,65 @@
     }
 
     let colDay = null, colNight = null;
-    outer: for (let r = 1; r <= 6; r++) {
+
+    // Paso 1: encontrar fila de labels Day/Night y construir mapa col→label
+    let labelRow = -1;
+    const esDay   = {};  // colIndex → true
+    const esNight = {};
+    for (let r = 1; r <= 8; r++) {
       const fila = data[r] || [];
+      let found = false;
       for (let c = 0; c < fila.length; c++) {
-        if (celdaEsFecha(fila[c])) {
-          colDay   = c;
-          colNight = c + 1;
-          break outer;
+        const lbl = String(fila[c] ?? '').trim().toLowerCase();
+        if (lbl === 'day')   { esDay[c]   = true; found = true; }
+        if (lbl === 'night') { esNight[c] = true; found = true; }
+      }
+      if (found) { labelRow = r; break; }
+    }
+
+    if (labelRow >= 0) {
+      // Paso 2: encontrar la columna EXACTA de la fecha de hoy en filas previas
+      // (sin tolerancia ±N para no confundir con días anteriores/siguientes)
+      let fechaCol = null;
+      for (let r = 0; r < labelRow && fechaCol === null; r++) {
+        const fila = data[r] || [];
+        for (let c = 0; c < fila.length; c++) {
+          if (celdaEsFecha(fila[c])) { fechaCol = c; break; }
+        }
+      }
+
+      if (fechaCol !== null) {
+        // Paso 3: buscar el label correcto DEBAJO de la fecha
+        // Celdas fusionadas pueden hacer que la fecha esté en col X
+        // y el label en col X, X+1 o X+2 — tolerancia pequeña solo hacia adelante
+        if (turnoSeleccionado === 'B') {  // Turno B: Night primero
+          // Turno B: Night de hoy primero, Day adyacente es de mañana
+          for (const off of [0, 1, 2]) {
+            if (esNight[fechaCol + off]) {
+              colNight = fechaCol + off;
+              colDay   = esDay[colNight + 1] ? colNight + 1
+                       : esDay[colNight - 1] ? colNight - 1 : colNight + 1;
+              break;
+            }
+          }
+        } else {
+          // Turno A / C: Day de hoy primero
+          for (const off of [0, 1, 2]) {
+            if (esDay[fechaCol + off]) {
+              colDay   = fechaCol + off;
+              colNight = esNight[colDay + 1] ? colDay + 1
+                       : esNight[colDay - 1] ? colDay - 1 : colDay + 1;
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      // Fallback: Excel sin etiquetas Day/Night
+      outer: for (let r = 1; r <= 6; r++) {
+        const fila = data[r] || [];
+        for (let c = 0; c < fila.length; c++) {
+          if (celdaEsFecha(fila[c])) { colDay = c; colNight = c + 1; break outer; }
         }
       }
     }
@@ -448,19 +668,30 @@
 
     const resultados = {'HI-1':[],'HI-2':[],'HI-3':[],'HI-4':[],'HI-5':[],'HI-6':[]};
 
-    for (let i = 5; i < data.length; i++) {
+    const mapaCol = encontrarMapaColumnas(data);
+    if (!mapaCol) {
+      document.getElementById('ami-section').style.display = 'block';
+      document.getElementById('ami-results').innerHTML =
+        `<div style="color:#ff5555;font-size:0.85rem;">❌ No se encontraron los encabezados esperados (Line, Internal Model, Board / Model…) en el Excel.</div>`;
+      return;
+    }
+    const { mapa, filaEncabezado } = mapaCol;
+
+    let ultimaLinea = null; // propaga Line en celdas fusionadas
+    for (let i = filaEncabezado + 1; i < data.length; i++) {
       const row = data[i];
       if (!row) continue;
-      const linea = mapearLinea(row[5]);
+      const lineaRaw = mapa.linea !== undefined ? row[mapa.linea] : null;
+      const lineaDetectada = mapearLinea(lineaRaw);
+      if (lineaDetectada) ultimaLinea = lineaDetectada;
+      const linea = ultimaLinea;
       if (!linea || !resultados[linea]) continue;
 
-      const internalModel = row[16];  // Q
-      const boardModel    = row[25];  // Z
-      const size          = row[18];  // S
-      const market        = row[19];  // T
-      const uph           = row[35];  // AJ
+      const internalModel = mapa.modelo_interno !== undefined ? row[mapa.modelo_interno] : null;
+      const boardModel    = mapa.board_model    !== undefined ? row[mapa.board_model]    : null;
+      const market        = mapa.market         !== undefined ? row[mapa.market]         : null;
+      const uph           = mapa.uph            !== undefined ? row[mapa.uph]            : null;
 
-      // Leer Day y Night por separado — el total del modelo es la suma de ambos
       const cantDia   = colDay   !== null && typeof row[colDay]   === 'number' ? row[colDay]   : 0;
       const cantNoche = colNight !== null && typeof row[colNight] === 'number' ? row[colNight] : 0;
       const cantTotal = cantDia + cantNoche;
@@ -468,11 +699,9 @@
       if (!internalModel && !boardModel) continue;
       if (cantTotal <= 0) continue;
 
-      // Cada fila del Excel es independiente — Day+Night solo de esa misma fila
       resultados[linea].push({
         internal_model: internalModel || '',
         board_model:    String(boardModel || ''),
-        size:           size || '',
         market:         market || '',
         uph:            typeof uph === 'number' ? Math.round(uph) : null,
         cantidad:       Math.round(cantTotal),
@@ -519,10 +748,15 @@
       const num = linea.split('-')[1];
       const uphField = `uph_hi${num}`;
 
+      const esNoche = turnoSeleccionado === 'B';
       html += `<div class="ami-linea-header">${linea}</div>
       <div class="ami-wrap"><table><thead><tr>
-        <th>Internal Model</th><th>Board/Model</th><th>Size</th><th>Market</th>
-        <th>UPH</th><th>Day</th><th>Night</th><th>Total</th><th>Estado</th>
+        <th>Internal Model</th><th>Board/Model</th><th>Market</th>
+        <th>UPH</th>
+        ${esNoche
+          ? '<th style="color:#CE93D8">Night</th><th style="color:#42A5F5">Day</th>'
+          : '<th style="color:#42A5F5">Day</th><th style="color:#CE93D8">Night</th>'}
+        <th>Total</th><th>Estado</th>
       </tr></thead><tbody>`;
 
       for (const m of mods) {
@@ -538,15 +772,16 @@
 
         const diaStr   = m.cantidad_dia   > 0 ? m.cantidad_dia   : '—';
         const nocheStr = m.cantidad_noche > 0 ? m.cantidad_noche : '—';
+        const col1 = esNoche
+          ? `<td class="num" style="color:#CE93D8">${nocheStr}</td><td class="num" style="color:#42A5F5">${diaStr}</td>`
+          : `<td class="num" style="color:#42A5F5">${diaStr}</td><td class="num" style="color:#CE93D8">${nocheStr}</td>`;
 
         html += `<tr>
           <td>${m.internal_model || '—'}</td>
           <td class="num">${m.board_model || '—'}</td>
-          <td class="num">${m.size ? m.size + '"' : '—'}</td>
           <td>${m.market || '—'}</td>
           <td class="num">${m.uph ?? '—'}</td>
-          <td class="num" style="color:#42A5F5">${diaStr}</td>
-          <td class="num" style="color:#CE93D8">${nocheStr}</td>
+          ${col1}
           <td class="num" style="color:#00c8b8;font-weight:700">${m.cantidad}</td>
           <td>${badge}</td>
         </tr>`;
@@ -579,14 +814,15 @@
       const res = await fetch('/api/uph/plan/subir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filas: amiCambios }),
+        body: JSON.stringify({ filas: amiCambios, turno: turnoSeleccionado }),
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const d = await res.json();
+      const n = d.guardados || amiCambios.length;
       status.className = 'status-msg ok';
-      status.textContent = `✓ ${d.guardados || amiCambios.length} registros guardados`;
+      status.textContent = `✓ ${n} registros guardados`;
       btn.textContent = '✓ Guardado';
-      // Ocultar botón tras éxito — ya no tiene sentido volver a guardar lo mismo
+      registrarHistorial('AMI PLAN', n);
       setTimeout(() => { document.getElementById('ami-acciones').style.display = 'none'; }, 2000);
     } catch(e) {
       status.className = 'status-msg err';
@@ -598,7 +834,7 @@
 
   // ── Excel upload (genérico) ───────────────────────────────────
   function procesarArchivo(file) {
-    // Mostrar loading inmediatamente
+    if (!turnoSeleccionado) { abrirModalTurno(); return; }
     document.getElementById('ami-section').style.display = 'block';
     document.getElementById('ami-info').innerHTML = '';
     document.getElementById('ami-results').innerHTML =
@@ -722,12 +958,14 @@
       const res = await fetch('/api/uph/plan/subir', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filas })
+        body: JSON.stringify({ filas, turno: turnoSeleccionado })
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      const n = data.guardados || filas.length;
       status.className = 'status-msg ok';
-      status.textContent = `✓ ${data.guardados || filas.length} filas guardadas`;
+      status.textContent = `✓ ${n} filas guardadas`;
+      registrarHistorial('Genérico', n);
     } catch(e) {
       status.className = 'status-msg err';
       status.textContent = `Error: ${e.message}`;

@@ -1739,13 +1739,15 @@ def get_plan_linea(
     ).scalar() or 0
     return {
         "plan": {
-            "id":            plan.id,
-            "modelo_id":     plan.modelo_id,
-            "modelo_nombre": plan.modelo.nombre if plan.modelo else None,
-            "modelo_interno": plan.modelo.modelo_interno if plan.modelo else None,
-            "plan_total":    plan.plan_total,
-            "piezas_actual": piezas_actual,
-            "creado_en":     plan.creado_en.isoformat(),
+            "id":               plan.id,
+            "modelo_id":        plan.modelo_id,
+            "modelo_nombre":    plan.modelo.nombre if plan.modelo else None,
+            "modelo_interno":   plan.modelo.modelo_interno if plan.modelo else None,
+            "plan_total":       plan.plan_total,
+            "plan_piezas_dia":  plan.plan_piezas_dia,
+            "plan_piezas_noche":plan.plan_piezas_noche,
+            "piezas_actual":    piezas_actual,
+            "creado_en":        plan.creado_en.isoformat(),
         }
     }
 
@@ -2735,17 +2737,20 @@ def guardar_csv_hora(linea: str = "L6", db: Session = Depends(get_uph_db)):
 # ── Plan de producción (sin JWT — auth manejada en el HTML) ───────────────
 
 class FilaPlan(BaseModel):
-    linea:          Optional[str] = None
-    modelo:         Optional[str] = None
-    modelo_interno: Optional[str] = None
-    uph_meta:       Optional[str] = None
-    plan_piezas:    Optional[str] = None
-    turno:          Optional[str] = None
-    hora_inicio:    Optional[str] = None
-    hora_fin:       Optional[str] = None
+    linea:             Optional[str] = None
+    modelo:            Optional[str] = None
+    modelo_interno:    Optional[str] = None
+    uph_meta:          Optional[str] = None
+    plan_piezas:       Optional[str] = None
+    plan_piezas_dia:   Optional[str] = None
+    plan_piezas_noche: Optional[str] = None
+    turno:             Optional[str] = None
+    hora_inicio:       Optional[str] = None
+    hora_fin:          Optional[str] = None
 
 class PlanSubirIn(BaseModel):
     filas: List[FilaPlan]
+    turno: Optional[str] = None   # 'B' o 'AC'
 
 
 @router.get("/plan/modelos")
@@ -2762,6 +2767,8 @@ async def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
     guardados = 0
     hoy = datetime.now().strftime("%Y-%m-%d")
     orden_por_linea: dict = {}
+    lineas_con_plan_activo: set = set()
+    es_noche = (data.turno or '').upper() == 'B'
 
     # Limpiar PlanDiaLinea de hoy para las líneas del upload antes de insertar
     lineas_nombres = {f.linea.strip() for f in data.filas if f.linea}
@@ -2773,6 +2780,21 @@ async def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                 PlanDiaLinea.fecha    == hoy,
             ).delete()
     db.flush()
+
+    # Pre-scan: qué líneas tienen piezas para el turno activo
+    lineas_con_piezas_turno: set = set()
+    campo_scan = 'plan_piezas_noche' if es_noche else 'plan_piezas_dia'
+    for f in data.filas:
+        if not f.linea:
+            continue
+        val = getattr(f, campo_scan, None)
+        if not val:
+            continue
+        try:
+            if int(float(val)) > 0:
+                lineas_con_piezas_turno.add(f.linea.strip().lower())
+        except (ValueError, TypeError):
+            pass
 
     for fila in data.filas:
         if not fila.modelo:
@@ -2814,26 +2836,40 @@ async def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                 Linea.nombre.ilike(fila.linea.strip())
             ).first()
             if linea_obj:
-                try:
-                    piezas = int(float(fila.plan_piezas)) if fila.plan_piezas else None
-                except (ValueError, TypeError):
-                    piezas = None
+                def _parse_int(val):
+                    try:    return int(float(val)) if val else None
+                    except: return None
+
+                piezas       = _parse_int(fila.plan_piezas)
+                piezas_dia   = _parse_int(fila.plan_piezas_dia)
+                piezas_noche = _parse_int(fila.plan_piezas_noche)
+
                 linea_key = linea_obj.id
                 orden = orden_por_linea.get(linea_key, 0)
                 orden_por_linea[linea_key] = orden + 1
 
-                # Insertar directo — PlanDiaLinea fue limpiado al inicio del request
                 db.add(PlanDiaLinea(
                     linea_id=linea_obj.id,
                     modelo_id=modelo.id,
                     fecha=hoy,
                     plan_piezas=piezas,
+                    plan_piezas_dia=piezas_dia,
+                    plan_piezas_noche=piezas_noche,
                     orden=orden,
                 ))
 
-                # ── PlanLinea activo: primer modelo de cada línea ──
-                # plan_piezas ya viene como total (día + noche) desde el parser
-                if orden == 0 and piezas:
+                # ── PlanLinea activo: primer modelo relevante por turno ──
+                # Turno B: primer modelo con piezas_noche > 0
+                #          Si ninguno tiene noche, usar el primero (plan existe, dashboard mostrará NO WORK)
+                # Turno A/C: primer modelo con piezas (orden=0)
+                linea_lower = fila.linea.strip().lower()
+                piezas_turno = piezas_noche if es_noche else piezas_dia
+                es_relevante = bool(piezas_turno and piezas_turno > 0)
+                es_fallback  = linea_lower not in lineas_con_piezas_turno and bool(piezas)
+                activar = (es_relevante or es_fallback) and linea_key not in lineas_con_plan_activo
+
+                if activar:
+                    lineas_con_plan_activo.add(linea_key)
                     plan_activo = db.query(PlanLinea).filter(
                         PlanLinea.linea_id == linea_obj.id,
                         PlanLinea.fecha    == hoy,
@@ -2841,17 +2877,17 @@ async def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                     ).first()
                     if plan_activo:
                         if plan_activo.modelo_id == modelo.id:
-                            # Mismo modelo → solo actualizar cantidad (corrección del planner)
-                            # Mantener creado_en para que el conteo de piezas no se resetee
-                            plan_activo.plan_total = piezas
+                            plan_activo.plan_total        = piezas
+                            plan_activo.plan_piezas_dia   = piezas_dia
+                            plan_activo.plan_piezas_noche = piezas_noche
                         else:
-                            # Modelo diferente → cerrar plan anterior y abrir uno nuevo
-                            # El conteo de piezas arranca desde ahora para el nuevo modelo
                             plan_activo.activo = False
                             db.add(PlanLinea(
                                 linea_id=linea_obj.id,
                                 modelo_id=modelo.id,
                                 plan_total=piezas,
+                                plan_piezas_dia=piezas_dia,
+                                plan_piezas_noche=piezas_noche,
                                 fecha=hoy,
                                 activo=True,
                                 creado_en=datetime.now(timezone.utc),
@@ -2861,6 +2897,8 @@ async def plan_subir(data: PlanSubirIn, db: Session = Depends(get_uph_db)):
                             linea_id=linea_obj.id,
                             modelo_id=modelo.id,
                             plan_total=piezas,
+                            plan_piezas_dia=piezas_dia,
+                            plan_piezas_noche=piezas_noche,
                             fecha=hoy,
                             activo=True,
                         ))
