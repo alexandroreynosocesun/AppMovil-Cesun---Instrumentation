@@ -343,7 +343,7 @@ class UPHService {
 
   async getLideresLista() {
     try {
-      const response = await apiClient.get('/uph/lideres');
+      const response = await apiClient.get('/uph/lideres/lista');
       return { success: true, data: response.data };
     } catch (error) {
       return { success: false, error: error.response?.data?.detail || 'Error de conexión' };
